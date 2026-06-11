@@ -76,10 +76,23 @@ def _sort_axes(arr, indices: list[Index]):
     return arr, [indices[k] for k in order]
 
 
-def evaluate(expr: Expr, geom: ComponentGeometry, scalars: dict[str, sp.Expr] | None = None):
+def evaluate(
+    expr: Expr,
+    geom: ComponentGeometry,
+    scalars: dict[str, sp.Expr] | None = None,
+    fields: dict[str, tuple[Array | sp.Expr, list[str]]] | None = None,
+):
     """Return (value, free_indices). Rank 0 values are plain sympy exprs;
-    higher ranks are Arrays with axes sorted by index name."""
-    scalars = scalars or {}
+    higher ranks are Arrays with axes sorted by index name.
+
+    `fields` binds extra named tensors: name -> (components, base_variances),
+    e.g. {"F": (antisym_array, ["down", "down"]), "phi": (expr, [])}.
+    """
+    scalars = dict(scalars or {})
+    fields = dict(fields or {})
+    for name, (val, variances) in fields.items():
+        if not variances:
+            scalars.setdefault(name, val)
 
     def ev(e: Expr):
         match e:
@@ -98,10 +111,13 @@ def evaluate(expr: Expr, geom: ComponentGeometry, scalars: dict[str, sp.Expr] | 
                 return val**exp, []
             case Tensor(name=name, indices=indices):
                 rank = len(indices)
-                arr = _base_components(name, rank, geom)
+                if name in fields and len(fields[name][1]) == rank:
+                    arr, base = fields[name]
+                else:
+                    arr = _base_components(name, rank, geom)
+                    base = _BASE_VARIANCES.get((name, rank), [])
                 if rank == 0:
                     return arr, []
-                base = _BASE_VARIANCES[(name, rank)]
                 arr = _adjust_variances(arr, base, [ix.variance for ix in indices], geom)
                 arr, remaining = _contract_duplicates(arr, list(indices), geom)
                 if not remaining:

@@ -5,10 +5,21 @@ Supported task payloads (capability COMPONENT_EVAL):
   {"check": "symmetric",       "expr": <rank-2 Expr dict>, "metric": <spec>}
   {"check": "divergence-zero", "expr": <rank-2 down-down Expr dict>, "metric": <spec>}
   {"check": "equal",           "lhs": <Expr dict>, "rhs": <Expr dict>, "metric": <spec>}
+  {"check": "palatini-projective-inert", "metric": <spec>, "seed": <int>}
+
+All checks accept an optional "fields" spec binding extra named tensors:
+  {"phi": {"kind": "random-scalar", "seed": 7},
+   "A":   {"kind": "random-covector", "seed": 3},
+   "F":   {"kind": "random-antisymmetric", "seed": 5}}
 
 Metric specs:
   {"kind": "random-diagonal", "seed": <int>, "dim": <int>}
   {"kind": "two-sphere"}
+
+The palatini check builds Gamma = LC(g) + delta^lam_nu A_mu with a seeded
+random covector A, computes Ricci(Gamma) from the general affine formula, and
+asserts (a) its symmetric part equals Ricci(g) and (b) the Palatini metric
+equation R_{(mu nu)} - 1/2 g_{mu nu} R~ equals the Einstein tensor of g.
 """
 
 import time
@@ -27,7 +38,12 @@ from noether.kernels.base import (
 from noether.kernels.sympy_kernel.evaluator import all_zero, evaluate
 from noether.kernels.sympy_kernel.geometry import (
     ComponentGeometry,
+    projective_connection,
+    random_antisymmetric,
+    random_covector,
     random_diagonal_metric,
+    random_scalar_field,
+    ricci_of_connection,
     two_sphere,
 )
 from noether.npr.ast import Expr
@@ -42,6 +58,21 @@ def _geometry_for(spec: dict[str, Any]) -> ComponentGeometry:
     if kind == "two-sphere":
         return two_sphere()
     raise ValueError(f"unknown metric spec kind {kind!r}")
+
+
+def _fields_for(spec: dict[str, Any], geom: ComponentGeometry) -> dict[str, tuple[Any, list[str]]]:
+    out: dict[str, tuple[Any, list[str]]] = {}
+    for name, fs in (spec or {}).items():
+        kind, seed = fs.get("kind"), int(fs.get("seed", 0))
+        if kind == "random-scalar":
+            out[name] = (random_scalar_field(seed, geom.coords), [])
+        elif kind == "random-covector":
+            out[name] = (random_covector(seed, geom.coords), ["down"])
+        elif kind == "random-antisymmetric":
+            out[name] = (random_antisymmetric(seed, geom.coords), ["down", "down"])
+        else:
+            raise ValueError(f"unknown field spec kind {kind!r}")
+    return out
 
 
 class SympyKernelAdapter:
@@ -62,22 +93,23 @@ class SympyKernelAdapter:
         payload = task.payload
         check = payload["check"]
         geom = _geometry_for(payload["metric"])
+        fields = _fields_for(payload.get("fields", {}), geom)
         start = time.monotonic()
 
         if check == "zero":
             expr = _EXPR.validate_python(payload["expr"])
-            value, _free = evaluate(expr, geom)
+            value, _free = evaluate(expr, geom, fields=fields)
             passed, detail = all_zero(value)
         elif check == "symmetric":
             expr = _EXPR.validate_python(payload["expr"])
-            value, free = evaluate(expr, geom)
+            value, free = evaluate(expr, geom, fields=fields)
             if len(free) != 2:
                 raise ValueError("symmetric check needs a rank-2 expression")
             residue = value - sp.permutedims(value, (1, 0))
             passed, detail = all_zero(residue)
         elif check == "divergence-zero":
             expr = _EXPR.validate_python(payload["expr"])
-            value, free = evaluate(expr, geom)
+            value, free = evaluate(expr, geom, fields=fields)
             if len(free) != 2 or any(ix.variance != "down" for ix in free):
                 raise ValueError("divergence check needs a rank-2 down-down expression")
             grad = geom.covariant_derivative(value, ["down", "down"])  # [a, mu, nu]
@@ -87,12 +119,14 @@ class SympyKernelAdapter:
         elif check == "equal":
             lhs = _EXPR.validate_python(payload["lhs"])
             rhs = _EXPR.validate_python(payload["rhs"])
-            lv, lf = evaluate(lhs, geom)
-            rv, rf = evaluate(rhs, geom)
+            lv, lf = evaluate(lhs, geom, fields=fields)
+            rv, rf = evaluate(rhs, geom, fields=fields)
             if [ix.model_dump() for ix in lf] != [ix.model_dump() for ix in rf]:
                 passed, detail = False, f"free index mismatch: {lf} vs {rf}"
             else:
                 passed, detail = all_zero(lv - rv if lf else sp.simplify(lv - rv))
+        elif check == "palatini-projective-inert":
+            passed, detail = _palatini_projective_inert(geom, int(payload.get("seed", 0)))
         else:
             raise ValueError(f"unknown check {check!r}")
 
@@ -111,6 +145,23 @@ class SympyKernelAdapter:
             value={"passed": passed, "detail": detail, "check": check},
             notes=[f"metric spec: {payload['metric']}"],
         )
+
+
+def _palatini_projective_inert(geom: ComponentGeometry, seed: int) -> tuple[bool, str]:
+    n = geom.dim
+    cov = random_covector(seed, geom.coords)
+    gamma = projective_connection(geom, cov)
+    ric = ricci_of_connection(geom.coords, gamma)
+    sym_part = (ric + sp.permutedims(ric, (1, 0))) / 2
+    ok_sym, det_sym = all_zero(sym_part - geom.ricci)
+    if not ok_sym:
+        return False, f"R_(mu nu)(LC + projective) != Ricci(g): {det_sym}"
+    rtilde = sum(geom.g_inv[a, b] * ric[a, b] for a in range(n) for b in range(n))
+    eom = sym_part - sp.Rational(1, 2) * rtilde * sp.ImmutableDenseNDimArray(geom.g)
+    ok_eom, det_eom = all_zero(eom - geom.einstein)
+    if not ok_eom:
+        return False, f"Palatini metric equation != Einstein(g): {det_eom}"
+    return True, "symmetric Ricci part and metric equation both reduce to the Levi-Civita ones"
 
 
 def _reproduction_script(payload: dict[str, Any]) -> str:

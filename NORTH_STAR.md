@@ -457,7 +457,10 @@ Deliberately coarse. These are *altitudes*, not dated milestones or scoped work.
 - **Horizon 3 — the trusted collaborator.** Multi-backend orchestration, robust
   cross-checking, and a track record across diverse theories. Noether becomes something
   a researcher relies on without double-checking it by hand — because it already
-  checked itself, and showed the work.
+  checked itself, and showed the work. It also becomes available as infrastructure:
+  an MCP server exposing the same session API, so any capable agent can delegate
+  tensor calculus to Noether the way it delegates arithmetic to a sandbox
+  (`docs/02_TECH_SPEC.md` §2).
 
 The ordering principle across all horizons: **breadth follows trust.** We earn the
 right to handle harder theories by being unimpeachably correct on easier ones first.

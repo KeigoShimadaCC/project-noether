@@ -80,8 +80,8 @@ noether/             Python package
   verify/            Check registry (V0..V3 implemented) and ladder runner
   provenance/        Result bundle writer
   orchestrator/      Session state machine, planner with ambiguity gate
-  cli/               `noether kernels`, `noether eval1`
-evals/               Executable evals (eval1 live; 2-5 to come) + their pytest gates
+  cli/               `noether kernels`, `noether eval{1,2,3,4}`
+evals/               Executable evals 1-4 (live) + registry + their pytest gates; eval 5 to come
 tests/               Unit and adapter tests (cadabra golden test included)
 pyproject.toml       Package, deps, ruff, pytest config
 ```
@@ -95,9 +95,10 @@ Planned next (see `docs/02_TECH_SPEC.md`): `server/` (FastAPI), `frontend/`
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 brew tap kpeeters/repo && brew install cadabra2   # official macOS channel
-.venv/bin/python -m pytest -q                      # 42 tests; cadabra ones
+.venv/bin/python -m pytest -q                      # full suite; cadabra tests
                                                    # skip if kernel missing
 .venv/bin/python -m noether.cli.main eval1         # end-to-end walking skeleton
+.venv/bin/python -m noether.cli.main eval2         # ... likewise eval3, eval4
 ```
 
 Cadabra2 is driven as a sandboxed subprocess (`cadabra2` CLI); set

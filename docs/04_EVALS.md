@@ -1,6 +1,16 @@
 # 04 — Evaluation suite: five action-to-result pairs
 
-**Status:** draft.
+**Status:** stable for evals 1-4; eval 5 draft.
+**Implementation (2026-06-12):** evals 1-4 are executable (`evals/`, run via
+`noether eval1` .. `noether eval4`) and kernel-verified against cadabra2
+2.5.15: the eval 1 and 3 variation residues are zero against the targets
+below, the eval 2 connection equation is solved identically by the projective
+family (with `Ricci(LC + projective) - Ricci(LC) = dA` checked exactly), and
+the eval 4 residue is zero with the metric never varied. SymPy component
+checks confirm the eval 1 ladder, eval 2 projective inertness, the eval 3
+generalized-Bianchi link in the minimal limit, and the eval 4 Noether
+identity off shell, all on seeded random curved backgrounds. Signs below are
+therefore pinned under `noether-default-v1`.
 **Role:** these five pairs are the acceptance tests for Horizons 1 and 2
 (NORTH_STAR §17). Each pair specifies the input a user would give, the
 elicitation Noether must perform, the result it must return, and the

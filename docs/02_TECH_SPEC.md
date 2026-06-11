@@ -66,8 +66,27 @@ terminals and TeX; a CLI proves the four-beat loop with zero frontend investment
   explicitly (no silent recomputation).
 - Export: `.tex` snippets, full provenance bundle as a zip, kernel scripts.
 
+### Horizon 2+: MCP server (planned, after the evals are done)
+
+Expose Noether as an MCP (Model Context Protocol) server so that Claude or any
+MCP-capable agent can delegate tensor calculus to it the way it delegates
+arithmetic to a Python sandbox. The host LLM does the conversation and planning;
+Noether does the algorithmic, kernel-backed part and returns verified results.
+
+- Tools map onto the existing orchestrator surface, not onto kernels directly:
+  `ingest_action` (LaTeX in, NPR + open ambiguity ledger out), `resolve_ambiguity`,
+  `derive` (vary/reduce/adm/perturb), `verify` (run the ladder on a claimed
+  result), `render` (canonical LaTeX out).
+- Provenance bundles are exposed as MCP resources, so the host agent can quote
+  the receipt, not just the answer.
+- The no-guessing contract survives the protocol: `derive` fails with the open
+  ambiguity list until the host (or its human) resolves them. A host LLM cannot
+  make Noether guess.
+- This is a frontend in the §2 sense: a thin adapter over the same session API
+  that drives the CLI and web app. No physics logic lives in it.
+
 The frontend is deliberately thin. All physics state lives server-side in the NPR
-and session store; the same API drives CLI and web.
+and session store; the same API drives CLI, web, and MCP.
 
 ## 3. Orchestrator
 

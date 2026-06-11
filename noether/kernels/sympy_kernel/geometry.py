@@ -186,6 +186,78 @@ def two_sphere(radius: sp.Expr | None = None) -> ComponentGeometry:
     return ComponentGeometry([theta, phi], g)
 
 
+def riemann_of_connection(coords: list[sp.Symbol], gamma) -> Array:
+    """R^rho_{sigma mu nu} of a general affine connection gamma[a][b][c] =
+    Gamma^a_{bc} (no symmetry assumed; torsion allowed). Same sign conventions
+    as ComponentGeometry.riemann."""
+    n, x = len(coords), coords
+    out = sp.MutableDenseNDimArray.zeros(n, n, n, n)
+    for rho in range(n):
+        for sig in range(n):
+            for mu in range(n):
+                for nu in range(mu + 1, n):
+                    val = (
+                        sp.diff(gamma[rho, nu, sig], x[mu])
+                        - sp.diff(gamma[rho, mu, sig], x[nu])
+                        + sum(
+                            gamma[rho, mu, lam] * gamma[lam, nu, sig]
+                            - gamma[rho, nu, lam] * gamma[lam, mu, sig]
+                            for lam in range(n)
+                        )
+                    )
+                    val = _clean(val)
+                    out[rho, sig, mu, nu] = val
+                    out[rho, sig, nu, mu] = -val
+    return Array(out)
+
+
+def ricci_of_connection(coords: list[sp.Symbol], gamma) -> Array:
+    """R_{sigma nu} = R^lambda_{sigma lambda nu}; NOT symmetric in general."""
+    n = len(coords)
+    Rm = riemann_of_connection(coords, gamma)
+    out = sp.MutableDenseNDimArray.zeros(n, n)
+    for sig in range(n):
+        for nu in range(n):
+            out[sig, nu] = _clean(sum(Rm[lam, sig, lam, nu] for lam in range(n)))
+    return Array(out)
+
+
+def projective_connection(geom: ComponentGeometry, covector) -> Array:
+    """Gamma^lam_{mu nu} = C^lam_{mu nu}(g) + delta^lam_nu A_mu."""
+    n = geom.dim
+    out = sp.MutableDenseNDimArray(geom.christoffel)
+    for a in range(n):
+        for b in range(n):
+            out[a, b, a] = _clean(out[a, b, a] + covector[b])
+    return Array(out)
+
+
+def _random_poly(rng: random.Random, coords: list[sp.Symbol]) -> sp.Expr:
+    c = sp.Rational(rng.randint(1, 3), rng.randint(2, 5))
+    return c * coords[rng.randrange(len(coords))]
+
+
+def random_scalar_field(seed: int, coords: list[sp.Symbol]) -> sp.Expr:
+    return _random_poly(random.Random(seed), coords)
+
+
+def random_covector(seed: int, coords: list[sp.Symbol]) -> Array:
+    rng = random.Random(seed)
+    return Array([_random_poly(rng, coords) for _ in coords])
+
+
+def random_antisymmetric(seed: int, coords: list[sp.Symbol]) -> Array:
+    rng = random.Random(seed)
+    n = len(coords)
+    out = sp.MutableDenseNDimArray.zeros(n, n)
+    for i in range(n):
+        for j in range(i + 1, n):
+            p = _random_poly(rng, coords)
+            out[i, j] = p
+            out[j, i] = -p
+    return Array(out)
+
+
 def random_diagonal_metric(seed: int, dim: int = 4) -> ComponentGeometry:
     """Seeded curved diagonal metric with polynomial entries.
 

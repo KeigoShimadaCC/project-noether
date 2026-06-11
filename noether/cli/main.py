@@ -1,6 +1,6 @@
 """Minimal CLI: prove the loop end to end from a terminal.
 
-H1 surface: `noether kernels`, `noether eval1 [--results DIR]`.
+H1 surface: `noether kernels`, `noether eval{1,2,3,4} [--results DIR]`.
 The conversational front grows here later; physics state stays server-side.
 """
 
@@ -15,13 +15,9 @@ from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.npr.latex import render
 from noether.orchestrator.session import Session
 from noether.provenance.bundle import ResultBundle, write_bundle
-from noether.verify.checks import (
-    DivergenceFreeCheck,
-    EqualOnBackgroundCheck,
-    SymmetricCheck,
-    WellFormedCheck,
-)
 from noether.verify.ladder import run_ladder
+
+EVAL_KEYS = ("eval1", "eval2", "eval3", "eval4")
 
 
 def _adapters() -> dict:
@@ -36,17 +32,20 @@ def cmd_kernels(_args) -> int:
     return 0
 
 
-def cmd_eval1(args) -> int:
-    from evals import eval1_eh_trace as ev1
+def run_eval(key: str, results_root: str) -> int:
+    from evals.registry import component_task, get_spec
 
+    spec = get_spec(key)
     adapters = _adapters()
-    session = Session(session_id=f"eval1-{uuid.uuid4().hex[:8]}")
+    session = Session(session_id=f"{spec.key}-{uuid.uuid4().hex[:8]}")
+
+    print(f"== {spec.key}: {spec.title} ==\n")
 
     # INGEST with open ambiguities, ELICIT with the documented answers.
-    session.ingest(ev1.build_npr(resolved=False))
+    session.ingest(spec.build_npr(False))
     print("Elicitation:")
     for amb in session.npr.unresolved_ambiguities():
-        answer = ev1.ELICITATION_ANSWERS[amb.id]
+        answer = spec.answers[amb.id]
         print(f"  Q: {amb.question}")
         print(f"  A: {answer}")
         session.resolve(amb.id, answer)
@@ -56,87 +55,109 @@ def cmd_eval1(args) -> int:
     for i, step in enumerate(plan.steps, 1):
         print(f"  {i}. [{step.capability.value}] {step.description}")
 
-    # COMPUTE: cadabra derivation if available.
-    computed = []
-    derivation_note = ""
+    # COMPUTE: audited cadabra derivations if the kernel is present.
     cadabra = adapters["cadabra"]
+    cadabra_results = []
+    derivation_ok = True
+    derivation_notes = []
     if cadabra.available():
-        task = KernelTask(
-            capability=Capability.VARY,
-            description="EH trace-form metric variation",
-            payload={"template": "eval1_eh_trace"},
-        )
-        result = cadabra.run(task)
-        computed.append(result)
-        residue_zero = result.value["checks"].get("residue_zero")
-        derivation_note = f"cadabra derivation residue check: residue_zero={residue_zero}"
-        print(f"\n{derivation_note}")
-        if residue_zero != "True":
-            print("DERIVATION CHECK FAILED; refusing to present result as verified.")
+        print("\nKernel derivations (cadabra):")
+        for run in spec.cadabra_runs:
+            result = cadabra.run(
+                KernelTask(
+                    capability=Capability.VARY,
+                    description=run.description,
+                    payload={"template": run.template},
+                )
+            )
+            cadabra_results.append(result)
+            checks = result.value["checks"]
+            oks = {k: checks.get(k) for k in run.required_true}
+            ok = all(v == "True" for v in oks.values())
+            derivation_ok = derivation_ok and ok
+            line = f"{run.description}: " + ", ".join(f"{k}={v}" for k, v in oks.items())
+            derivation_notes.append(line)
+            print(f"  {'PASS' if ok else 'FAIL'} {line}")
+            if not ok:
+                print("  DERIVATION CHECK FAILED; result will not be presented as verified.")
     else:
-        derivation_note = (
-            "cadabra2 not installed: symbolic derivation step SKIPPED; "
-            "presenting the documented target with component verification only"
+        note = (
+            "cadabra2 not installed: symbolic derivation SKIPPED; "
+            "presenting documented targets with component verification only"
         )
-        print(f"\n{derivation_note}")
+        derivation_notes.append(note)
+        print(f"\n{note}")
 
-    # VERIFY: the ladder on the target EOM.
-    target = ev1.target_eom()
-    checks = [
-        WellFormedCheck(expected_free=[ev1.MU, ev1.NU]),
-        SymmetricCheck(),
-        DivergenceFreeCheck(),
-        EqualOnBackgroundCheck(rhs=ev1.target_eom_expanded()),
-    ]
-    report = run_ladder(target, checks, adapters)
-    for line in report.summary().splitlines():
-        print(f"  {line}")
-    for check in report.results:
-        computed.extend(check.artifacts)
+    # VERIFY + PRESENT + provenance bundle, one per presented result.
+    exit_code = 0
+    for presented in spec.results:
+        target = presented.expr()
+        report = run_ladder(target, presented.ladder(), adapters)
+        computed = list(cadabra_results)
+        for check in report.results:
+            computed.extend(check.artifacts)
 
-    # PRESENT + provenance bundle.
-    eom_tex = render(target) + " = 0"
-    verified = report.all_passed and (
-        not cadabra.available() or computed[0].value["checks"].get("residue_zero") == "True"
-    )
-    print(f"\nResult: {eom_tex}")
-    print(f"Verified: {verified}")
+        extra_ok = True
+        extra_lines = []
+        for description, payload in presented.component_tasks:
+            result = adapters["sympy"].run(component_task(description, payload))
+            computed.append(result)
+            passed = bool(result.value["passed"])
+            extra_ok = extra_ok and passed
+            extra_lines.append(
+                f"[{'PASS' if passed else 'FAIL'}] (sympy) {description}: {result.value['detail']}"
+            )
 
-    bundle = ResultBundle(
-        session_id=session.session_id,
-        result_id="eom-metric",
-        result_tex=eom_tex,
-        result_expr=target.model_dump(),
-        npr_snapshot=session.npr,
-        plan=[s.model_dump() for s in plan.steps],
-        computed=computed,
-        ladder=report,
-        narrative=(
-            "# Eval 1: Einstein-Hilbert in trace form\n\n"
-            "Assumptions: see assumptions.json (noether-default-v1).\n\n"
-            f"Derivation: {derivation_note}\n\n"
-            f"Checks:\n{report.summary()}\n\n"
-            f"Result: $ {eom_tex} $\n"
-        ),
-    )
-    path = write_bundle(Path(args.results), bundle)
-    session.record_result("eom-metric")
-    print(f"Provenance bundle: {path}")
-    return 0 if verified else 1
+        eom_tex = render(target) + presented.tex_suffix
+        verified = report.all_passed and extra_ok and derivation_ok
+        print(f"\nResult [{presented.result_id}]: {eom_tex}")
+        for line in report.summary().splitlines():
+            print(f"  {line}")
+        for line in extra_lines:
+            print(f"  {line}")
+        print(f"  Verified: {verified}")
+
+        bundle = ResultBundle(
+            session_id=session.session_id,
+            result_id=presented.result_id,
+            result_tex=eom_tex,
+            result_expr=target.model_dump(),
+            npr_snapshot=session.npr,
+            plan=[s.model_dump() for s in plan.steps],
+            computed=computed,
+            ladder=report,
+            narrative=(
+                f"# {spec.title} [{presented.result_id}]\n\n"
+                "Assumptions: see assumptions.json (noether-default-v1).\n\n"
+                "Derivation:\n"
+                + "".join(f"- {n}\n" for n in derivation_notes)
+                + ("".join(f"- note: {n}\n" for n in spec.notes))
+                + f"\nChecks:\n{report.summary()}\n"
+                + "".join(f"{line}\n" for line in extra_lines)
+                + f"\nResult: $ {eom_tex} $\n"
+            ),
+        )
+        path = write_bundle(Path(results_root), bundle)
+        session.record_result(presented.result_id)
+        print(f"  Provenance bundle: {path}")
+        if not verified:
+            exit_code = 1
+    return exit_code
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="noether")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("kernels", help="list kernel adapters and availability")
-    p1 = sub.add_parser("eval1", help="run eval 1 end to end")
-    p1.add_argument("--results", default="results", help="provenance bundle root")
+    for key in EVAL_KEYS:
+        p = sub.add_parser(key, help=f"run {key} end to end")
+        p.add_argument("--results", default="results", help="provenance bundle root")
     args = parser.parse_args()
     try:
         if args.command == "kernels":
             return cmd_kernels(args)
-        if args.command == "eval1":
-            return cmd_eval1(args)
+        if args.command in EVAL_KEYS:
+            return run_eval(args.command, args.results)
     except KernelUnavailable as exc:
         print(f"kernel unavailable: {exc}", file=sys.stderr)
         return 2
