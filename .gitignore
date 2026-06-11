@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# macOS
+.DS_Store
+
+# Noether artifacts (provenance bundles are per-user research output)
+results/
+
+# Secrets
+.env

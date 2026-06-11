@@ -1,0 +1,43 @@
+[project]
+name = "noether"
+version = "0.1.0"
+description = "Agentic symbolic-physics collaborator: LaTeX action in, verified field equations out"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7",
+    "sympy>=1.13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+noether = "noether.cli.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["noether*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Frozen kernel scripts are verbatim artifacts; do not reflow their lines.
+"noether/kernels/cadabra/templates.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "evals"]
+markers = [
+    "kernel_cadabra: requires a working cadabra2 kernel",
+    "slow: long-running symbolic computation",
+]
