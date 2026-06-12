@@ -88,6 +88,19 @@ Noether does the algorithmic, kernel-backed part and returns verified results.
 The frontend is deliberately thin. All physics state lives server-side in the NPR
 and session store; the same API drives CLI, web, and MCP.
 
+### Status: the HTTP session API is implemented
+
+`noether.server.create_app` (FastAPI, behind the optional `[server]` extra;
+`noether serve` runs it) exposes the orchestrator loop over HTTP with the
+no-guessing contract intact: `POST /sessions` ingests an action and returns the
+open question ledger; `POST /sessions/{id}/elicit` returns UNCONFIRMED model
+proposals (off-menu suggestions already discarded; 503 when no agent CLI is
+detected); only `POST /sessions/{id}/resolve`, validated against the listed
+options, mutates the session; `GET /sessions/{id}/plan` returns 409 with the
+open questions until the problem is well posed. Sessions persist as JSON
+through `noether.orchestrator.store.SessionStore` and are shared by CLI, web,
+and MCP frontends. Tested in `tests/test_server.py` (skips without the extra).
+
 ## 3. Orchestrator
 
 ### 3.1 Agent loop

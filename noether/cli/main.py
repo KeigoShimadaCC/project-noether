@@ -139,6 +139,26 @@ def cmd_elicit(args) -> int:
     return 0
 
 
+def cmd_serve(args) -> int:
+    """Run the HTTP session API. FastAPI/uvicorn live behind the [server]
+    extra so the core package stays lean."""
+    try:
+        import uvicorn
+
+        from noether.orchestrator.store import SessionStore
+        from noether.server import create_app
+    except ImportError:
+        print(
+            'server dependencies missing: pip install -e ".[server]"',
+            file=sys.stderr,
+        )
+        return 2
+    store = SessionStore(Path(args.store)) if args.store else None
+    app = create_app(store=store)
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
+
 def run_eval(key: str, results_root: str) -> int:
     from evals.registry import component_task, get_spec
 
@@ -274,6 +294,10 @@ def main() -> int:
         action="store_true",
         help="delegate confirmation to the model: apply on-menu proposals and plan",
     )
+    srv = sub.add_parser("serve", help="run the HTTP session API (requires [server] extra)")
+    srv.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
+    srv.add_argument("--port", type=int, default=8754, help="bind port (default: 8754)")
+    srv.add_argument("--store", default=None, help="session store directory")
     for key in EVAL_KEYS:
         p = sub.add_parser(key, help=f"run {key} end to end")
         p.add_argument("--results", default="results", help="provenance bundle root")
@@ -285,6 +309,8 @@ def main() -> int:
             return cmd_ingest(args)
         if args.command == "elicit":
             return cmd_elicit(args)
+        if args.command == "serve":
+            return cmd_serve(args)
         if args.command in EVAL_KEYS:
             return run_eval(args.command, args.results)
     except KernelUnavailable as exc:
