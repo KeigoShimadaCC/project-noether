@@ -8,6 +8,10 @@ __pycache__/
 build/
 dist/
 
+# Node / Next.js (frontend/)
+node_modules/
+.next/
+
 # macOS
 .DS_Store
 

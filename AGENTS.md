@@ -99,12 +99,14 @@ noether/             Python package
                      `noether eval3s` (Minkowski spectrum)
 evals/               Executable evals 1-5, 1s, 3s + registry + pytest gates
 tests/               Unit and adapter tests (cadabra golden test included)
+frontend/            Web client (Next.js + KaTeX) over the HTTP session API;
+                     /api/* proxied to `noether serve`, no client-side physics
 pyproject.toml       Package, deps, ruff, pytest config
 ```
 
-Planned next (see `docs/02_TECH_SPEC.md`): `frontend/` (web client; CLI
-shipped first) and wiring arbitrary well-posed sessions into the compute
-pipeline beyond the eval-defined tasks.
+Planned next (see `docs/02_TECH_SPEC.md`): wiring arbitrary well-posed
+sessions into the compute pipeline beyond the eval-defined tasks, then the
+derivation tree and export views in the web client.
 
 ## 4.1 Development setup
 
@@ -116,6 +118,8 @@ brew tap kpeeters/repo && brew install cadabra2   # official macOS channel
                                                    # skip if kernel missing
 .venv/bin/python -m noether.cli.main eval1         # end-to-end walking skeleton
 .venv/bin/python -m noether.cli.main eval2         # ... likewise eval3, eval4
+cd frontend && npm install && npm run dev          # web client; needs
+                                                   # `noether serve` running
 ```
 
 Cadabra2 is driven as a sandboxed subprocess (`cadabra2` CLI); set

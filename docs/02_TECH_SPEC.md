@@ -77,6 +77,19 @@ scripted IO.
   explicitly (no silent recomputation).
 - Export: `.tex` snippets, full provenance bundle as a zip, kernel scripts.
 
+Status: implemented in `frontend/` (Next.js App Router, TypeScript, KaTeX;
+no Tailwind, plain CSS). The home page ingests an action and lists stored
+sessions; the session workspace shows the question flow on the left (options,
+free-form answers, model proposals that require per-question confirmation)
+and the NPR side panel on the right (problem card with the rendered action,
+assumptions with a change control, event history). The browser talks only to
+Next; `/api/*` is rewritten to the FastAPI server (`NOETHER_API_URL`,
+default `http://127.0.0.1:8754`), so no physics state lives client-side.
+Still pending: the derivation tree and exports, which arrive when arbitrary
+well-posed sessions are wired into the compute pipeline (today derivations
+and provenance run through the eval commands). CI builds the frontend with
+type checking on every push.
+
 ### Horizon 2+: MCP server (implemented for the session surface)
 
 Expose Noether as an MCP (Model Context Protocol) server so that Claude or any
