@@ -96,7 +96,16 @@ Built on an agent SDK (Claude Agent SDK or equivalent; the choice is an
 implementation detail behind our own `Orchestrator` interface). The LLM gets
 tools, not freedom:
 
-- `parse_latex(action_tex) -> NPR draft + ambiguity list`
+- `parse_latex(action_tex) -> NPR draft + ambiguity list`. Implemented as two
+  deterministic layers: `noether.npr.parse` (purely syntactic LaTeX -> NPR Expr,
+  no physics inference) and `noether.orchestrator.ingest` (syntactic object
+  discovery plus the ambiguity ledger). Ingest never assigns field roles,
+  conventions, the fields to vary, or the curvature/connection/coupling meaning
+  of a symbol; it emits each as an open question, so a freshly ingested action is
+  structurally un-plannable until elicitation resolves it. The LLM narrates and
+  may propose answers, but cannot make ingest guess. Validated against the five
+  acceptance actions (`tests/test_parse.py`, `tests/test_ingest.py`); reachable
+  from the CLI as `noether ingest "<lagrangian>"`.
 - `ask_user(questions) -> answers` (elicitation; see 03_METHODOLOGY §1)
 - `plan(task, npr) -> computation plan` (a DAG of kernel-task nodes)
 - `run_kernel(kernel, task, npr) -> npr_expression + raw artifacts`

@@ -75,12 +75,14 @@ NORTH_STAR.md        Vision document
 AGENTS.md            This file
 docs/                Design and research documents (00 through 04)
 noether/             Python package
-  npr/               Problem representation: conventions, AST, schema, LaTeX, validation
+  npr/               Problem representation: conventions, AST, schema, LaTeX,
+                     validation, and the LaTeX action parser (parse.py)
   kernels/           Adapters: base contract, cadabra/ (subprocess), sympy_kernel/
   verify/            Check registry (V0..V3 implemented) and ladder runner
   provenance/        Result bundle writer
-  orchestrator/      Session state machine, planner with ambiguity gate
-  cli/               `noether kernels`, `noether eval{1..5}`
+  orchestrator/      Session state machine, planner with ambiguity gate,
+                     ingest (LaTeX action -> draft NPR + open ambiguity ledger)
+  cli/               `noether kernels`, `noether ingest`, `noether eval{1..5}`
 evals/               Executable evals 1-5 + registry + their pytest gates
 tests/               Unit and adapter tests (cadabra golden test included)
 pyproject.toml       Package, deps, ruff, pytest config

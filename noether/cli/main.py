@@ -1,7 +1,7 @@
 """Minimal CLI: prove the loop end to end from a terminal.
 
-H1 surface: `noether kernels`, `noether eval{1..5} [--results DIR]`
-(eval5 gates Horizon 2).
+H1 surface: `noether kernels`, `noether ingest "<lagrangian>"`,
+`noether eval{1..5} [--results DIR]` (eval5 gates Horizon 2).
 The conversational front grows here later; physics state stays server-side.
 """
 
@@ -14,6 +14,8 @@ from noether.kernels.base import Capability, KernelTask, KernelUnavailable
 from noether.kernels.cadabra import CadabraAdapter
 from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.npr.latex import render
+from noether.npr.parse import ParseError
+from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.session import Session
 from noether.provenance.bundle import ResultBundle, write_bundle
 from noether.verify.ladder import run_ladder
@@ -30,6 +32,38 @@ def cmd_kernels(_args) -> int:
         status = adapter.version() if adapter.available() else "NOT INSTALLED"
         caps = ", ".join(sorted(c.value for c in adapter.capabilities()))
         print(f"{name:10s} {status:30s} [{caps}]")
+    return 0
+
+
+def cmd_ingest(args) -> int:
+    """Parse an action and show the draft NPR plus the questions that block it.
+
+    This is the INGEST beat in isolation: it never answers a physics question,
+    it only surfaces them, so the printed draft is deliberately un-plannable.
+    """
+    try:
+        result = ingest_action(args.measure, args.lagrangian)
+    except ParseError as exc:
+        print(f"parse error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"Action:  \\int {args.measure} ( {args.lagrangian} )\n")
+    print(f"Parsed Lagrangian (NPR -> LaTeX): {render(result.lagrangian)}\n")
+
+    print("Objects (syntactic classification; roles provisional):")
+    for obj in result.npr.objects:
+        print(f"  {obj.name:6s} {obj.kind:13s} rank={obj.rank} role={obj.role}*")
+
+    print("\nOpen questions (must be resolved by a human before planning):")
+    for amb in result.npr.ambiguities:
+        opts = ", ".join(amb.options)
+        print(f"  [{amb.id}] ({amb.kind}) {amb.question}")
+        print(f"      options: {opts}")
+
+    print(
+        f"\nWell-posed: {result.npr.is_well_posed()} "
+        "(planning is structurally blocked until every question is answered)."
+    )
     return 0
 
 
@@ -150,6 +184,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="noether")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("kernels", help="list kernel adapters and availability")
+    ing = sub.add_parser("ingest", help="parse a LaTeX action into a draft NPR + questions")
+    ing.add_argument(
+        "lagrangian",
+        help="the scalar Lagrangian density, e.g. '-\\tfrac14 F_{\\mu\\nu} F^{\\mu\\nu}'",
+    )
+    ing.add_argument(
+        "--measure", default=r"d^4x \sqrt{-g}", help="action measure (default: d^4x \\sqrt{-g})"
+    )
     for key in EVAL_KEYS:
         p = sub.add_parser(key, help=f"run {key} end to end")
         p.add_argument("--results", default="results", help="provenance bundle root")
@@ -157,6 +199,8 @@ def main() -> int:
     try:
         if args.command == "kernels":
             return cmd_kernels(args)
+        if args.command == "ingest":
+            return cmd_ingest(args)
         if args.command in EVAL_KEYS:
             return run_eval(args.command, args.results)
     except KernelUnavailable as exc:
