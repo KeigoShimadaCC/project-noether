@@ -92,9 +92,12 @@ and session store; the same API drives CLI, web, and MCP.
 
 ### 3.1 Agent loop
 
-Built on an agent SDK (Claude Agent SDK or equivalent; the choice is an
-implementation detail behind our own `Orchestrator` interface). The LLM gets
-tools, not freedom:
+Built on a swappable model backend behind our own `LLMAdapter` interface
+(`noether.llm`). The implemented backend is ambient-auth, no API key: it
+auto-detects an installed agent CLI (codex, claude, gemini, droid) and runs it
+one-shot as a sandboxed subprocess, mirroring the cadabra transport, so
+credentials stay in that CLI's own login session. A `StubLLMAdapter` makes the
+plumbing deterministic in tests. The LLM gets tools, not freedom:
 
 - `parse_latex(action_tex) -> NPR draft + ambiguity list`. Implemented as two
   deterministic layers: `noether.npr.parse` (purely syntactic LaTeX -> NPR Expr,
@@ -106,7 +109,16 @@ tools, not freedom:
   may propose answers, but cannot make ingest guess. Validated against the five
   acceptance actions (`tests/test_parse.py`, `tests/test_ingest.py`); reachable
   from the CLI as `noether ingest "<lagrangian>"`.
-- `ask_user(questions) -> answers` (elicitation; see 03_METHODOLOGY §1)
+- `ask_user(questions) -> answers` (elicitation; see 03_METHODOLOGY §1).
+  Implemented in `noether.orchestrator.elicit` with a propose-then-confirm
+  contract that makes AGENTS.md rule 4 structural: `propose_resolutions` asks the
+  model to pick one listed option per open ambiguity, validates each suggestion
+  against the allowed options (off-menu answers are discarded, never guessed),
+  and returns suggestions plus model provenance without mutating the NPR. Only
+  `apply_resolutions`, given human-confirmed choices, sets resolutions and
+  unblocks planning. Reachable as `noether elicit "<lagrangian>"`; the explicit
+  `--accept-llm` flag delegates confirmation to the model. Tested against all
+  five acceptance actions (`tests/test_llm.py`, `tests/test_elicit.py`).
 - `plan(task, npr) -> computation plan` (a DAG of kernel-task nodes)
 - `run_kernel(kernel, task, npr) -> npr_expression + raw artifacts`
 - `verify(result, checks) -> verdicts`
@@ -314,8 +326,12 @@ pinned kernel versions and diffs canonical forms. CI runs this for the eval corp
 - Kernel workers: no network, CPU/memory/time limits, throwaway filesystem except
   the artifact mount. Kernel scripts are generated from audited templates, which
   bounds the injection surface; raw user LaTeX never reaches a kernel.
-- LLM calls carry no secrets beyond the API key; session content is the user's
-  research and is treated as confidential (no training, no third-party logging).
+- LLM calls carry no secrets: the implemented adapter shells out to an agent CLI
+  whose credentials live in its own login session, so Noether holds no API key.
+  Session content is the user's research and is treated as confidential (no
+  training, no third-party logging). Caveat: agent CLIs are built for interactive
+  use, so programmatic headless use may bump against their terms; fine for a
+  personal research tool, revisit before any distribution.
 - Determinism: pinned kernel versions, pinned model versions recorded per result,
   seeded randomness in spot checks. "Same bundle, same answer" is a test.
 

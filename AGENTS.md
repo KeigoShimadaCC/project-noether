@@ -77,19 +77,27 @@ docs/                Design and research documents (00 through 04)
 noether/             Python package
   npr/               Problem representation: conventions, AST, schema, LaTeX,
                      validation, and the LaTeX action parser (parse.py)
-  kernels/           Adapters: base contract, cadabra/ (subprocess), sympy_kernel/
+  kernels/           Adapters: base contract, cadabra/ (subprocess), sympy_kernel/;
+                     versions.py pins kernel versions (single source of truth)
+  llm/               LLM adapters behind one interface: ambient-auth CLI
+                     subprocess (auto-detects codex/claude/gemini/droid; no API
+                     key) plus an in-process stub for tests
   verify/            Check registry (V0..V3 implemented) and ladder runner
   provenance/        Result bundle writer
   orchestrator/      Session state machine, planner with ambiguity gate,
-                     ingest (LaTeX action -> draft NPR + open ambiguity ledger)
-  cli/               `noether kernels`, `noether ingest`, `noether eval{1..5}`
+                     ingest (LaTeX action -> draft NPR + open ambiguity ledger),
+                     elicit (model proposes resolutions; only human-confirmed
+                     answers mutate the NPR)
+  cli/               `noether kernels`, `noether ingest`, `noether elicit`,
+                     `noether eval{1..5}`
 evals/               Executable evals 1-5 + registry + their pytest gates
 tests/               Unit and adapter tests (cadabra golden test included)
 pyproject.toml       Package, deps, ruff, pytest config
 ```
 
 Planned next (see `docs/02_TECH_SPEC.md`): `server/` (FastAPI), `frontend/`
-(web client; CLI shipped first), LLM elicitation behind the orchestrator.
+(web client; CLI shipped first), and a conversational front-end that drives the
+existing ingest/elicit/plan loop end to end.
 
 ## 4.1 Development setup
 

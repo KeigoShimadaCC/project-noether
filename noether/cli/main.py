@@ -1,7 +1,8 @@
 """Minimal CLI: prove the loop end to end from a terminal.
 
 H1 surface: `noether kernels`, `noether ingest "<lagrangian>"`,
-`noether eval{1..5} [--results DIR]` (eval5 gates Horizon 2).
+`noether elicit "<lagrangian>"`, `noether eval{1..5} [--results DIR]`
+(eval5 gates Horizon 2).
 The conversational front grows here later; physics state stays server-side.
 """
 
@@ -13,9 +14,12 @@ from pathlib import Path
 from noether.kernels.base import Capability, KernelTask, KernelUnavailable
 from noether.kernels.cadabra import CadabraAdapter
 from noether.kernels.sympy_kernel import SympyKernelAdapter
+from noether.llm import CliLLMAdapter, LLMError
 from noether.npr.latex import render
 from noether.npr.parse import ParseError
+from noether.orchestrator.elicit import apply_resolutions, propose_resolutions
 from noether.orchestrator.ingest import ingest_action
+from noether.orchestrator.planner import AmbiguityBlocked, build_plan
 from noether.orchestrator.session import Session
 from noether.provenance.bundle import ResultBundle, write_bundle
 from noether.verify.ladder import run_ladder
@@ -64,6 +68,74 @@ def cmd_ingest(args) -> int:
         f"\nWell-posed: {result.npr.is_well_posed()} "
         "(planning is structurally blocked until every question is answered)."
     )
+    return 0
+
+
+def cmd_elicit(args) -> int:
+    """Ingest an action, then let an auto-detected agent CLI PROPOSE answers.
+
+    Proposals are unconfirmed by default: nothing is resolved and planning
+    stays blocked. With --accept-llm the human explicitly delegates
+    confirmation to the model, applies its on-menu proposals, and (if every
+    question is answered) prints the plan.
+    """
+    try:
+        result = ingest_action(args.measure, args.lagrangian)
+    except ParseError as exc:
+        print(f"parse error: {exc}", file=sys.stderr)
+        return 2
+    npr = result.npr
+
+    print(f"Action:  \\int {args.measure} ( {args.lagrangian} )\n")
+    print("Open questions:")
+    for amb in npr.ambiguities:
+        print(f"  [{amb.id}] {amb.question}")
+        print(f"      options: {', '.join(amb.options)}")
+
+    llm = CliLLMAdapter()
+    if not llm.available():
+        print(
+            "\nNo agent CLI detected (looked for codex, claude, gemini, droid). "
+            "Answer the questions manually, then plan."
+        )
+        return 0
+
+    print(f"\nDetected LLM: {llm.name} ({llm.version()})")
+    try:
+        proposal = propose_resolutions(npr, llm)
+    except LLMError as exc:
+        print(f"elicitation failed: {exc}", file=sys.stderr)
+        return 2
+
+    print("Proposed resolutions (UNCONFIRMED; a human must accept each):")
+    for p in proposal.proposals:
+        shown = p.choice if p.choice is not None else "(no valid proposal)"
+        print(f"  [{p.ambiguity_id}] -> {shown}")
+        if p.rationale:
+            print(f"      rationale: {p.rationale}")
+
+    if not args.accept_llm:
+        print(
+            "\nWell-posed: False. Re-run with --accept-llm to delegate "
+            "confirmation to the model, or resolve manually."
+        )
+        return 0
+
+    confirmations = {p.ambiguity_id: p.choice for p in proposal.proposals if p.choice is not None}
+    confirmed = apply_resolutions(npr, confirmations)
+    print(f"\n--accept-llm: applied {len(confirmations)} model proposal(s) as confirmed.")
+    if not confirmed.is_well_posed():
+        missing = [a.id for a in confirmed.unresolved_ambiguities()]
+        print(f"Still blocked: no valid proposal for {', '.join(missing)}.")
+        return 1
+    try:
+        plan = build_plan(confirmed)
+    except AmbiguityBlocked as exc:
+        print(f"still blocked: {exc}", file=sys.stderr)
+        return 1
+    print(f"\nPlan ({plan.task_type}):")
+    for i, step in enumerate(plan.steps, 1):
+        print(f"  {i}. [{step.capability.value}] {step.description}")
     return 0
 
 
@@ -192,6 +264,14 @@ def main() -> int:
     ing.add_argument(
         "--measure", default=r"d^4x \sqrt{-g}", help="action measure (default: d^4x \\sqrt{-g})"
     )
+    el = sub.add_parser("elicit", help="ingest, then let an agent CLI propose answers")
+    el.add_argument("lagrangian", help="the scalar Lagrangian density")
+    el.add_argument("--measure", default=r"d^4x \sqrt{-g}", help="action measure")
+    el.add_argument(
+        "--accept-llm",
+        action="store_true",
+        help="delegate confirmation to the model: apply on-menu proposals and plan",
+    )
     for key in EVAL_KEYS:
         p = sub.add_parser(key, help=f"run {key} end to end")
         p.add_argument("--results", default="results", help="provenance bundle root")
@@ -201,6 +281,8 @@ def main() -> int:
             return cmd_kernels(args)
         if args.command == "ingest":
             return cmd_ingest(args)
+        if args.command == "elicit":
+            return cmd_elicit(args)
         if args.command in EVAL_KEYS:
             return run_eval(args.command, args.results)
     except KernelUnavailable as exc:
