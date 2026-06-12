@@ -9,13 +9,11 @@ Layers:
          metric whose GB scalar is NONZERO (the cancellation is real);
        - D=5: H != 0 (falsifier: the theory is dynamical above four
          dimensions), H symmetric, divergence-free.
-  4. Cadabra (skips if not installed): symbolic-D Lovelock algebra; the p=2
-     delta contraction is the GB scalar, and the Lovelock field-equation
-     contraction equals the documented Lanczos form.
-
-The variational derivation delta S -> H with Bianchi reduction is Horizon 2
-scope and intentionally has no test here yet (no capability without an eval,
-but also no test asserting an unimplemented capability passes).
+  4. Cadabra (skips if not installed): the full variational derivation
+     (delta S -> Lanczos H, double IBP + Bianchi/commutator reduction,
+     residue zero in general D) and the symbolic-D Lovelock algebra (the p=2
+     delta contraction is the GB scalar, the Lovelock field-equation
+     contraction equals the documented Lanczos form).
 """
 
 import pytest
@@ -114,3 +112,18 @@ class TestKernelAlgebra:
         checks = result.value["checks"]
         assert checks.get("gb_scalar_zero") == "True", result.raw.stdout
         assert checks.get("lanczos_form_zero") == "True", result.raw.stdout
+
+    def test_variational_derivation_residue_zero(self):
+        """delta of int sqrt(-g) GB: Palatini variation, double IBP,
+        contracted-Bianchi + commutator reduction, residue against the
+        Lanczos H exactly zero in general dimension. The reduction rules
+        in the template were sympy-verified on a curved background first."""
+        result = CadabraAdapter().run(
+            KernelTask(
+                capability=Capability.VARY,
+                description="GB variational derivation",
+                payload={"template": "eval5_gauss_bonnet_variation"},
+            )
+        )
+        checks = result.value["checks"]
+        assert checks.get("variation_residue_zero") == "True", result.raw.stdout

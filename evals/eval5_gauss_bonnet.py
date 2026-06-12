@@ -13,17 +13,21 @@ Gauss-Bonnet term is topological): Noether must report "identically zero",
 not a dynamical 0 = 0.
 
 Verification scope (honest accounting, per AGENTS.md rule 1):
-  - cadabra verifies the Lovelock p=2 ALGEBRA in symbolic D: the generalized
-    Kronecker delta contraction equals the GB scalar, and the Lovelock
-    field-equation contraction (Lovelock 1971, J. Math. Phys. 12 498; the
-    citable standard form) equals the Lanczos expression above.
+  - cadabra DERIVES the field equation from the action: Palatini variation of
+    all three quadratic invariants, double integration by parts, reduction by
+    the contracted second Bianchi identities, the rank-2 commutator and the
+    definitional Riemann traces; the residue against the Lanczos form above
+    is exactly zero in general dimension. Every reduction identity fed to
+    cadabra was first verified numerically in the sympy kernel on a curved
+    background under noether-default-v1.
+  - cadabra also verifies the Lovelock p=2 ALGEBRA in symbolic D: the
+    generalized Kronecker delta contraction equals the GB scalar, and the
+    Lovelock field-equation contraction (Lovelock 1971, J. Math. Phys. 12
+    498) equals the Lanczos expression above.
   - sympy verifies the Lovelock PROPERTIES by component evaluation: H is
     symmetric and divergence-free in D=5; H == 0 identically on curved D=4
     backgrounds (including one with GB scalar nonzero, so the cancellation is
     real); H != 0 on a curved D=5 background (falsifier).
-  - The variational derivation delta S -> H with Bianchi-identity reduction
-    to second-order good form is the Horizon 2 identity-reduction capability
-    and is NOT yet kernel-derived here.
 
 The pytest entry points live in evals/test_eval5.py.
 """

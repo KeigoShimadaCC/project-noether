@@ -82,8 +82,6 @@ noether/             Python package
   orchestrator/      Session state machine, planner with ambiguity gate
   cli/               `noether kernels`, `noether eval{1..5}`
 evals/               Executable evals 1-5 + registry + their pytest gates
-                     (eval 5: Lovelock algebra + component checks; the
-                     variational Bianchi-reduction derivation is open H2 work)
 tests/               Unit and adapter tests (cadabra golden test included)
 pyproject.toml       Package, deps, ruff, pytest config
 ```

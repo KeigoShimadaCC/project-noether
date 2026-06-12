@@ -11,7 +11,7 @@ explicit revision), `living` (expected to change continuously).
 | 01 | `01_RESEARCH.md` | CAS landscape, prior art, kernel selection rationale | draft |
 | 02 | `02_TECH_SPEC.md` | Architecture, stack, NPR schema, adapters, algorithms | draft |
 | 03 | `03_METHODOLOGY.md` | Elicitation, good form, verification ladder, dev process | draft |
-| 04 | `04_EVALS.md` | Five acceptance evaluations with worked solutions | stable (1-4); eval 5 partial (H2 derivation open) |
+| 04 | `04_EVALS.md` | Five acceptance evaluations with worked solutions | stable; all five implemented and kernel-verified |
 
 ## Relationships
 

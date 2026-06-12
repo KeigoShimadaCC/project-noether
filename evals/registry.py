@@ -241,6 +241,12 @@ def _eval5() -> EvalSpec:
                 "eval5_gauss_bonnet",
                 ("gb_scalar_zero", "lanczos_form_zero"),
             ),
+            CadabraRun(
+                "Variational derivation: delta(GB action) -> Lanczos H "
+                "(double IBP + Bianchi/commutator reduction)",
+                "eval5_gauss_bonnet_variation",
+                ("variation_residue_zero",),
+            ),
         ),
         results=(
             PresentedResult(
@@ -285,10 +291,11 @@ def _eval5() -> EvalSpec:
         notes=(
             "in D=4 the equation is IDENTICALLY zero (Gauss-Bonnet is topological); "
             "dynamical only for D >= 5",
-            "variational derivation with Bianchi reduction is Horizon 2 scope; "
-            "kernel evidence here: Lovelock delta algebra (cadabra, symbolic D) "
-            "+ component Lovelock properties (sympy); field-equation form cited "
-            "from Lovelock 1971",
+            "kernel evidence: full variational derivation (cadabra: Palatini "
+            "variation, double IBP, Bianchi/commutator reduction, residue zero "
+            "against the Lanczos form in general D) + Lovelock delta algebra "
+            "(cadabra, symbolic D) + component Lovelock properties (sympy); "
+            "every reduction identity was sympy-verified before use",
         ),
     )
 

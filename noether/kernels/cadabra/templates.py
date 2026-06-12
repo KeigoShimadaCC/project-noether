@@ -517,3 +517,113 @@ meld(res)
 print("NOETHER_CHECK: lanczos_form_zero=" + str(str(res) == "0"))
 """,
 )
+
+# ---------------------------------------------------------------------------
+# Eval 5 (variational derivation): delta of S = int sqrt(-g) (R^2 - 4 Ric^2
+# + Riem^2) equals -int sqrt(-g) H^{mn} h_{mn} with H the Lanczos tensor.
+# Mechanics: Palatini variation of RC/RM (all-lower vocabulary, explicit
+# inverse metrics, position=independent indices), double integration by
+# parts, then reduction by the contracted second Bianchi identities (all
+# Riemann slots), the once-contracted Ricci divergence (B2c), the rank-2
+# commutator, and the definitional Riemann traces. Every reduction rule was
+# verified numerically in the sympy kernel on a curved background under
+# noether-default-v1 before being frozen here. The h-field is delta g_{mn}
+# (so delta g^{mn} = -h^{mn}); the residue against the Lanczos form must be
+# exactly zero, valid in general dimension.
+# ---------------------------------------------------------------------------
+
+register(
+    "eval5_gauss_bonnet_variation",
+    r"""
+{a#, b#, c#, e#, m, n}::Indices(position=independent).
+q::Coordinate.
+\nabla{#}::Derivative.
+g^{a1 a2}::Symmetric.
+h_{a1 a2}::Symmetric.
+RC_{a1 a2}::Symmetric.
+RM_{a1 a2 a3 a4}::TableauSymmetry(shape={2,2}, indices={0,2,1,3}).
+dC_{a1 a2 a3}::TableauSymmetry(shape={2}, indices={1,2}).
+sg::LaTeXForm("\sqrt{-g}").
+h{#}::Depends(\nabla{#}).
+RC{#}::Depends(\nabla{#}).
+RM{#}::Depends(\nabla{#}).
+dC{#}::Depends(\nabla{#}).
+
+ex := \int{ sg RC_{a1 a2} g^{a1 a2} RC_{a3 a4} g^{a3 a4}
+          - 4 sg RC_{a1 a2} RC_{a3 a4} g^{a1 a3} g^{a2 a4}
+          + sg RM_{a1 a2 a3 a4} RM_{a5 a6 a7 a8} g^{a1 a5} g^{a2 a6} g^{a3 a7} g^{a4 a8} }{q};
+
+vary(ex, $RC_{a1 a2} -> g^{c1 c2} \nabla_{c1}{dC_{c2 a2 a1}} - g^{c1 c2} \nabla_{a2}{dC_{c2 c1 a1}}, RM_{a1 a2 a3 a4} -> g^{c1 c2} h_{a1 c1} RM_{c2 a2 a3 a4} + \nabla_{a3}{dC_{a1 a4 a2}} - \nabla_{a4}{dC_{a1 a3 a2}}, g^{a1 a2} -> - g^{a1 c1} g^{a2 c2} h_{c1 c2}, sg -> 1/2 sg g^{c1 c2} h_{c1 c2}$);
+substitute(ex, $dC_{a1 a2 a3} -> 1/2 \nabla_{a2}{h_{a1 a3}} + 1/2 \nabla_{a3}{h_{a1 a2}} - 1/2 \nabla_{a1}{h_{a2 a3}}$);
+distribute(ex);
+product_rule(ex);
+distribute(ex);
+
+def cleanup(e):
+    substitute(e, $\nabla_{m}{g^{a1 a2}} -> 0$)
+    substitute(e, $\nabla_{m}{sg} -> 0$)
+    unwrap(e)
+    distribute(e)
+    return e
+
+cleanup(ex)
+integrate_by_parts(ex, $\nabla_{m}{h_{a1 a2}}$);
+product_rule(ex)
+distribute(ex)
+cleanup(ex)
+integrate_by_parts(ex, $h_{a1 a2}$);
+product_rule(ex)
+distribute(ex)
+cleanup(ex)
+substitute(ex, $\int{A??}{q} -> A??$);
+
+def tidy(e):
+    sort_product(e)
+    sort_sum(e)
+    canonicalise(e)
+    rename_dummies(e)
+    meld(e)
+    return e
+
+for i in range(8):
+    tidy(ex)
+    substitute(ex, $RM_{a1 a2 a3 a4} g^{a1 a3} -> RC_{a2 a4}$)
+    substitute(ex, $RM_{a1 a2 a3 a4} g^{a1 a4} -> - RC_{a2 a3}$)
+    substitute(ex, $RM_{a1 a2 a3 a4} g^{a2 a3} -> - RC_{a1 a4}$)
+    substitute(ex, $RM_{a1 a2 a3 a4} g^{a2 a4} -> RC_{a1 a3}$)
+    substitute(ex, $\nabla_{e1}{RM_{a1 a2 a3 a4}} g^{e1 a1} -> \nabla_{a3}{RC_{a2 a4}} - \nabla_{a4}{RC_{a2 a3}}$)
+    substitute(ex, $\nabla_{e1}{RM_{a1 a2 a3 a4}} g^{e1 a2} -> \nabla_{a4}{RC_{a1 a3}} - \nabla_{a3}{RC_{a1 a4}}$)
+    substitute(ex, $\nabla_{e1}{RM_{a1 a2 a3 a4}} g^{e1 a3} -> \nabla_{a1}{RC_{a4 a2}} - \nabla_{a2}{RC_{a4 a1}}$)
+    substitute(ex, $\nabla_{e1}{RM_{a1 a2 a3 a4}} g^{e1 a4} -> \nabla_{a2}{RC_{a3 a1}} - \nabla_{a1}{RC_{a3 a2}}$)
+    substitute(ex, $\nabla_{e2}{\nabla_{e1}{RM_{a1 a2 a3 a4}}} g^{e1 a1} -> \nabla_{e2}{\nabla_{a3}{RC_{a2 a4}}} - \nabla_{e2}{\nabla_{a4}{RC_{a2 a3}}}$)
+    substitute(ex, $\nabla_{e2}{\nabla_{e1}{RM_{a1 a2 a3 a4}}} g^{e1 a2} -> \nabla_{e2}{\nabla_{a4}{RC_{a1 a3}}} - \nabla_{e2}{\nabla_{a3}{RC_{a1 a4}}}$)
+    substitute(ex, $\nabla_{e2}{\nabla_{e1}{RM_{a1 a2 a3 a4}}} g^{e1 a3} -> \nabla_{e2}{\nabla_{a1}{RC_{a4 a2}}} - \nabla_{e2}{\nabla_{a2}{RC_{a4 a1}}}$)
+    substitute(ex, $\nabla_{e2}{\nabla_{e1}{RM_{a1 a2 a3 a4}}} g^{e1 a4} -> \nabla_{e2}{\nabla_{a2}{RC_{a3 a1}}} - \nabla_{e2}{\nabla_{a1}{RC_{a3 a2}}}$)
+    substitute(ex, $\nabla_{e1}{RC_{a1 a2}} g^{e1 a1} -> 1/2 g^{c1 c2} \nabla_{a2}{RC_{c1 c2}}$)
+    substitute(ex, $\nabla_{e1}{RC_{a1 a2}} g^{e1 a2} -> 1/2 g^{c1 c2} \nabla_{a1}{RC_{c1 c2}}$)
+    substitute(ex, $\nabla_{e2}{\nabla_{e1}{RC_{a1 a2}}} g^{e2 a1} -> \nabla_{e1}{\nabla_{e2}{RC_{a1 a2}}} g^{e2 a1} - RM_{c1 a1 e2 e1} RC_{c2 a2} g^{c1 c2} g^{e2 a1} - RM_{c1 a2 e2 e1} RC_{a1 c2} g^{c1 c2} g^{e2 a1}$)
+    substitute(ex, $\nabla_{e2}{\nabla_{e1}{RC_{a1 a2}}} g^{e2 a2} -> \nabla_{e1}{\nabla_{e2}{RC_{a1 a2}}} g^{e2 a2} - RM_{c1 a1 e2 e1} RC_{c2 a2} g^{c1 c2} g^{e2 a2} - RM_{c1 a2 e2 e1} RC_{a1 c2} g^{c1 c2} g^{e2 a2}$)
+    distribute(ex)
+    substitute(ex, $\nabla_{e2}{\nabla_{e1}{RC_{a1 a2}}} g^{e1 a1} -> 1/2 g^{c1 c2} \nabla_{e2}{\nabla_{a2}{RC_{c1 c2}}}$)
+    substitute(ex, $\nabla_{e2}{\nabla_{e1}{RC_{a1 a2}}} g^{e1 a2} -> 1/2 g^{c1 c2} \nabla_{e2}{\nabla_{a1}{RC_{c1 c2}}}$)
+    distribute(ex)
+
+tidy(ex)
+print("NOETHER_RESULT: " + str(ex))
+
+tgt := - sg h_{m n} ( 2 RC_{b1 b2} g^{m b1} g^{n b2} RC_{b3 b4} g^{b3 b4}
+ - 4 RC_{b1 b2} RC_{b3 b4} g^{m b1} g^{b2 b3} g^{n b4}
+ - 4 RC_{b1 b2} RM_{b3 b4 b5 b6} g^{b1 b4} g^{b2 b6} g^{m b3} g^{n b5}
+ + 2 RM_{b1 b2 b3 b4} RM_{b5 b6 b7 b8} g^{m b1} g^{n b5} g^{b2 b6} g^{b3 b7} g^{b4 b8}
+ - 1/2 g^{m n} ( RC_{b1 b2} g^{b1 b2} RC_{b3 b4} g^{b3 b4} - 4 RC_{b1 b2} RC_{b3 b4} g^{b1 b3} g^{b2 b4} + RM_{b1 b2 b3 b4} RM_{b5 b6 b7 b8} g^{b1 b5} g^{b2 b6} g^{b3 b7} g^{b4 b8} ) );
+distribute(tgt);
+tidy(tgt)
+print("TARGET: " + str(tgt))
+
+res := @(ex) - @(tgt);
+distribute(res);
+tidy(res)
+tidy(res)
+print("NOETHER_CHECK: variation_residue_zero=" + str(str(res) == "0"))
+""",
+)
