@@ -44,7 +44,9 @@ from noether.kernels.sympy_kernel.geometry import (
     random_diagonal_metric,
     random_scalar_field,
     ricci_of_connection,
+    sparse_diagonal_metric,
     two_sphere,
+    warped_product_4d,
 )
 from noether.npr.ast import Expr
 
@@ -55,8 +57,14 @@ def _geometry_for(spec: dict[str, Any]) -> ComponentGeometry:
     kind = spec.get("kind")
     if kind == "random-diagonal":
         return random_diagonal_metric(seed=int(spec["seed"]), dim=int(spec.get("dim", 4)))
+    if kind == "sparse-diagonal":
+        return sparse_diagonal_metric(
+            seed=int(spec["seed"]), dim=int(spec.get("dim", 4)), curved=int(spec.get("curved", 3))
+        )
     if kind == "two-sphere":
         return two_sphere()
+    if kind == "warped-product-4d":
+        return warped_product_4d()
     raise ValueError(f"unknown metric spec kind {kind!r}")
 
 

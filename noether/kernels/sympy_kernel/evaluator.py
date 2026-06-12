@@ -28,6 +28,7 @@ _BASE_VARIANCES = {
     ("R", 2): ["down", "down"],
     ("G", 2): ["down", "down"],
     ("g", 2): ["down", "down"],
+    ("H", 2): ["down", "down"],
 }
 
 
@@ -42,6 +43,10 @@ def _base_components(name: str, rank: int, geom: ComponentGeometry):
         return geom.ricci_scalar
     if name == "G" and rank == 2:
         return geom.einstein
+    if name == "H" and rank == 2:
+        return geom.gauss_bonnet
+    if name == "GB" and rank == 0:
+        return geom.gauss_bonnet_scalar
     raise EvaluationError(f"no component rule for tensor {name!r} of rank {rank}")
 
 

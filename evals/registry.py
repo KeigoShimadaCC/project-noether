@@ -225,11 +225,80 @@ def _eval4() -> EvalSpec:
     )
 
 
+def _eval5() -> EvalSpec:
+    from evals import eval5_gauss_bonnet as m
+    from noether.verify.checks import WellFormedCheck
+
+    h = m.lanczos_shorthand().model_dump()
+    return EvalSpec(
+        key="eval5",
+        title="Gauss-Bonnet (Lovelock p=2), dimension-dependent identities",
+        build_npr=m.build_npr,
+        answers=m.ELICITATION_ANSWERS,
+        cadabra_runs=(
+            CadabraRun(
+                "Lovelock p=2 delta algebra in symbolic D (GB scalar + Lanczos form)",
+                "eval5_gauss_bonnet",
+                ("gb_scalar_zero", "lanczos_form_zero"),
+            ),
+        ),
+        results=(
+            PresentedResult(
+                result_id="eom-metric",
+                expr=m.target_eom,
+                tex_suffix=" = 0",
+                ladder=lambda: [WellFormedCheck(expected_free=[m.MU, m.NU])],
+                component_tasks=(
+                    (
+                        "D=4: Lanczos tensor identically zero (GB scalar nonzero background)",
+                        {"check": "zero", "expr": h, "metric": {"kind": "warped-product-4d"}},
+                    ),
+                    (
+                        "D=5: Lanczos tensor symmetric",
+                        {
+                            "check": "symmetric",
+                            "expr": h,
+                            "metric": {
+                                "kind": "sparse-diagonal",
+                                "seed": 7,
+                                "dim": 5,
+                                "curved": 3,
+                            },
+                        },
+                    ),
+                    (
+                        "D=5: Lanczos tensor divergence-free (Lovelock property)",
+                        {
+                            "check": "divergence-zero",
+                            "expr": h,
+                            "metric": {
+                                "kind": "sparse-diagonal",
+                                "seed": 7,
+                                "dim": 5,
+                                "curved": 3,
+                            },
+                        },
+                    ),
+                ),
+            ),
+        ),
+        notes=(
+            "in D=4 the equation is IDENTICALLY zero (Gauss-Bonnet is topological); "
+            "dynamical only for D >= 5",
+            "variational derivation with Bianchi reduction is Horizon 2 scope; "
+            "kernel evidence here: Lovelock delta algebra (cadabra, symbolic D) "
+            "+ component Lovelock properties (sympy); field-equation form cited "
+            "from Lovelock 1971",
+        ),
+    )
+
+
 _BUILDERS: dict[str, Callable[[], EvalSpec]] = {
     "eval1": _eval1,
     "eval2": _eval2,
     "eval3": _eval3,
     "eval4": _eval4,
+    "eval5": _eval5,
 }
 
 

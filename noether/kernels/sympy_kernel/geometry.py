@@ -108,6 +108,70 @@ class ComponentGeometry:
                 out[a, b] = _clean(self.ricci[a, b] - sp.Rational(1, 2) * self.g[a, b] * R)
         return Array(out)
 
+    @cached_property
+    def riemann_down(self) -> Array:
+        """R_{rho sigma mu nu}, all indices down."""
+        n = self.dim
+        out = sp.MutableDenseNDimArray.zeros(n, n, n, n)
+        for s in range(n):
+            for m in range(n):
+                for nu in range(m + 1, n):
+                    for r in range(n):
+                        val = _clean(
+                            sum(self.g[r, lam] * self.riemann[lam, s, m, nu] for lam in range(n))
+                        )
+                        out[r, s, m, nu] = val
+                        out[r, s, nu, m] = -val
+        return Array(out)
+
+    @cached_property
+    def _riemann_mixed(self) -> Array:
+        """R_mu^{abc}: riemann_down with the last three axes raised."""
+        arr = self.riemann_down
+        for axis in (1, 2, 3):
+            arr = self.raise_first_index(arr, axis)
+        return arr
+
+    @cached_property
+    def gauss_bonnet_scalar(self) -> sp.Expr:
+        """GB = R^2 - 4 R_{ab}R^{ab} + R_{abcd}R^{abcd}."""
+        n = self.dim
+        ric_up = self.raise_first_index(self.raise_first_index(self.ricci, 0), 1)
+        ricric = sum(self.ricci[a, b] * ric_up[a, b] for a in range(n) for b in range(n))
+        riem_up = self.raise_first_index(self._riemann_mixed, 0)
+        riemriem = sum(self.riemann_down[idx] * riem_up[idx] for idx in _all_indices(n, 4))
+        return _clean(self.ricci_scalar**2 - 4 * ricric + riemriem)
+
+    @cached_property
+    def gauss_bonnet(self) -> Array:
+        """The Lanczos tensor H_{mu nu} (the Gauss-Bonnet field equation LHS):
+        2( R R_{mu nu} - 2 R_{mu a}R^a_nu - 2 R^{ab} R_{mu a nu b}
+           + R_mu^{abc} R_{nu abc} ) - 1/2 g_{mu nu} GB.
+        Identically zero in dim 4 (Lovelock); divergence-free in any dim."""
+        n = self.dim
+        ric, scal = self.ricci, self.ricci_scalar
+        ric_mixed = self.raise_first_index(ric, 0)  # R^a_b
+        ric_up = self.raise_first_index(ric_mixed, 1)  # R^{ab}
+        rdown, rmixed = self.riemann_down, self._riemann_mixed
+        out = sp.MutableDenseNDimArray.zeros(n, n)
+        # every component computed independently so the V1 symmetric check
+        # genuinely exercises the pair symmetries of the Riemann contractions
+        for m in range(n):
+            for nu in range(n):
+                a_term = sum(ric[m, a] * ric_mixed[a, nu] for a in range(n))
+                b_term = sum(ric_up[a, b] * rdown[m, a, nu, b] for a in range(n) for b in range(n))
+                c_term = sum(
+                    rmixed[m, a, b, c] * rdown[nu, a, b, c]
+                    for a in range(n)
+                    for b in range(n)
+                    for c in range(n)
+                )
+                out[m, nu] = _clean(
+                    2 * (scal * ric[m, nu] - 2 * a_term - 2 * b_term + c_term)
+                    - sp.Rational(1, 2) * self.g[m, nu] * self.gauss_bonnet_scalar
+                )
+        return Array(out)
+
     def covariant_derivative(self, arr, variances: list[str]):
         """nabla_a T: returns array with a new leading 'down' axis.
 
@@ -256,6 +320,39 @@ def random_antisymmetric(seed: int, coords: list[sp.Symbol]) -> Array:
             out[i, j] = p
             out[j, i] = -p
     return Array(out)
+
+
+def warped_product_4d() -> ComponentGeometry:
+    """Deterministic warped-product 4-metric with NONZERO Gauss-Bonnet scalar,
+    so the D=4 vanishing of the Lanczos tensor is a genuine cancellation
+    between its quadratic-curvature pieces, not an artifact of GB = 0."""
+    t, x, y, z = sp.symbols("t x y z")
+    g = sp.diag(-(1 + x), 1, (1 + x) * (1 + y), 1 + y)
+    return ComponentGeometry([t, x, y, z], g)
+
+
+def sparse_diagonal_metric(seed: int, dim: int = 4, curved: int = 3) -> ComponentGeometry:
+    """Seeded diagonal metric with only `curved` perturbed entries.
+
+    Same Lorentzian mostly-plus shape as random_diagonal_metric, but the
+    remaining entries stay constant, keeping the Riemann tensor sparse. Used
+    for quartic-curvature checks (Gauss-Bonnet) where full random metrics
+    make exact rational arithmetic prohibitively slow."""
+    rng = random.Random(seed)
+    names = ["t", "x", "y", "z", "w", "v"][:dim]
+    coords = [sp.Symbol(nm) for nm in names]
+    slots = sorted(rng.sample(range(dim), k=min(curved, dim)))
+    entries = []
+    for i in range(dim):
+        if i in slots:
+            c = sp.Rational(rng.randint(1, 3), rng.randint(2, 5))
+            var = coords[rng.randrange(dim)]
+            p = 1 + c * var
+        else:
+            p = sp.Integer(1)
+        entries.append(-p if i == 0 else p)
+    g = sp.diag(*entries)
+    return ComponentGeometry(coords, g)
 
 
 def random_diagonal_metric(seed: int, dim: int = 4) -> ComponentGeometry:

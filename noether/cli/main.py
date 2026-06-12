@@ -1,6 +1,7 @@
 """Minimal CLI: prove the loop end to end from a terminal.
 
-H1 surface: `noether kernels`, `noether eval{1,2,3,4} [--results DIR]`.
+H1 surface: `noether kernels`, `noether eval{1..5} [--results DIR]`
+(eval5 gates Horizon 2).
 The conversational front grows here later; physics state stays server-side.
 """
 
@@ -17,7 +18,7 @@ from noether.orchestrator.session import Session
 from noether.provenance.bundle import ResultBundle, write_bundle
 from noether.verify.ladder import run_ladder
 
-EVAL_KEYS = ("eval1", "eval2", "eval3", "eval4")
+EVAL_KEYS = ("eval1", "eval2", "eval3", "eval4", "eval5")
 
 
 def _adapters() -> dict:

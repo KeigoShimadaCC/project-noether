@@ -451,3 +451,69 @@ print("NOETHER_CHECK: residue=" + str(residue))
 print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
 """,
 )
+
+# ---------------------------------------------------------------------------
+# Eval 5: Gauss-Bonnet / Lovelock p=2, via the generalized Kronecker delta
+# (pattern after Castillo-Felisola, Price & Scomparin, arXiv:2210.00005).
+# Indices are position-independent with SYMBOLIC dimension D. Two checks:
+#   gb_scalar_zero    -- the p=2 Lovelock delta contraction equals
+#                        R^2 - 4 R_{ab}R^{ab} + R_{abcd}R^{abcd} (the GB scalar);
+#   lanczos_form_zero -- the p=2 Lovelock field-equation contraction
+#                        (Lovelock 1971) equals the literature Lanczos form
+#                        2( R R^{mn} - 2 R^{ma}R^{na} - 2 R^{ab}R^{manb}
+#                           + R^{mabc}R^{nabc} ) - 1/2 delta^{mn} GB.
+# The D=4 identical vanishing of the Lanczos tensor is a dimension-dependent
+# identity invisible to symbol-level canonicalisation; it is verified by
+# component evaluation in the sympy kernel (docs/04_EVALS.md, eval 5 V3).
+# ---------------------------------------------------------------------------
+
+register(
+    "eval5_gauss_bonnet",
+    r"""
+{a#,b#,m,n,s#}::Indices.
+{a#,b#,m,n,s#}::Integer(1..D).
+\delta{#}::KroneckerDelta.
+R^{s1 s2 s3 s4}::TableauSymmetry(shape={2,2}, indices={0,2,1,3}).
+R^{s1 s2}::Symmetric.
+
+toR := {R^{s1 s2 s1 s2} = R, R^{s1 s2 s2 s1} = -R};
+toRic := {R^{s1 s2 s1 s3} = R^{s2 s3}, R^{s2 s1 s3 s1} = R^{s2 s3}, R^{s1 s2 s3 s1} = -R^{s2 s3}, R^{s2 s1 s1 s3} = -R^{s2 s3}};
+
+def LLmanip(ex):
+    expand_delta(ex)
+    distribute(ex)
+    eliminate_kronecker(ex)
+    canonicalise(ex)
+    rename_dummies(ex)
+    substitute(ex, toR)
+    substitute(ex, toRic)
+    sort_product(ex)
+    sort_sum(ex)
+    canonicalise(ex)
+    rename_dummies(ex)
+    collect_factors(ex)
+    return ex
+
+LL2 := 4 * 3 * 2/2/2 R^{a1 a2 b1 b2} R^{a3 a4 b3 b4} \delta^{a1 b1 a2 b2 a3 b3 a4 b4};
+LLmanip(LL2)
+print("NOETHER_RESULT: " + str(LL2))
+gbres := @(LL2) - R R + 4 R^{s1 s2} R^{s1 s2} - R^{s1 s2 s3 s4} R^{s1 s2 s3 s4};
+LLmanip(gbres)
+print("NOETHER_CHECK: gb_scalar_zero=" + str(str(gbres) == "0"))
+
+feq := - 5 * 4 * 3 * 2/2/2/2 R^{a1 a2 b1 b2} R^{a3 a4 b3 b4} \delta^{m n a1 b1 a2 b2 a3 b3 a4 b4};
+LLmanip(feq)
+print("NOETHER_LANCZOS: " + str(feq))
+
+target := 2 R R^{m n} - 4 R^{s1 s2} R^{m s1 n s2} - 4 R^{m s1} R^{n s1} + 2 R^{m s1 s2 s3} R^{n s1 s2 s3} - 1/2 \delta^{m n} ( R R - 4 R^{s1 s2} R^{s1 s2} + R^{s1 s2 s3 s4} R^{s1 s2 s3 s4} );
+distribute(target);
+sort_product(target)
+sort_sum(target)
+canonicalise(target)
+rename_dummies(target)
+res := @(feq) - @(target);
+LLmanip(res)
+meld(res)
+print("NOETHER_CHECK: lanczos_form_zero=" + str(str(res) == "0"))
+""",
+)

@@ -1,8 +1,8 @@
 # 04 — Evaluation suite: five action-to-result pairs
 
-**Status:** stable for evals 1-4; eval 5 draft.
-**Implementation (2026-06-12):** evals 1-4 are executable (`evals/`, run via
-`noether eval1` .. `noether eval4`) and kernel-verified against cadabra2
+**Status:** stable for evals 1-4; eval 5 partially implemented (see below).
+**Implementation (2026-06-12):** all five evals are executable (`evals/`, run
+via `noether eval1` .. `noether eval5`) and kernel-checked against cadabra2
 2.5.15: the eval 1 and 3 variation residues are zero against the targets
 below, the eval 2 connection equation is solved identically by the projective
 family (with `Ricci(LC + projective) - Ricci(LC) = dA` checked exactly), and
@@ -11,6 +11,13 @@ checks confirm the eval 1 ladder, eval 2 projective inertness, the eval 3
 generalized-Bianchi link in the minimal limit, and the eval 4 Noether
 identity off shell, all on seeded random curved backgrounds. Signs below are
 therefore pinned under `noether-default-v1`.
+**Eval 5 scope:** cadabra verifies the Lovelock p=2 delta algebra in symbolic
+D (the GB scalar and the Lanczos field-equation form, the latter cited from
+Lovelock 1971); sympy verifies by component evaluation that the Lanczos
+tensor is symmetric, divergence-free, identically zero in D=4 (on a
+background with nonzero GB scalar, so the cancellation is real) and nonzero
+in D=5. The variational derivation with Bianchi-identity reduction to
+second-order good form remains the open Horizon 2 capability.
 **Role:** these five pairs are the acceptance tests for Horizons 1 and 2
 (NORTH_STAR §17). Each pair specifies the input a user would give, the
 elicitation Noether must perform, the result it must return, and the
