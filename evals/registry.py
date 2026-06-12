@@ -244,6 +244,63 @@ def _eval3() -> EvalSpec:
     )
 
 
+def _eval3s() -> EvalSpec:
+    from evals import eval3s_spectrum as m
+    from noether.verify.checks import WellFormedCheck
+
+    return EvalSpec(
+        key="eval3s",
+        title="Spectrum around Minkowski (eval 3 stretch task, Horizon 2 gate)",
+        build_npr=m.build_npr,
+        answers=m.ELICITATION_ANSWERS,
+        cadabra_runs=(),
+        results=(
+            PresentedResult(
+                result_id="diagonalizing-shift",
+                expr=m.diagonalizing_shift,
+                tex_suffix=(
+                    r" = h_{\mu\nu} + \frac{F'(\phi_0)}{F(\phi_0)}\,\chi\,\eta_{\mu\nu}"
+                    r"\quad\text{(removes the kinetic mixing exactly)}"
+                ),
+                ladder=lambda: [WellFormedCheck(expected_free=[m.MU, m.NU])],
+                component_tasks=(
+                    (
+                        "linearization + diagonalization + dispersion, verified on "
+                        "component fields and anchored to the full eval-3 equations",
+                        {"check": "spectrum-scalar-tensor-minkowski"},
+                    ),
+                ),
+            ),
+            PresentedResult(
+                result_id="graviton-sector",
+                expr=m.graviton_eom,
+                tex_suffix=r"[\bar h] = 0",
+                ladder=lambda: [WellFormedCheck(expected_free=[m.MU, m.NU])],
+            ),
+            PresentedResult(
+                result_id="scalar-sector",
+                expr=m.scalar_eom,
+                tex_suffix=(r" = 0,\qquad K_\chi = \frac{F(\phi_0) + 3F'(\phi_0)^2}{F(\phi_0)}"),
+                ladder=lambda: [WellFormedCheck(expected_free=[])],
+            ),
+        ),
+        notes=(
+            "kernel evidence (sympy, spectrum-scalar-tensor-minkowski): the linear "
+            "operators equal the eps-derivative of the cadabra-verified full eval-3 "
+            "equations (anchor on concrete fields, exact geometry); the shift "
+            "c = -F'/F cancels the mixing exactly and +F'/F does not; "
+            "R1[chi eta] = -3 box chi and tr G1 = -R1 pin K_chi = (F0+3F'^2)/F0; "
+            "a TT plane wave solves G1[hbar] = 0 iff its momentum is null",
+            "spectrum: massless graviton (2 TT polarizations) + one scalar with "
+            "m^2 = V''(phi_0)/K_chi; no ghost iff F(phi_0) > 0 and "
+            "F(phi_0) + 3F'(phi_0)^2 > 0",
+            "diagonalization is at the level of the equations of motion, so no "
+            "gauge fixing enters the K_chi statement; TT is used only for mode "
+            "counting",
+        ),
+    )
+
+
 def _eval4() -> EvalSpec:
     from evals import eval4_maxwell as m
     from noether.verify.checks import WellFormedCheck
@@ -363,6 +420,7 @@ _BUILDERS: dict[str, Callable[[], EvalSpec]] = {
     "eval1s": _eval1s,
     "eval2": _eval2,
     "eval3": _eval3,
+    "eval3s": _eval3s,
     "eval4": _eval4,
     "eval5": _eval5,
 }

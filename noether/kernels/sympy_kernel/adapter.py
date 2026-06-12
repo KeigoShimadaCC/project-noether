@@ -9,6 +9,9 @@ Supported task payloads (capability COMPONENT_EVAL):
   {"check": "adm-gr-1p2"}  (no metric spec: builds its own foliated 1+2
                             background and runs every ADM split/constraint
                             check in noether.kernels.sympy_kernel.adm)
+  {"check": "spectrum-scalar-tensor-minkowski"}  (no metric spec: runs every
+                            linearization/diagonalization check in
+                            noether.kernels.sympy_kernel.linearized)
 
 All checks accept an optional "fields" spec binding extra named tensors:
   {"phi": {"kind": "random-scalar", "seed": 7},
@@ -52,6 +55,7 @@ from noether.kernels.sympy_kernel.geometry import (
     two_sphere,
     warped_product_4d,
 )
+from noether.kernels.sympy_kernel.linearized import spectrum_checks
 from noether.npr.ast import Expr
 
 _EXPR = TypeAdapter(Expr)
@@ -105,7 +109,18 @@ class SympyKernelAdapter:
         payload = task.payload
         check = payload["check"]
         if check == "adm-gr-1p2":
-            return self._run_adm(payload)
+            return self._run_suite(
+                payload,
+                lambda: adm_sample_1p2().run_all(),
+                "adm background: deterministic nondegenerate 1+2 sample (adm_sample_1p2)",
+            )
+        if check == "spectrum-scalar-tensor-minkowski":
+            return self._run_suite(
+                payload,
+                spectrum_checks,
+                "linearized around Minkowski; anchor checks recompute the full "
+                "eval-3 equations with exact ComponentGeometry",
+            )
         geom = _geometry_for(payload["metric"])
         fields = _fields_for(payload.get("fields", {}), geom)
         start = time.monotonic()
@@ -160,9 +175,15 @@ class SympyKernelAdapter:
             notes=[f"metric spec: {payload['metric']}"],
         )
 
-    def _run_adm(self, payload: dict[str, Any]) -> ComputedResult:
+    def _run_suite(
+        self,
+        payload: dict[str, Any],
+        suite: Any,
+        note: str,
+    ) -> ComputedResult:
+        """Run a named suite of (ok, detail) checks as one kernel task."""
         start = time.monotonic()
-        results = adm_sample_1p2().run_all()
+        results: dict[str, tuple[bool, str]] = suite()
         passed = all(ok for ok, _ in results.values())
         detail = "; ".join(
             f"{name}: {'PASS' if ok else 'FAIL'} ({d})" for name, (ok, d) in results.items()
@@ -179,8 +200,8 @@ class SympyKernelAdapter:
             kernel_version=self.version(),
             script=script,
             raw=raw,
-            value={"passed": passed, "detail": detail, "check": "adm-gr-1p2"},
-            notes=["adm background: deterministic nondegenerate 1+2 sample (adm_sample_1p2)"],
+            value={"passed": passed, "detail": detail, "check": payload["check"]},
+            notes=[note],
         )
 
 

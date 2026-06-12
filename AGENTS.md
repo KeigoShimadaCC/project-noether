@@ -89,8 +89,9 @@ noether/             Python package
                      elicit (model proposes resolutions; only human-confirmed
                      answers mutate the NPR)
   cli/               `noether kernels`, `noether ingest`, `noether elicit`,
-                     `noether eval{1..5}`, `noether eval1s` (ADM of GR)
-evals/               Executable evals 1-5 and 1s + registry + their pytest gates
+                     `noether eval{1..5}`, `noether eval1s` (ADM of GR),
+                     `noether eval3s` (Minkowski spectrum)
+evals/               Executable evals 1-5, 1s, 3s + registry + pytest gates
 tests/               Unit and adapter tests (cadabra golden test included)
 pyproject.toml       Package, deps, ruff, pytest config
 ```

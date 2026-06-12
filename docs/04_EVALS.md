@@ -1,7 +1,7 @@
 # 04 — Evaluation suite: five action-to-result pairs
 
-**Status:** stable; all five evals plus the eval 1 stretch task (1s, ADM of GR)
-implemented and kernel-verified.
+**Status:** stable; all five evals plus the stretch tasks 1s (ADM of GR) and
+3s (spectrum around Minkowski) implemented and kernel-verified.
 **Implementation (2026-06-12):** all five evals are executable (`evals/`, run
 via `noether eval1` .. `noether eval5`) and kernel-checked against cadabra2
 2.5.15: the eval 1 and 3 variation residues are zero against the targets
@@ -304,6 +304,30 @@ quadratic order in a stated gauge: recover the massless graviton plus a scalar
 with kinetic mixing from `F'(φ₀)`, and report the diagonalized kinetic
 structure (no ghost for `F(φ₀) > 0` and positive effective scalar kinetic
 term). This is the eval for the "spectrum" beat of the guiding scenario.
+
+**Status: implemented (eval 3s; `evals/eval3s_spectrum.py`).** Conventions:
+`noether-default-v1`; `F₀ = F(φ₀)`, `F₁ = F'(φ₀)`. The linearized geometry is
+computed from the definitional formulas with arithmetic truncated at `O(ε²)`,
+and the linear equations of motion are anchored to the cadabra-verified full
+eval-3 equations by recomputing their `ε`-derivative on concrete component
+fields with exact geometry (no truncation). Every coefficient was pinned by
+kernel computation, with falsifiers:
+
+- Linear EOMs: `F₀ G⁽¹⁾_{μν}[h] + (η_{μν}□ - ∂_μ∂_ν)(F₁χ) = 0` and
+  `□χ + F₁ R⁽¹⁾[h] - V''₀ χ = 0`.
+- The shift `h_{μν} = h̄_{μν} - (F₁/F₀) χ η_{μν}` cancels the kinetic mixing
+  exactly; the opposite sign does not (kernel-rejected). Metric equation
+  becomes `F₀ G⁽¹⁾[h̄] = 0`; its trace forces `R⁽¹⁾[h̄] = 0` on shell
+  (`η^{μν}G⁽¹⁾ = -R⁽¹⁾`, kernel-pinned).
+- With `R⁽¹⁾[χη] = -3□χ` (kernel-pinned), the scalar sector becomes
+  `K_χ □χ = V''₀ χ` with `K_χ = (F₀ + 3F₁²)/F₀`, so `m²_χ = V''₀/K_χ`.
+- Graviton: a TT plane wave solves `G⁽¹⁾[h̄] = 0` iff its momentum is null
+  (massless; non-null momentum is kernel-rejected). Two TT polarizations.
+- No ghost: `F₀ > 0` (graviton sector) and `F₀ + 3F₁² > 0` (scalar sector).
+
+The diagonalization is performed at the level of the equations of motion, so
+no gauge choice enters the `K_χ` statement; TT enters only the mode-counting
+statement.
 
 ---
 

@@ -104,6 +104,35 @@ def build_plan(npr: NPR) -> Plan:
         ]
         return Plan(task_type="adm", steps=steps, verification=verification)
 
+    if npr.task.type == "perturb":
+        steps = [
+            PlanStep(
+                capability=Capability.SUBSTITUTE,
+                description=("expand fields around the stated background to the requested order"),
+            ),
+            PlanStep(
+                capability=Capability.CANONICALIZE,
+                description=(
+                    "assemble the linearized equations of motion from the "
+                    "verified full equations; diagonalize kinetic mixing"
+                ),
+            ),
+            PlanStep(
+                capability=Capability.COMPONENT_EVAL,
+                description=(
+                    "verify the diagonalizing shift, the trace identity, the "
+                    "dispersion relations, and the anchors against the full "
+                    "equations on component fields"
+                ),
+            ),
+        ]
+        verification = [
+            "well-formed",
+            "linearization-anchored-to-full-eom",
+            "kinetic-diagonalization-on-components",
+        ]
+        return Plan(task_type="perturb", steps=steps, verification=verification)
+
     raise NotImplementedError(
         f"task type {npr.task.type!r} has no plan template yet (Horizon gate)"
     )
