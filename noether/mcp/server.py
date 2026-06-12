@@ -13,7 +13,6 @@ MCP runtime); create_mcp_server wraps it for stdio transport.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from noether.kernels.cadabra import CadabraAdapter
@@ -21,11 +20,10 @@ from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.npr.parse import ParseError
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
-from noether.orchestrator.store import SessionStore
+from noether.orchestrator.store import DEFAULT_STORE, SessionStore
 from noether.orchestrator.view import session_payload
 
 DEFAULT_MEASURE = r"d^4x \sqrt{-g}"
-DEFAULT_STORE = Path.home() / ".noether" / "sessions"
 
 
 class NoetherTools:

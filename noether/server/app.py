@@ -13,7 +13,6 @@ returns 409 with the questions, never a guess.
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -27,11 +26,10 @@ from noether.orchestrator.elicit import propose_resolutions
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
 from noether.orchestrator.session import Session
-from noether.orchestrator.store import SessionStore
+from noether.orchestrator.store import DEFAULT_STORE, SessionStore
 from noether.orchestrator.view import session_payload as _session_payload
 
 DEFAULT_MEASURE = r"d^4x \sqrt{-g}"
-DEFAULT_STORE = Path.home() / ".noether" / "sessions"
 
 
 class CreateSessionRequest(BaseModel):

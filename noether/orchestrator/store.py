@@ -13,6 +13,8 @@ from pathlib import Path
 
 from noether.orchestrator.session import Session
 
+DEFAULT_STORE = Path.home() / ".noether" / "sessions"
+
 
 class SessionStore:
     def __init__(self, root: Path) -> None:

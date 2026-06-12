@@ -159,6 +159,33 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def _store_from(args):
+    from noether.orchestrator.store import DEFAULT_STORE, SessionStore
+
+    return SessionStore(Path(args.store) if args.store else DEFAULT_STORE)
+
+
+def _chat_loop(args):
+    from noether.cli.chat import ChatLoop
+    from noether.llm.cli import CliLLMAdapter
+
+    return ChatLoop(store=_store_from(args), llm=CliLLMAdapter())
+
+
+def cmd_chat(args) -> int:
+    return _chat_loop(args).start(measure=args.measure)
+
+
+def cmd_resume(args) -> int:
+    return _chat_loop(args).resume(args.session_id)
+
+
+def cmd_sessions(args) -> int:
+    for session_id in _store_from(args).list_ids():
+        print(session_id)
+    return 0
+
+
 def cmd_mcp(args) -> int:
     try:
         from noether.mcp import create_mcp_server
@@ -312,6 +339,14 @@ def main() -> int:
     srv.add_argument("--store", default=None, help="session store directory")
     mcp_p = sub.add_parser("mcp", help="run the MCP stdio server (requires [mcp] extra)")
     mcp_p.add_argument("--store", default=None, help="session store directory")
+    chat = sub.add_parser("chat", help="conversational loop: ingest, clarify, plan")
+    chat.add_argument("--measure", default=r"d^4x \sqrt{-g}", help="action measure")
+    chat.add_argument("--store", default=None, help="session store directory")
+    res = sub.add_parser("resume", help="resume a stored session")
+    res.add_argument("session_id", help="session id, e.g. s-1a2b3c4d5e6f")
+    res.add_argument("--store", default=None, help="session store directory")
+    lst = sub.add_parser("sessions", help="list stored sessions")
+    lst.add_argument("--store", default=None, help="session store directory")
     for key in EVAL_KEYS:
         p = sub.add_parser(key, help=f"run {key} end to end")
         p.add_argument("--results", default="results", help="provenance bundle root")
@@ -327,6 +362,12 @@ def main() -> int:
             return cmd_serve(args)
         if args.command == "mcp":
             return cmd_mcp(args)
+        if args.command == "chat":
+            return cmd_chat(args)
+        if args.command == "resume":
+            return cmd_resume(args)
+        if args.command == "sessions":
+            return cmd_sessions(args)
         if args.command in EVAL_KEYS:
             return run_eval(args.command, args.results)
     except KernelUnavailable as exc:

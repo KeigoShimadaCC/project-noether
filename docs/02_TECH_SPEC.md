@@ -56,6 +56,17 @@ terminals and TeX; a CLI proves the four-beat loop with zero frontend investment
   containing scripts, assumptions, and checks.
 - Sessions are named and resumable: `noether resume <session>`.
 
+Status: `noether chat` runs the conversational loop (multiline LaTeX paste,
+ingest, questions as numbered options plus free-form answers, plan once well
+posed); `propose` inside the loop asks the detected agent CLI for suggestions
+that take effect only when the human accepts them one by one. `noether
+resume <id>` continues a stored session and `noether sessions` lists them;
+the store is shared with the HTTP and MCP frontends. Derivations for the
+supported task types currently run through the eval commands, which carry the
+provenance bundles; wiring arbitrary well-posed sessions into the compute
+pipeline is the remaining Horizon 1 gap. Tested in `tests/test_chat.py` with
+scripted IO.
+
 ### Horizon 2+: web app
 
 - Next.js + React, KaTeX for rendering, chat pane plus a structured side panel
