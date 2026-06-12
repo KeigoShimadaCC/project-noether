@@ -24,7 +24,7 @@ from noether.orchestrator.session import Session
 from noether.provenance.bundle import ResultBundle, write_bundle
 from noether.verify.ladder import run_ladder
 
-EVAL_KEYS = ("eval1", "eval2", "eval3", "eval4", "eval5")
+EVAL_KEYS = ("eval1", "eval1s", "eval2", "eval3", "eval4", "eval5")
 
 
 def _adapters() -> dict:
@@ -167,7 +167,9 @@ def run_eval(key: str, results_root: str) -> int:
     cadabra_results = []
     derivation_ok = True
     derivation_notes = []
-    if cadabra.available():
+    if not spec.cadabra_runs:
+        pass
+    elif cadabra.available():
         print("\nKernel derivations (cadabra):")
         for run in spec.cadabra_runs:
             result = cadabra.run(

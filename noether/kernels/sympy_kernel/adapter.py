@@ -6,6 +6,9 @@ Supported task payloads (capability COMPONENT_EVAL):
   {"check": "divergence-zero", "expr": <rank-2 down-down Expr dict>, "metric": <spec>}
   {"check": "equal",           "lhs": <Expr dict>, "rhs": <Expr dict>, "metric": <spec>}
   {"check": "palatini-projective-inert", "metric": <spec>, "seed": <int>}
+  {"check": "adm-gr-1p2"}  (no metric spec: builds its own foliated 1+2
+                            background and runs every ADM split/constraint
+                            check in noether.kernels.sympy_kernel.adm)
 
 All checks accept an optional "fields" spec binding extra named tensors:
   {"phi": {"kind": "random-scalar", "seed": 7},
@@ -35,6 +38,7 @@ from noether.kernels.base import (
     KernelScript,
     KernelTask,
 )
+from noether.kernels.sympy_kernel.adm import adm_sample_1p2
 from noether.kernels.sympy_kernel.evaluator import all_zero, evaluate
 from noether.kernels.sympy_kernel.geometry import (
     ComponentGeometry,
@@ -100,6 +104,8 @@ class SympyKernelAdapter:
             raise ValueError(f"sympy kernel does not provide {task.capability}")
         payload = task.payload
         check = payload["check"]
+        if check == "adm-gr-1p2":
+            return self._run_adm(payload)
         geom = _geometry_for(payload["metric"])
         fields = _fields_for(payload.get("fields", {}), geom)
         start = time.monotonic()
@@ -152,6 +158,29 @@ class SympyKernelAdapter:
             raw=raw,
             value={"passed": passed, "detail": detail, "check": check},
             notes=[f"metric spec: {payload['metric']}"],
+        )
+
+    def _run_adm(self, payload: dict[str, Any]) -> ComputedResult:
+        start = time.monotonic()
+        results = adm_sample_1p2().run_all()
+        passed = all(ok for ok, _ in results.values())
+        detail = "; ".join(
+            f"{name}: {'PASS' if ok else 'FAIL'} ({d})" for name, (ok, d) in results.items()
+        )
+        duration = time.monotonic() - start
+        script = KernelScript(
+            kernel_name=self.name,
+            language="python-sympy",
+            source=_reproduction_script(payload),
+        )
+        raw = KernelRawOutput(stdout=detail, returncode=0, duration_s=round(duration, 3))
+        return ComputedResult(
+            kernel_name=self.name,
+            kernel_version=self.version(),
+            script=script,
+            raw=raw,
+            value={"passed": passed, "detail": detail, "check": "adm-gr-1p2"},
+            notes=["adm background: deterministic nondegenerate 1+2 sample (adm_sample_1p2)"],
         )
 
 

@@ -73,6 +73,37 @@ def build_plan(npr: NPR) -> Plan:
         ]
         return Plan(task_type="vary", steps=steps, verification=verification)
 
+    if npr.task.type == "adm":
+        steps = [
+            PlanStep(
+                capability=Capability.SUBSTITUTE,
+                description=(
+                    "rewrite the metric in lapse/shift/spatial-metric (ADM) "
+                    "variables for the stated foliation"
+                ),
+            ),
+            PlanStep(
+                capability=Capability.CANONICALIZE,
+                description=(
+                    "split sqrt(-g) L into bulk and total-derivative parts "
+                    "(Gauss-Codazzi); separate constraints from evolution"
+                ),
+            ),
+            PlanStep(
+                capability=Capability.COMPONENT_EVAL,
+                description=(
+                    "verify the split, the constraint projections, and the "
+                    "lapse Euler-Lagrange equation on component fields"
+                ),
+            ),
+        ]
+        verification = [
+            "well-formed",
+            "adm-split-on-components",
+            "constraints-as-normal-projections",
+        ]
+        return Plan(task_type="adm", steps=steps, verification=verification)
+
     raise NotImplementedError(
         f"task type {npr.task.type!r} has no plan template yet (Horizon gate)"
     )

@@ -75,6 +75,64 @@ def _eval1() -> EvalSpec:
     )
 
 
+def _eval1s() -> EvalSpec:
+    from evals import eval1s_adm as m
+    from noether.verify.checks import WellFormedCheck
+
+    return EvalSpec(
+        key="eval1s",
+        title="ADM decomposition of GR (eval 1 stretch task, Horizon 2 gate)",
+        build_npr=m.build_npr,
+        answers=m.ELICITATION_ANSWERS,
+        cadabra_runs=(),
+        results=(
+            PresentedResult(
+                result_id="adm-split",
+                expr=m.bulk_density,
+                tex_suffix=(
+                    r" \;=\; \frac{\sqrt{-g}\,R + 2\,\partial_\mu(\sqrt{-g}\,v^\mu)}"
+                    r"{N\sqrt{h}},\quad v^\mu = n^\nu\nabla_\nu n^\mu "
+                    r"- n^\mu\nabla_\nu n^\nu"
+                ),
+                ladder=lambda: [WellFormedCheck(expected_free=[])],
+                component_tasks=(
+                    (
+                        "ADM split + constraint projections + lapse EL, verified on a "
+                        "nondegenerate 1+2 component background",
+                        {"check": "adm-gr-1p2"},
+                    ),
+                ),
+            ),
+            PresentedResult(
+                result_id="hamiltonian-constraint",
+                expr=m.hamiltonian_constraint,
+                tex_suffix=" = 0",
+                ladder=lambda: [WellFormedCheck(expected_free=[])],
+            ),
+            PresentedResult(
+                result_id="momentum-constraint",
+                expr=m.momentum_constraint,
+                tex_suffix=" = 0",
+                ladder=lambda: [WellFormedCheck(expected_free=[m.B])],
+            ),
+        ),
+        notes=(
+            "kernel evidence (sympy components, adm-gr-1p2): K_ij(ADM formula) == "
+            "+nabla_i n_j; sqrt(-g)R splits into N sqrt(h)(R3 + KK - K^2) minus "
+            "2 d_mu(sqrt(-g) v^mu); 2 G_nn equals the Hamiltonian form; G_(n,i) "
+            "equals the momentum form; the lapse EL equation reproduces the "
+            "Hamiltonian constraint; the background switches on every structural "
+            "feature (falsifier hygiene)",
+            "constraints are the normal projections of the Einstein equations: "
+            "first order in time derivatives, so they constrain initial data; "
+            "the spatial-spatial projections are the evolution equations",
+            "D is the Levi-Civita derivative of h on the slice; the "
+            "hamiltonian/momentum results share the adm-gr-1p2 kernel run "
+            "recorded in the adm-split bundle",
+        ),
+    )
+
+
 def _eval2() -> EvalSpec:
     from evals import eval2_palatini as m
     from noether.verify.checks import WellFormedCheck
@@ -302,6 +360,7 @@ def _eval5() -> EvalSpec:
 
 _BUILDERS: dict[str, Callable[[], EvalSpec]] = {
     "eval1": _eval1,
+    "eval1s": _eval1s,
     "eval2": _eval2,
     "eval3": _eval3,
     "eval4": _eval4,

@@ -1,6 +1,7 @@
 # 04 — Evaluation suite: five action-to-result pairs
 
-**Status:** stable; all five evals implemented and kernel-verified.
+**Status:** stable; all five evals plus the eval 1 stretch task (1s, ADM of GR)
+implemented and kernel-verified.
 **Implementation (2026-06-12):** all five evals are executable (`evals/`, run
 via `noether eval1` .. `noether eval5`) and kernel-checked against cadabra2
 2.5.15: the eval 1 and 3 variation residues are zero against the targets
@@ -107,6 +108,31 @@ Good form: the canonical presentation is `G_{μν} = 0`, with the overall factor
 ADM decomposition of the same action with respect to a stated foliation: return
 lapse/shift/spatial-metric form, Hamiltonian and momentum constraints separated
 from evolution terms; regression target is the textbook ADM form of GR.
+
+**Status: implemented (eval 1s; `evals/eval1s_adm.py`).** Conventions:
+`noether-default-v1`, foliation by `t = const` spacelike slices, future-pointing
+unit normal `n_μ = (-N, 0, 0, 0)`, lapse `N`, shift `N^i`, induced metric
+`h_ij`, `D` the Levi-Civita derivative of `h` on the slice. Every sign below
+was pinned by kernel computation (residue exactly zero on a nondegenerate
+1+2 component background; alternatives rejected), not asserted:
+
+- `K_ij = (∂_t h_ij - D_i N_j - D_j N_i)/(2N) = +∇_i n_j`
+  (expansion-positive convention, elicited).
+- `√-g R = N√h (R⁽³⁾ + K_ij K^ij - K²) - 2 ∂_μ(√-g v^μ)`,
+  `v^μ = n^ν∇_ν n^μ - n^μ∇_ν n^ν`.
+- Hamiltonian constraint (vacuum): `R⁽³⁾ + K² - K_ij K^ij = 0`, kernel-equal to
+  `2 G_{μν} n^μ n^ν` and to the lapse Euler-Lagrange equation of the bulk
+  (the lapse enters the bulk undifferentiated).
+- Momentum constraint (vacuum): `D_j (K^j_i - δ^j_i K) = 0`, kernel-equal to
+  `G_{μi} n^μ`.
+
+The constraints are the normal projections of the Einstein equations and are
+first order in time derivatives (they contain only `h` and `K`), so they
+constrain initial data; the spatial-spatial projections are the evolution
+equations. The component background switches on every structural feature
+(time-dependent curved slice, off-diagonal `h`, nonzero shift, nonconstant
+lapse) and the falsifier check confirms none of the verified forms vanish
+identically on it.
 
 ---
 
