@@ -90,17 +90,20 @@ noether/             Python package
                      answers mutate the NPR), store (JSON session persistence)
   server/            HTTP session API (FastAPI, optional [server] extra):
                      ingest/elicit/resolve/plan with the no-guessing contract
+  mcp/               MCP stdio server (optional [mcp] extra): same session
+                     surface as tools; refusals are tool results, not guesses
   cli/               `noether kernels`, `noether ingest`, `noether elicit`,
-                     `noether serve`, `noether eval{1..5}`, `noether eval1s`
-                     (ADM of GR), `noether eval3s` (Minkowski spectrum)
+                     `noether serve`, `noether mcp`, `noether eval{1..5}`,
+                     `noether eval1s` (ADM of GR), `noether eval3s`
+                     (Minkowski spectrum)
 evals/               Executable evals 1-5, 1s, 3s + registry + pytest gates
 tests/               Unit and adapter tests (cadabra golden test included)
 pyproject.toml       Package, deps, ruff, pytest config
 ```
 
-Planned next (see `docs/02_TECH_SPEC.md`): an MCP server and a conversational
-front-end with session resume over the HTTP session API, plus `frontend/`
-(web client; CLI shipped first).
+Planned next (see `docs/02_TECH_SPEC.md`): a conversational front-end with
+session resume over the session store, plus `frontend/` (web client; CLI
+shipped first).
 
 ## 4.1 Development setup
 

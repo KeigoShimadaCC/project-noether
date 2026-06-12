@@ -28,6 +28,7 @@ from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
 from noether.orchestrator.session import Session
 from noether.orchestrator.store import SessionStore
+from noether.orchestrator.view import session_payload as _session_payload
 
 DEFAULT_MEASURE = r"d^4x \sqrt{-g}"
 DEFAULT_STORE = Path.home() / ".noether" / "sessions"
@@ -40,31 +41,6 @@ class CreateSessionRequest(BaseModel):
 
 class ResolveRequest(BaseModel):
     resolutions: dict[str, str] = Field(min_length=1)
-
-
-def _session_payload(session: Session) -> dict[str, Any]:
-    npr = session.npr
-    return {
-        "session_id": session.session_id,
-        "state": session.state.value,
-        "well_posed": npr.is_well_posed(),
-        "action": {
-            "measure_tex": npr.action.measure_tex,
-            "lagrangian_tex": npr.action.lagrangian_tex,
-        },
-        "objects": [{"name": o.name, "kind": o.kind, "role": o.role} for o in npr.objects],
-        "questions": [
-            {
-                "id": a.id,
-                "question": a.question,
-                "kind": a.kind,
-                "options": a.options,
-                "resolution": a.resolution,
-            }
-            for a in npr.ambiguities
-        ],
-        "events": [{"state": e.state.value, "detail": e.detail} for e in session.events],
-    }
 
 
 def create_app(

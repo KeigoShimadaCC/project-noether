@@ -20,7 +20,7 @@ jobs:
       - name: Install package and dev tooling
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,server]"
+          python -m pip install -e ".[dev,server,mcp]"
 
       - name: Ruff format check
         run: ruff format --check noether tests evals

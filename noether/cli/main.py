@@ -159,6 +159,18 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def cmd_mcp(args) -> int:
+    try:
+        from noether.mcp import create_mcp_server
+        from noether.orchestrator.store import SessionStore
+    except ImportError:
+        print('mcp dependencies missing: pip install -e ".[mcp]"', file=sys.stderr)
+        return 2
+    store = SessionStore(Path(args.store)) if args.store else None
+    create_mcp_server(store=store).run()
+    return 0
+
+
 def run_eval(key: str, results_root: str) -> int:
     from evals.registry import component_task, get_spec
 
@@ -298,6 +310,8 @@ def main() -> int:
     srv.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
     srv.add_argument("--port", type=int, default=8754, help="bind port (default: 8754)")
     srv.add_argument("--store", default=None, help="session store directory")
+    mcp_p = sub.add_parser("mcp", help="run the MCP stdio server (requires [mcp] extra)")
+    mcp_p.add_argument("--store", default=None, help="session store directory")
     for key in EVAL_KEYS:
         p = sub.add_parser(key, help=f"run {key} end to end")
         p.add_argument("--results", default="results", help="provenance bundle root")
@@ -311,6 +325,8 @@ def main() -> int:
             return cmd_elicit(args)
         if args.command == "serve":
             return cmd_serve(args)
+        if args.command == "mcp":
+            return cmd_mcp(args)
         if args.command in EVAL_KEYS:
             return run_eval(args.command, args.results)
     except KernelUnavailable as exc:

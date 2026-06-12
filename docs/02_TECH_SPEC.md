@@ -66,7 +66,7 @@ terminals and TeX; a CLI proves the four-beat loop with zero frontend investment
   explicitly (no silent recomputation).
 - Export: `.tex` snippets, full provenance bundle as a zip, kernel scripts.
 
-### Horizon 2+: MCP server (planned, after the evals are done)
+### Horizon 2+: MCP server (implemented for the session surface)
 
 Expose Noether as an MCP (Model Context Protocol) server so that Claude or any
 MCP-capable agent can delegate tensor calculus to it the way it delegates
@@ -84,6 +84,16 @@ Noether does the algorithmic, kernel-backed part and returns verified results.
   make Noether guess.
 - This is a frontend in the §2 sense: a thin adapter over the same session API
   that drives the CLI and web app. No physics logic lives in it.
+
+Status: `noether.mcp.create_mcp_server` (behind the optional `[mcp]` extra;
+`noether mcp` runs it over stdio) exposes the session surface as tools:
+`noether_ingest`, `noether_session(s)`, `noether_resolve`, `noether_plan`,
+`noether_kernels`. Refusals are tool results, not exceptions: `noether_plan`
+returns `blocked=true` with the open questions, off-menu resolutions are
+rejected without mutating the session, and the tool instructions direct the
+host to relay questions to its human. The richer `derive`/`verify`/`render`
+tools land when the compute surface is generalized beyond the evals. Tested
+in `tests/test_mcp.py` (skips without the extra).
 
 The frontend is deliberately thin. All physics state lives server-side in the NPR
 and session store; the same API drives CLI, web, and MCP.
