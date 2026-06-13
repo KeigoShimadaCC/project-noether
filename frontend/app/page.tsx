@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import Latex from "@/components/Latex";
 import { api, ApiError } from "@/lib/api";
 
 const DEFAULT_MEASURE = "d^4x \\sqrt{-g}";
@@ -64,6 +65,15 @@ export default function HomePage() {
             </button>
           </div>
         </form>
+        <div className="preview">
+          <span className="note">Live preview</span>
+          <Latex
+            tex={`S \\;=\\; \\int ${measure || "d^4x"} \\, \\left( ${
+              lagrangian.trim() || "\\mathcal{L}"
+            } \\right)`}
+            block
+          />
+        </div>
         {error && <div className="error-box">{error}</div>}
       </div>
 

@@ -234,6 +234,23 @@ ul.session-list a {
   margin-bottom: 0.25rem;
 }
 
+.preview {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: #fbfaf6;
+}
+
+.preview .note {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.preview .latex {
+  font-size: 1.05rem;
+}
+
 .error-box {
   border: 1px solid var(--bad);
   color: var(--bad);

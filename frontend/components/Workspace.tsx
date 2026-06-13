@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Latex from "@/components/Latex";
 import NprPanel from "@/components/NprPanel";
 import {
   api,
@@ -68,6 +69,12 @@ function QuestionCard({
           record
         </button>
       </div>
+      {freeform.includes("\\") && (
+        <div className="preview">
+          <span className="note">Live preview</span>
+          <Latex tex={freeform} block />
+        </div>
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ dist/
 # Node / Next.js (frontend/)
 node_modules/
 .next/
+*.tsbuildinfo
 
 # macOS
 .DS_Store

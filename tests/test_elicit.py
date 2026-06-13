@@ -94,3 +94,10 @@ class TestApplyResolutions:
         npr = _ingest(eval4_maxwell)
         with pytest.raises(ValueError, match="no ambiguity"):
             apply_resolutions(npr, {"amb-does-not-exist": "x"})
+
+    def test_vary_wrt_confirmation_propagates_to_task(self):
+        npr = _ingest(eval3_scalar_tensor)
+        assert npr.task.with_respect_to == ["g", "phi"]
+        confirmed = apply_resolutions(npr, {"amb-vary-wrt": "phi"})
+        assert confirmed.task.with_respect_to == ["phi"]
+        assert npr.task.with_respect_to == ["g", "phi"]  # input NPR untouched

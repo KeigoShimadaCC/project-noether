@@ -52,3 +52,46 @@ class TestSession:
         session.change_assumption("amb-conventions", "custom")
         assert "eom-1" in session.stale_result_ids
         assert session.state is SessionState.ELICIT
+
+
+class TestResolutionPropagation:
+    """A confirmed vary-wrt answer must reach task.with_respect_to; the
+    ledger entry alone is not what the planner reads."""
+
+    @staticmethod
+    def _ingested_session() -> Session:
+        from noether.orchestrator.ingest import ingest_action
+
+        npr = ingest_action(
+            r"d^4x \sqrt{-g}",
+            r"F(\phi) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi)",
+        ).npr
+        session = Session(session_id="prop")
+        session.ingest(npr)
+        return session
+
+    def test_choice_narrows_task(self):
+        session = self._ingested_session()
+        assert session.npr.task.with_respect_to == ["g", "phi"]
+        session.resolve("amb-vary-wrt", "g")
+        assert session.npr.task.with_respect_to == ["g"]
+        # earlier NPR version stays untouched
+        assert session.npr_versions[0].task.with_respect_to == ["g", "phi"]
+
+    def test_eval_style_answer_parses(self):
+        session = self._ingested_session()
+        session.resolve("amb-vary-wrt", "g and phi")
+        assert session.npr.task.with_respect_to == ["g", "phi"]
+
+    def test_free_form_without_declared_fields_changes_nothing(self):
+        session = self._ingested_session()
+        session.resolve("amb-vary-wrt", "everything dynamical please")
+        assert session.npr.task.with_respect_to == ["g", "phi"]
+
+    def test_plan_reflects_choice(self):
+        session = self._ingested_session()
+        for amb in list(session.npr.unresolved_ambiguities()):
+            session.resolve(amb.id, amb.options[0] if amb.id != "amb-vary-wrt" else "phi")
+        plan = session.plan()
+        vary_steps = [s for s in plan.steps if s.payload.get("with_respect_to")]
+        assert vary_steps and vary_steps[0].payload["with_respect_to"] == ["phi"]

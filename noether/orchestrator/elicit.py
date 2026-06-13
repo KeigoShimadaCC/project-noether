@@ -126,6 +126,8 @@ def apply_resolutions(npr: NPR, confirmations: dict[str, str]) -> NPR:
     Each confirmation must name a listed option for its ambiguity; an off-menu
     answer is a hard error, never a silent acceptance.
     """
+    from noether.orchestrator.resolutions import propagate_resolution
+
     updated = npr.model_copy(deep=True)
     by_id = {amb.id: amb for amb in updated.ambiguities}
     for amb_id, choice in confirmations.items():
@@ -135,4 +137,5 @@ def apply_resolutions(npr: NPR, confirmations: dict[str, str]) -> NPR:
         if amb.options and choice not in amb.options:
             raise ValueError(f"{choice!r} is not a listed option for {amb_id!r}: {amb.options}")
         amb.resolution = choice
+        propagate_resolution(updated, amb)
     return updated

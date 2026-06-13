@@ -58,11 +58,14 @@ class Session(BaseModel):
 
     def resolve(self, ambiguity_id: str, resolution: str) -> None:
         """Resolving an ambiguity produces a new immutable NPR version."""
+        from noether.orchestrator.resolutions import propagate_resolution
+
         current = self.npr
         updated = current.model_copy(deep=True)
         for amb in updated.ambiguities:
             if amb.id == ambiguity_id:
                 amb.resolution = resolution
+                propagate_resolution(updated, amb)
                 break
         else:
             raise KeyError(f"no ambiguity with id {ambiguity_id!r}")

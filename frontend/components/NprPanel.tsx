@@ -6,6 +6,20 @@ import type { SessionPayload } from "@/lib/api";
 // The side panel is the UI expression of the NPR: what the problem IS right
 // now, with every assumption visible and clickable (docs/02_TECH_SPEC.md).
 
+// Object names arrive as plain identifiers ("phi"); render the greek ones as
+// symbols instead of italic letter runs. Presentation only.
+const GREEK = new Set([
+  "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta",
+  "iota", "kappa", "lambda", "mu", "nu", "xi", "pi", "rho", "sigma", "tau",
+  "upsilon", "phi", "chi", "psi", "omega",
+  "Gamma", "Delta", "Theta", "Lambda", "Xi", "Pi", "Sigma", "Upsilon",
+  "Phi", "Psi", "Omega",
+]);
+
+function symbolTex(name: string): string {
+  return GREEK.has(name) ? `\\${name}` : name;
+}
+
 export default function NprPanel({
   session,
   onReopen,
@@ -40,7 +54,10 @@ export default function NprPanel({
         <ul className="object-list">
           {objects.map((object) => (
             <li key={object.name}>
-              <Latex tex={object.name} /> <span className="qmeta">{object.kind}, {object.role}</span>
+              <Latex tex={symbolTex(object.name)} />{" "}
+              <span className="qmeta">
+                {object.kind}, {object.role}
+              </span>
             </li>
           ))}
         </ul>
