@@ -363,7 +363,12 @@ perturbative expansion (xPert), Young projection.
    before they can be derived the same way, which is why `derive_eom` refuses
    those task types rather than guessing. The general path is gated by
    `evals/test_eval_general.py`, which checks it reproduces eval 3's two
-   kernel-verified equations of motion end to end.
+   kernel-verified equations of motion end to end. The `perturb` task now has a
+   first frozen scaffold, `pert_scalar_quadratic` (eval 3p): it expands a scalar
+   action to quadratic order using Cadabra weights to track fluctuation order,
+   then verifies the linearized equation of motion both against the documented
+   operator and by linearizing the full nonlinear equation. It is a golden
+   template, not yet wired into the model-written path or the product surfaces.
 
 ## 7. Provenance bundles
 

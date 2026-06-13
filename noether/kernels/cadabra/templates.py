@@ -4,8 +4,9 @@ Templates are born from drafts, then frozen once golden-tested against a
 pinned kernel version (docs/02_TECH_SPEC.md section 5). The LLM never writes
 kernel scripts character by character in production; it parameterizes these.
 
-Status: all registered templates FROZEN (golden-tested against cadabra2
-2.5.15 on 2026-06-12; see tests/test_cadabra_adapter.py).
+Status: all registered templates FROZEN (evals 1-5 golden-tested against
+cadabra2 2.5.15 on 2026-06-12; pert_scalar_quadratic added 2026-06-13, same
+kernel; see tests/test_cadabra_adapter.py).
 """
 
 _TEMPLATES: dict[str, str] = {}
@@ -625,5 +626,109 @@ distribute(res);
 tidy(res)
 tidy(res)
 print("NOETHER_CHECK: variation_residue_zero=" + str(str(res) == "0"))
+""",
+)
+
+
+# ---------------------------------------------------------------------------
+# Perturbation, scalar sector: quadratic-action expansion of
+#   S = \int d^4x \sqrt{-g} ( -1/2 (nabla phi)^2 - V(phi) )
+# about a background phi -> phibar + chi on a FIXED background metric. The
+# fluctuation chi carries smallness weight eps=1; every background symbol
+# (phibar, V, Vp=V', Vpp=V'', g, sg) carries weight 0, and \nabla inherits the
+# weight of its argument (WeightInherit), so keep_weight(eps=2) projects the
+# expanded Lagrangian onto its genuinely quadratic part:
+#   S2 = \int sqrt(-g) ( -1/2 (nabla chi)^2 - 1/2 V''(phibar) chi^2 ).
+# The integrand is projected before wrapping in \int, because keep_weight
+# filters additive terms and the whole integrand is a single \int node.
+#
+# Two kernel checks, both in noether-default-v1:
+#   residue_zero        -- delta S2 / delta chi equals the documented
+#                          linearized operator sqrt(-g)( box chi - V'' chi );
+#   linearized_eom_match -- the same operator is obtained by linearizing the
+#                          full nonlinear EOM (box phi - V') directly, an
+#                          independent route that does not reuse the target.
+# This reproduces the eval-3s scalar mass term m^2 = V''(phibar) (massless when
+# V''=0), now derived symbolically rather than only on a flat background.
+# ---------------------------------------------------------------------------
+
+register(
+    "pert_scalar_quadratic",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\nabla{#}::Derivative.
+\nabla{#}::WeightInherit(label=eps, type=multiplicative).
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+sg::LaTeXForm("\sqrt{-g}").
+chi::Weight(label=eps, value=1).
+{phibar, V, Vp, Vpp, dchi, sg}::Weight(label=eps, value=0).
+g^{\mu\nu}::Weight(label=eps, value=0).
+g_{\mu\nu}::Weight(label=eps, value=0).
+{phibar, chi, V, Vp, Vpp, dchi}::Depends(\nabla{#}).
+
+S2 := - 1/2 sg g^{\alpha\beta} ( \nabla_{\alpha}{phibar} + \nabla_{\alpha}{chi} ) ( \nabla_{\beta}{phibar} + \nabla_{\beta}{chi} ) - sg ( V + Vp chi + 1/2 Vpp chi chi );
+distribute(S2);
+keep_weight(S2, $eps=2$);
+canonicalise(S2);
+rename_dummies(S2);
+print("NOETHER_RESULT: " + str(S2))
+
+ex := \int{ @(S2) }{x};
+vary(ex, $chi -> dchi$);
+distribute(ex);
+product_rule(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+canonicalise(ex);
+integrate_by_parts(ex, $dchi$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+substitute(ex, $\int{A??}{x} -> A??$);
+eliminate_kronecker(ex);
+sort_product(ex);
+canonicalise(ex);
+rename_dummies(ex);
+
+target := sg g^{\alpha\beta} \nabla_{\alpha}{\nabla_{\beta}{chi}} dchi - sg Vpp chi dchi;
+distribute(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+
+residue := @(ex) - @(target);
+distribute(residue);
+eliminate_kronecker(residue);
+sort_product(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: residue=" + str(residue))
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
+
+full := sg g^{\alpha\beta} \nabla_{\alpha}{\nabla_{\beta}{phibar}} + sg g^{\alpha\beta} \nabla_{\alpha}{\nabla_{\beta}{chi}} - sg Vp - sg Vpp chi;
+distribute(full);
+keep_weight(full, $eps=1$);
+eliminate_kronecker(full);
+sort_product(full);
+canonicalise(full);
+rename_dummies(full);
+
+cross := @(ex) - @(full) dchi;
+distribute(cross);
+eliminate_kronecker(cross);
+sort_product(cross);
+canonicalise(cross);
+rename_dummies(cross);
+meld(cross);
+print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
 """,
 )

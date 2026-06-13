@@ -1,7 +1,8 @@
 # 04 — Evaluation suite: five action-to-result pairs
 
-**Status:** stable; all five evals plus the stretch tasks 1s (ADM of GR) and
-3s (spectrum around Minkowski) implemented and kernel-verified.
+**Status:** stable; all five evals plus the stretch tasks 1s (ADM of GR),
+3s (spectrum around Minkowski), and 3p (scalar quadratic action in Cadabra)
+implemented and kernel-verified.
 **Implementation (2026-06-12):** all five evals are executable (`evals/`, run
 via `noether eval1` .. `noether eval5`) and kernel-checked against cadabra2
 2.5.15: the eval 1 and 3 variation residues are zero against the targets
@@ -328,6 +329,20 @@ kernel computation, with falsifiers:
 The diagonalization is performed at the level of the equations of motion, so
 no gauge choice enters the `K_χ` statement; TT enters only the mode-counting
 statement.
+
+**Status: implemented (eval 3p; `evals/eval3p_scalar_perturbation.py`,
+template `pert_scalar_quadratic`).** Where eval 3s reads the scalar mass off a
+flat-background Fourier analysis in SymPy, eval 3p derives the same physics
+symbolically in Cadabra for a general fixed background. For the canonical scalar
+sector `S = ∫√-g(-½(∇φ)² - V)`, it expands about `φ → φ̄ + χ` (with `χ` carrying
+a smallness weight and `∇` inheriting it), projects onto the quadratic part with
+`keep_weight`, and obtains `S₂ = ∫√-g(-½(∇χ)² - ½V''(φ̄)χ²)`. Two kernel checks,
+both `noether-default-v1`: `δS₂/δχ` equals the documented operator
+`√-g(□χ - V''(φ̄)χ)` (`residue_zero`), and linearizing the full nonlinear EOM
+`□φ - V'` independently reproduces it (`linearized_eom_match`). So the linearized
+Klein-Gordon mass is `m² = V''(φ̄)`, massless when `V'' = 0`, on any fixed
+background. This is the first `perturb` scaffold; it is a frozen template, not
+yet wired into the model-written derivation path.
 
 ---
 

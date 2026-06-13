@@ -149,8 +149,13 @@ labels a result verified only when the kernel reports `residue_zero=True`. A
 script that cannot make the residue vanish yields an unverified result, shown as
 such and never as truth. The model writes a script; the kernel decides whether
 the answer holds. This covers the `vary` task for the metric, scalar, and
-gauge-field classes; `adm` and `perturb` wait on their own audited scaffolds
-rather than being guessed.
+gauge-field classes. The `perturb` task has its first kernel-verified scaffold,
+`pert_scalar_quadratic`: it expands a scalar action to quadratic order (tracking
+fluctuation order through Cadabra weights) and confirms the linearized equation
+of motion both against the documented operator and by linearizing the full
+nonlinear equation independently (eval 3p). It is a frozen template today, not
+yet wired into the general model-written path; `adm` still waits on its own
+audited scaffold rather than being guessed.
 
 ## 5. Honesty and failure policy
 

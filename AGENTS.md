@@ -105,7 +105,8 @@ noether/             Python package
                      `noether elicit`, `noether serve`, `noether mcp`,
                      `noether eval{1..5}`, `noether eval1s` (ADM of GR),
                      `noether eval3s` (Minkowski spectrum)
-evals/               Executable evals 1-5, 1s, 3s + registry + pytest gates
+evals/               Executable evals 1-5, 1s, 3s, 3p + a general-path eval
+                     (test_eval_general) + registry + pytest gates
 tests/               Unit and adapter tests (cadabra golden test included)
 frontend/            Web client (Next.js + KaTeX) over the HTTP session API;
                      /api/* proxied to `noether serve`, no client-side physics
@@ -115,8 +116,11 @@ pyproject.toml       Package, deps, ruff, pytest config
 The general derivation path (model writes a Cadabra script, kernel verifies it
 through an in-script residue check) now serves arbitrary well-posed actions for
 the `vary` task across the metric, scalar, and gauge-field classes; see
-`docs/02_TECH_SPEC.md` section 6, item 7. Planned next: audited Cadabra
-scaffolds for the `adm` and `perturb` tasks so those derive the same way, then
+`docs/02_TECH_SPEC.md` section 6, item 7. The `perturb` task has its first
+kernel-verified scaffold too: the frozen `pert_scalar_quadratic` template
+expands a scalar action to quadratic order and checks the linearized EOM two
+ways (eval 3p). Planned next: wire `perturb` into the general path and the
+product surfaces, widen it past the scalar sector, add an `adm` scaffold, then
 the derivation tree and export views in the web client.
 
 ## 4.1 Development setup
