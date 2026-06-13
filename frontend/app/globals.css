@@ -292,3 +292,10 @@ ul.session-list a {
   font-size: 1.05rem;
   margin: 0.3rem 0;
 }
+
+.derive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.4rem 0;
+}

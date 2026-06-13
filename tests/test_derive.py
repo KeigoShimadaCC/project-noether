@@ -16,7 +16,7 @@ from noether.kernels.cadabra.generate import (
     strip_fences,
 )
 from noether.llm.base import StubLLMAdapter
-from noether.orchestrator.derive import derive_eom, derive_field
+from noether.orchestrator.derive import derive_eom, derive_field, derive_perturbation
 from noether.orchestrator.planner import AmbiguityBlocked
 
 requires_cadabra = pytest.mark.skipif(
@@ -109,3 +109,68 @@ class TestVerifiedDerivation:
         stub = StubLLMAdapter(reply=templates.get("eval3_scalar_tensor_metric"))
         results = derive_eom(npr, stub, {"cadabra": CadabraAdapter()}, session_id="s")
         assert [r.wrt for r in results] == ["g", "phi"]
+
+
+class TestPerturbationPromptGeneration:
+    def test_scalar_perturbation_prompt_uses_quadratic_scaffold(self):
+        npr = build_npr(resolved=True)
+        system, prompt = build_generation_prompt(npr, "phi", kind="perturbation")
+        assert "keep_weight" in system
+        assert "WeightInherit" in system
+        assert "linearized_eom_match" in system
+        assert "quadratic order" in prompt
+        assert templates.get("pert_scalar_quadratic") in prompt
+
+    def test_perturbation_rejects_nonscalar_field(self):
+        npr = build_npr(resolved=True)
+        with pytest.raises(NotImplementedError):
+            build_generation_prompt(npr, "g", kind="perturbation")
+
+
+class TestPerturbationGate:
+    def test_unresolved_npr_blocks_perturbation(self):
+        npr = build_npr(resolved=False)
+        with pytest.raises(AmbiguityBlocked):
+            derive_field(
+                npr,
+                "phi",
+                StubLLMAdapter(),
+                {"cadabra": CadabraAdapter()},
+                kind="perturbation",
+                session_id="s",
+            )
+
+    def test_perturbation_refuses_nonscalar(self):
+        npr = build_npr(resolved=True)
+        with pytest.raises(NotImplementedError):
+            derive_perturbation(
+                npr,
+                StubLLMAdapter(),
+                {"cadabra": CadabraAdapter()},
+                fields=["g"],
+                session_id="s",
+            )
+
+
+@requires_cadabra
+@pytest.mark.kernel_cadabra
+class TestVerifiedPerturbation:
+    def test_scalar_quadratic_action_verified(self):
+        npr = build_npr(resolved=True)
+        stub = StubLLMAdapter(reply=templates.get("pert_scalar_quadratic"))
+        results = derive_perturbation(
+            npr, stub, {"cadabra": CadabraAdapter()}, fields=["phi"], session_id="s-test"
+        )
+        assert [r.wrt for r in results] == ["phi"]
+        d = results[0]
+        assert d.kind == "perturbation"
+        assert d.verified is True, d.checks
+        assert d.checks.get("linearized_eom_match") == "True"
+        assert d.result_tex
+
+    def test_perturbation_defaults_to_dynamical_scalars(self):
+        npr = build_npr(resolved=True)
+        stub = StubLLMAdapter(reply=templates.get("pert_scalar_quadratic"))
+        results = derive_perturbation(npr, stub, {"cadabra": CadabraAdapter()}, session_id="s")
+        # phi is the only dynamical scalar in the scalar-tensor NPR
+        assert [r.wrt for r in results] == ["phi"]

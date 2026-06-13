@@ -31,6 +31,7 @@ _EXAMPLE_TEMPLATE: dict[str, str] = {
     "vary-metric": "eval3_scalar_tensor_metric",
     "vary-scalar": "eval3_scalar_tensor_scalar",
     "vary-gauge": "eval4_maxwell",
+    "perturb-scalar": "pert_scalar_quadratic",
 }
 
 CADABRA_CONTRACT = r"""You are a Cadabra2 scripting backend for Noether, a symbolic-physics tool.
@@ -70,6 +71,47 @@ Metric variation rules (mostly-plus, noether-default-v1):
 Scalar variation rules: \phi -> dphi, and for any coupling C(\phi): C -> Cp dphi.
 Output ONLY the script."""
 
+PERTURBATION_CONTRACT = r"""You are a Cadabra2 scripting backend for Noether.
+Your ONLY output is a complete Cadabra2 script. No prose, no markdown fences.
+
+You never assert a quadratic action or a linearized equation from memory. The
+script must EXPAND the action to second order in the fluctuation and let the
+kernel check the result. Specifically:
+
+1. Reproduce the declaration block exactly as in the worked example. Crucially:
+   - declare the derivative `\nabla{#}::Derivative` AND
+     `\nabla{#}::WeightInherit(label=eps, type=multiplicative)` so derivatives
+     inherit the weight of their argument;
+   - give the fluctuation `chi::Weight(label=eps, value=1)`;
+   - give EVERY background symbol weight 0 (the background field `phibar`, the
+     coupling values `V`, `Vp`, `Vpp`, the shorthand `sg`, and both metrics
+     `g^{...}`, `g_{...}`); a symbol with no weight defeats keep_weight;
+   - list every differentiated symbol in `::Depends(\nabla{#})`.
+2. Build the integrand of the action with the field replaced by background plus
+   fluctuation, phi -> phibar + chi, expanding each function of phi by Taylor:
+   V(phi) -> V + Vp chi + 1/2 Vpp chi chi  (and likewise for other couplings).
+   Assign it to a plain symbol (NOT yet wrapped in \int).
+3. distribute it, then `keep_weight(S2, $eps=2$)` to project onto the genuinely
+   quadratic part. Do the projection BEFORE wrapping in \int, because
+   keep_weight filters additive terms and a whole integrand is one \int node.
+   canonicalise, rename_dummies, then print("NOETHER_RESULT: " + str(S2)).
+4. Wrap it: ex := \int{ @(S2) }{x}; derive the linearized equation of motion
+   with a single vary(ex, $chi -> dchi$), then distribute, product_rule,
+   metric-compatibility substitutions, integrate_by_parts on $dchi$,
+   strip the integral, canonicalise, rename_dummies.
+5. State the linearized operator INDEPENDENTLY as `target := ...` times dchi
+   (e.g. sg g^{ab} nabla_a nabla_b chi - sg Vpp chi, all times dchi), put it in
+   the same canonical form, then:
+       residue := @(ex) - @(target);
+       distribute(residue); canonicalise(residue); rename_dummies(residue); meld(residue);
+       print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
+6. As an independent cross-check, build the full nonlinear EOM operator with
+   phi -> phibar + chi and the coupling derivatives expanded, keep_weight eps=1
+   to linearize it, and confirm it matches (times dchi):
+       print("NOETHER_CHECK: linearized_eom_match=" + str(...))
+   The kernel's two Trues, not your say-so, are what make the result trusted.
+Output ONLY the script."""
+
 
 @dataclass
 class GeneratedScript:
@@ -80,10 +122,17 @@ class GeneratedScript:
     raw: str
 
 
-def _variation_key(npr: NPR, wrt: str) -> str:
-    """Pick the worked example that best matches the field being varied."""
+def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
+    """Pick the worked example that best matches the field and derivation kind."""
     by_name = {obj.name: obj for obj in npr.objects}
     obj = by_name.get(wrt)
+    if kind == "perturbation":
+        if obj is not None and obj.kind == "scalar-field":
+            return "perturb-scalar"
+        raise NotImplementedError(
+            "perturbation currently has an audited scaffold only for scalar "
+            f"fields; no quadratic-action example for {wrt!r}"
+        )
     if obj is None:
         return "vary-metric"
     if obj.kind == "metric":
@@ -95,23 +144,40 @@ def _variation_key(npr: NPR, wrt: str) -> str:
     return "vary-metric"
 
 
-def build_generation_prompt(npr: NPR, wrt: str) -> tuple[str, str]:
-    """Return (system, prompt) for generating a variation script wrt `wrt`."""
-    key = _variation_key(npr, wrt)
+def build_generation_prompt(npr: NPR, wrt: str, kind: str = "eom") -> tuple[str, str]:
+    """Return (system, prompt) for generating a `kind` script for field `wrt`."""
+    key = _variation_key(npr, wrt, kind)
     example = templates.get(_EXAMPLE_TEMPLATE[key])
     objs = "\n".join(f"  - {o.name} ({o.kind}, {o.role}, rank {o.rank})" for o in npr.objects)
-    prompt = (
+    header = (
         f"Conventions: {npr.conventions.id} (dimension {npr.conventions.dimension}, "
         f"signature {npr.conventions.signature}).\n"
         f"Action: S = \\int {npr.action.measure_tex} \\, ( {npr.action.lagrangian_tex} )\n"
         f"Objects:\n{objs}\n"
-        f"Task: derive the equation of motion delta S / delta {wrt} = 0 "
-        f"(vary with respect to {wrt}).\n\n"
-        f"Worked example for this kind of variation (follow its structure):\n"
-        f"-----\n{example}\n-----\n"
-        f"Now write the script for the action above, varying with respect to {wrt}."
     )
-    return CADABRA_CONTRACT, prompt
+    if kind == "perturbation":
+        task = (
+            f"Task: expand the action to quadratic order in a fluctuation of {wrt} "
+            f"(write {wrt} -> {wrt}bar + chi) and derive the linearized equation "
+            f"of motion for chi.\n\n"
+        )
+        contract = PERTURBATION_CONTRACT
+        closing = f"Now write the script for the action above, expanding {wrt} to quadratic order."
+    else:
+        task = (
+            f"Task: derive the equation of motion delta S / delta {wrt} = 0 "
+            f"(vary with respect to {wrt}).\n\n"
+        )
+        contract = CADABRA_CONTRACT
+        closing = f"Now write the script for the action above, varying with respect to {wrt}."
+    prompt = (
+        header
+        + task
+        + "Worked example for this kind of derivation (follow its structure):\n"
+        + f"-----\n{example}\n-----\n"
+        + closing
+    )
+    return contract, prompt
 
 
 def strip_fences(text: str) -> str:
@@ -127,17 +193,17 @@ def strip_fences(text: str) -> str:
     return stripped
 
 
-def generate_script(npr: NPR, wrt: str, llm: LLMAdapter) -> GeneratedScript:
-    """Ask the model to write a Cadabra variation script for `wrt`.
+def generate_script(npr: NPR, wrt: str, llm: LLMAdapter, kind: str = "eom") -> GeneratedScript:
+    """Ask the model to write a Cadabra script (`kind` = eom or perturbation).
 
     Pure script generation: the returned source is run and verified elsewhere;
     nothing here is trusted as a physics result.
     """
-    system, prompt = build_generation_prompt(npr, wrt)
+    system, prompt = build_generation_prompt(npr, wrt, kind)
     raw = llm.complete(system, prompt)
     return GeneratedScript(
         source=strip_fences(raw),
-        variation_key=_variation_key(npr, wrt),
+        variation_key=_variation_key(npr, wrt, kind),
         llm_name=getattr(llm, "name", "unknown"),
         llm_version=llm.version(),
         raw=raw,

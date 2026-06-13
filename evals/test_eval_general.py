@@ -18,7 +18,8 @@ import pytest
 from evals.eval3_scalar_tensor import build_npr
 from noether.kernels.cadabra import CadabraAdapter, templates
 from noether.kernels.sympy_kernel import SympyKernelAdapter
-from noether.orchestrator.derive import derive_eom
+from noether.llm.base import StubLLMAdapter
+from noether.orchestrator.derive import derive_eom, derive_perturbation
 from noether.orchestrator.planner import AmbiguityBlocked
 
 
@@ -71,3 +72,42 @@ class TestGeneralPathReproducesEval3:
             assert d.result_tex
             assert d.kernel_name == "cadabra"
             assert d.bundle_path  # provenance written for every run
+
+
+class TestGeneralPerturbationGate:
+    def test_unresolved_npr_refuses_to_perturb(self):
+        adapters = {"cadabra": CadabraAdapter(), "sympy": SympyKernelAdapter()}
+        with pytest.raises(AmbiguityBlocked):
+            derive_perturbation(
+                build_npr(resolved=False),
+                StubLLMAdapter(reply=templates.get("pert_scalar_quadratic")),
+                adapters,
+                fields=["phi"],
+                session_id="eval-general-pert",
+            )
+
+
+@pytest.mark.kernel_cadabra
+@pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+class TestGeneralPathReproducesEval3p:
+    """The general perturbation path drives the same kernel checks as eval 3p:
+    the stubbed-but-audited quadratic-action script must pass both the residue
+    gate and the independent linearized-EOM match before the orchestrator calls
+    it verified."""
+
+    def test_scalar_quadratic_action_is_kernel_verified(self, tmp_path):
+        adapters = {"cadabra": CadabraAdapter(), "sympy": SympyKernelAdapter()}
+        derivations = derive_perturbation(
+            build_npr(resolved=True),
+            StubLLMAdapter(reply=templates.get("pert_scalar_quadratic")),
+            adapters,
+            session_id="eval-general-pert",
+            results_root=tmp_path / "results",
+        )
+        assert [d.wrt for d in derivations] == ["phi"]
+        d = derivations[0]
+        assert d.kind == "perturbation"
+        assert d.verified is True, d.checks
+        assert d.checks.get("linearized_eom_match") == "True"
+        assert d.result_tex
+        assert d.bundle_path

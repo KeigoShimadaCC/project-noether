@@ -116,12 +116,14 @@ pyproject.toml       Package, deps, ruff, pytest config
 The general derivation path (model writes a Cadabra script, kernel verifies it
 through an in-script residue check) now serves arbitrary well-posed actions for
 the `vary` task across the metric, scalar, and gauge-field classes; see
-`docs/02_TECH_SPEC.md` section 6, item 7. The `perturb` task has its first
-kernel-verified scaffold too: the frozen `pert_scalar_quadratic` template
-expands a scalar action to quadratic order and checks the linearized EOM two
-ways (eval 3p). Planned next: wire `perturb` into the general path and the
-product surfaces, widen it past the scalar sector, add an `adm` scaffold, then
-the derivation tree and export views in the web client.
+`docs/02_TECH_SPEC.md` section 6, item 7. The `perturb` task runs through the
+same path for scalar fields: `derive_perturbation`, reachable as
+`kind="perturbation"` on the server, MCP, and web clients, drives the frozen
+`pert_scalar_quadratic` scaffold, which expands a scalar action to quadratic
+order and checks the linearized EOM two ways (eval 3p); both checks must pass
+before a result is called verified. Planned next: widen `perturb` past the
+scalar sector, add an `adm` scaffold, then the derivation tree and export
+views in the web client.
 
 ## 4.1 Development setup
 

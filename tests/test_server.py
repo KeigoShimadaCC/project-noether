@@ -219,3 +219,29 @@ class TestDerive:
         sid = _well_posed_scalar_tensor(client)
         response = client.post(f"/sessions/{sid}/derive", json={"with_respect_to": ["not_a_field"]})
         assert response.status_code == 400
+
+    def test_unknown_kind_is_422(self, store, tmp_path):
+        client = self._client(store, tmp_path, templates.get("eval3_scalar_tensor_metric"))
+        sid = _well_posed_scalar_tensor(client)
+        response = client.post(f"/sessions/{sid}/derive", json={"kind": "bogus"})
+        assert response.status_code == 422
+
+    def test_perturbation_returns_verified_quadratic_action(self, store, tmp_path):
+        client = self._client(store, tmp_path, templates.get("pert_scalar_quadratic"))
+        sid = _well_posed_scalar_tensor(client)
+        response = client.post(f"/sessions/{sid}/derive", json={"kind": "perturbation"})
+        assert response.status_code == 200, response.text
+        derivations = response.json()["derivations"]
+        assert [d["wrt"] for d in derivations] == ["phi"]
+        phi = derivations[0]
+        assert phi["kind"] == "perturbation"
+        assert phi["verified"] is True, phi["checks"]
+        assert phi["result_tex"]
+
+    def test_perturbation_refuses_nonscalar(self, store, tmp_path):
+        client = self._client(store, tmp_path, templates.get("pert_scalar_quadratic"))
+        sid = _well_posed_scalar_tensor(client)
+        response = client.post(
+            f"/sessions/{sid}/derive", json={"kind": "perturbation", "with_respect_to": ["g"]}
+        )
+        assert response.status_code == 422

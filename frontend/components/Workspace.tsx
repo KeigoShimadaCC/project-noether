@@ -115,15 +115,15 @@ function NotationCard({
 
 function DerivationPanel({ sessionId }: { sessionId: string }) {
   const [results, setResults] = useState<FieldDerivation[] | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyKind, setBusyKind] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openScript, setOpenScript] = useState<string | null>(null);
 
-  async function run() {
-    setBusy(true);
+  async function run(kind: "eom" | "perturbation") {
+    setBusyKind(kind);
     setError(null);
     try {
-      const payload = await api.derive(sessionId);
+      const payload = await api.derive(sessionId, undefined, kind);
       setResults(payload.derivations);
     } catch (err) {
       setError(
@@ -134,53 +134,71 @@ function DerivationPanel({ sessionId }: { sessionId: string }) {
             : "derivation failed",
       );
     } finally {
-      setBusy(false);
+      setBusyKind(null);
     }
   }
 
+  const busy = busyKind !== null;
+
   return (
     <div className="card">
-      <h2>Equations of motion</h2>
+      <h2>Derive</h2>
       <p className="note">
         Noether parameterizes a Cadabra script for this action, runs it in the
         kernel, and trusts the result only if the kernel confirms it. Results it
         cannot confirm are shown as unverified, never as truth. This can take a
         moment.
       </p>
-      <button disabled={busy} onClick={run}>
-        {busy ? "Deriving..." : results ? "Re-derive" : "Derive"}
-      </button>
+      <div className="derive-actions">
+        <button disabled={busy} onClick={() => run("eom")}>
+          {busyKind === "eom" ? "Deriving..." : "Equations of motion"}
+        </button>
+        <button disabled={busy} onClick={() => run("perturbation")}>
+          {busyKind === "perturbation"
+            ? "Expanding..."
+            : "Expand to quadratic order"}
+        </button>
+      </div>
+      <p className="note">
+        Quadratic-order expansion has a kernel-verified scaffold for scalar
+        fields today; other sectors report honestly that no audited scaffold
+        exists yet.
+      </p>
       {error && <div className="error-box">{error}</div>}
-      {results?.map((d) => (
-        <div key={d.wrt} className="proposal derivation">
-          <div className="defn-row">
-            <span className="mono">
-              δS / δ{d.wrt} = 0
-            </span>
-            <span className={`badge ${d.verified ? "resolved" : "error"}`}>
-              {d.verified ? "kernel-verified" : "unverified"}
-            </span>
-          </div>
-          {d.result_tex ? (
-            <div className="eom">
-              <Latex tex={d.result_tex} block />
+      {results?.map((d) => {
+        const heading =
+          d.kind === "perturbation" ? `S₂[${d.wrt}] (quadratic action)` : `δS / δ${d.wrt} = 0`;
+        return (
+          <div key={`${d.kind}-${d.wrt}`} className="proposal derivation">
+            <div className="defn-row">
+              <span className="mono">{heading}</span>
+              <span className={`badge ${d.verified ? "resolved" : "error"}`}>
+                {d.verified ? "kernel-verified" : "unverified"}
+              </span>
             </div>
-          ) : (
-            <p className="note">the kernel returned no expression</p>
-          )}
-          <div className="rationale">
-            {d.detail}. computed by {d.kernel_name} {d.kernel_version}; script by{" "}
-            {d.llm_name} {d.llm_version}.
+            {d.result_tex ? (
+              <div className="eom">
+                <Latex tex={d.result_tex} block />
+              </div>
+            ) : (
+              <p className="note">the kernel returned no expression</p>
+            )}
+            <div className="rationale">
+              {d.detail}. computed by {d.kernel_name} {d.kernel_version}; script by{" "}
+              {d.llm_name} {d.llm_version}.
+            </div>
+            <button
+              className="secondary"
+              onClick={() =>
+                setOpenScript(openScript === `${d.kind}-${d.wrt}` ? null : `${d.kind}-${d.wrt}`)
+              }
+            >
+              {openScript === `${d.kind}-${d.wrt}` ? "hide kernel script" : "show kernel script"}
+            </button>
+            {openScript === `${d.kind}-${d.wrt}` && <pre className="script">{d.script}</pre>}
           </div>
-          <button
-            className="secondary"
-            onClick={() => setOpenScript(openScript === d.wrt ? null : d.wrt)}
-          >
-            {openScript === d.wrt ? "hide kernel script" : "show kernel script"}
-          </button>
-          {openScript === d.wrt && <pre className="script">{d.script}</pre>}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

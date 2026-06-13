@@ -118,11 +118,12 @@ Status: `noether.mcp.create_mcp_server` (behind the optional `[mcp]` extra;
 questions until the problem is well posed, off-menu resolutions are rejected
 without mutating the session, and the tool instructions direct the host to
 relay questions to its human. `noether_derive` runs the general derivation
-(section 6, item 7): it returns each field equation with a `verified` flag the
-kernel sets, never the host. Today it covers `vary` (equations of motion); the
-`verify`/`render` tools and the `adm`/`perturb` task types land as those
-compute surfaces are built out. Tested in `tests/test_mcp.py` (skips without
-the extra).
+(section 6, item 7): it returns each result with a `verified` flag the kernel
+sets, never the host. `kind="eom"` (the default) varies the action; for the
+scalar sector `kind="perturbation"` expands it to quadratic order instead.
+The `verify`/`render` tools and the `adm` task type land as those compute
+surfaces are built out. Tested in `tests/test_mcp.py` (skips without the
+extra).
 
 The frontend is deliberately thin. All physics state lives server-side in the NPR
 and session store; the same API drives CLI, web, and MCP.
@@ -359,16 +360,18 @@ perturbative expansion (xPert), Young projection.
    or not, writes a provenance bundle. The bright line holds: the model writes a
    script, the kernel decides whether the answer is trustworthy. This covers the
    `vary` task (equations of motion) for the metric, scalar, and gauge-field
-   classes today; `adm` and `perturb` need their own audited Cadabra scaffolds
-   before they can be derived the same way, which is why `derive_eom` refuses
-   those task types rather than guessing. The general path is gated by
-   `evals/test_eval_general.py`, which checks it reproduces eval 3's two
-   kernel-verified equations of motion end to end. The `perturb` task now has a
-   first frozen scaffold, `pert_scalar_quadratic` (eval 3p): it expands a scalar
-   action to quadratic order using Cadabra weights to track fluctuation order,
-   then verifies the linearized equation of motion both against the documented
-   operator and by linearizing the full nonlinear equation. It is a golden
-   template, not yet wired into the model-written path or the product surfaces.
+   classes today. The general path is gated by `evals/test_eval_general.py`,
+   which checks it reproduces eval 3's two kernel-verified equations of motion
+   end to end. The `perturb` task now runs through the same model-written path:
+   `derive_perturbation` (and `kind="perturbation"` on the server, MCP, and web
+   clients) hands the model the `pert_scalar_quadratic` scaffold (eval 3p),
+   which expands a scalar action to quadratic order using Cadabra weights to
+   track fluctuation order, then checks the linearized equation of motion twice,
+   against the documented operator and by linearizing the full nonlinear
+   equation. Both checks must pass before the result is called verified. That
+   scaffold only covers dynamical scalar fields, so `derive_perturbation`
+   refuses other field kinds rather than guessing, and `adm` still has no
+   scaffold at all, so `derive_eom` declines non-`vary` task types.
 
 ## 7. Provenance bundles
 

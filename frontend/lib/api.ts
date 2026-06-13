@@ -55,6 +55,7 @@ export interface BlockedPlan {
 
 export interface FieldDerivation {
   wrt: string;
+  kind: string;
   capability: string;
   result_tex: string | null;
   verified: boolean;
@@ -129,9 +130,12 @@ export const api = {
       body: JSON.stringify({ accept }),
     }),
   plan: (id: string) => request<PlanPayload>(`/sessions/${id}/plan`),
-  derive: (id: string, withRespectTo?: string[]) =>
+  derive: (id: string, withRespectTo?: string[], kind: string = "eom") =>
     request<DerivePayload>(`/sessions/${id}/derive`, {
       method: "POST",
-      body: JSON.stringify(withRespectTo ? { with_respect_to: withRespectTo } : {}),
+      body: JSON.stringify({
+        kind,
+        ...(withRespectTo ? { with_respect_to: withRespectTo } : {}),
+      }),
     }),
 };

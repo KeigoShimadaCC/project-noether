@@ -341,8 +341,12 @@ both `noether-default-v1`: `δS₂/δχ` equals the documented operator
 `√-g(□χ - V''(φ̄)χ)` (`residue_zero`), and linearizing the full nonlinear EOM
 `□φ - V'` independently reproduces it (`linearized_eom_match`). So the linearized
 Klein-Gordon mass is `m² = V''(φ̄)`, massless when `V'' = 0`, on any fixed
-background. This is the first `perturb` scaffold; it is a frozen template, not
-yet wired into the model-written derivation path.
+background. This scaffold now runs through the model-written derivation path:
+`derive_perturbation` (and `kind="perturbation"` on the server, MCP, and web
+clients) drives it for dynamical scalar fields, and `evals/test_eval_general.py`
+gates that the orchestration reproduces this kernel-verified quadratic action
+end to end. The expansion is still scalar-only; other field kinds are refused
+rather than guessed.
 
 ---
 

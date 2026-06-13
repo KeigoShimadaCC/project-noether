@@ -138,6 +138,33 @@ class TestDeriveTools:
         tools = self._tools(tmp_path)
         assert "error" in tools.derive("s-doesnotexist")
 
+    def test_unknown_kind_is_data(self, tmp_path):
+        tools = self._tools(tmp_path)
+        sid = _well_posed_scalar_tensor(tools)
+        assert "error" in tools.derive(sid, kind="bogus")
+
+    def test_perturbation_returns_verified_quadratic_action(self, tmp_path):
+        tools = NoetherTools(
+            SessionStore(tmp_path / "sessions"),
+            llm=StubLLMAdapter(reply=templates.get("pert_scalar_quadratic")),
+            results_root=tmp_path / "results",
+        )
+        sid = _well_posed_scalar_tensor(tools)
+        result = tools.derive(sid, kind="perturbation")
+        derivations = result["derivations"]
+        assert [d["wrt"] for d in derivations] == ["phi"]
+        assert derivations[0]["kind"] == "perturbation"
+        assert derivations[0]["verified"] is True
+
+    def test_perturbation_refuses_nonscalar(self, tmp_path):
+        tools = NoetherTools(
+            SessionStore(tmp_path / "sessions"),
+            llm=StubLLMAdapter(reply=templates.get("pert_scalar_quadratic")),
+            results_root=tmp_path / "results",
+        )
+        sid = _well_posed_scalar_tensor(tools)
+        assert "error" in tools.derive(sid, ["g"], kind="perturbation")
+
 
 class TestServerWiring:
     def test_expected_tools_registered(self, tmp_path):

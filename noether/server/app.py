@@ -24,7 +24,7 @@ from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import LLMAdapter, LLMError
 from noether.npr.parse import ParseError
 from noether.orchestrator.definitions import propose_definitions
-from noether.orchestrator.derive import derive_eom
+from noether.orchestrator.derive import derive_eom, derive_perturbation
 from noether.orchestrator.elicit import propose_resolutions
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
@@ -50,6 +50,7 @@ class AdoptDefinitionsRequest(BaseModel):
 
 class DeriveRequest(BaseModel):
     with_respect_to: list[str] | None = None
+    kind: str = "eom"  # "eom" | "perturbation"
 
 
 def create_app(
@@ -228,22 +229,38 @@ def create_app(
                 status_code=503,
                 detail="no LLM backend available to parameterize the derivation",
             )
+        kind = body.kind if body is not None else "eom"
+        if kind not in ("eom", "perturbation"):
+            raise HTTPException(status_code=422, detail=f"unknown derivation kind {kind!r}")
         npr = session.npr
-        if body is not None and body.with_respect_to:
+        fields = body.with_respect_to if body is not None else None
+        if fields:
             declared = {o.name for o in npr.objects}
-            for wrt in body.with_respect_to:
+            for wrt in fields:
                 if wrt not in declared:
                     raise HTTPException(status_code=400, detail=f"{wrt!r} is not a declared object")
-            npr = npr.model_copy(deep=True)
-            npr.task.with_respect_to = body.with_respect_to
+            if kind == "eom":
+                npr = npr.model_copy(deep=True)
+                npr.task.with_respect_to = fields
+        adapters = {"cadabra": cadabra, "sympy": SympyKernelAdapter()}
         try:
-            results = derive_eom(
-                npr,
-                adapter,
-                {"cadabra": cadabra, "sympy": SympyKernelAdapter()},
-                session_id=session_id,
-                results_root=app.state.results_root,
-            )
+            if kind == "perturbation":
+                results = derive_perturbation(
+                    npr,
+                    adapter,
+                    adapters,
+                    fields=fields,
+                    session_id=session_id,
+                    results_root=app.state.results_root,
+                )
+            else:
+                results = derive_eom(
+                    npr,
+                    adapter,
+                    adapters,
+                    session_id=session_id,
+                    results_root=app.state.results_root,
+                )
         except AmbiguityBlocked as exc:
             raise HTTPException(
                 status_code=409, detail={"blocked": True, "questions": exc.questions}

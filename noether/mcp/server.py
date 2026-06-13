@@ -20,7 +20,7 @@ from noether.kernels.cadabra import CadabraAdapter
 from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import LLMAdapter, LLMError
 from noether.npr.parse import ParseError
-from noether.orchestrator.derive import derive_eom
+from noether.orchestrator.derive import derive_eom, derive_perturbation
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
 from noether.orchestrator.store import DEFAULT_STORE, SessionStore
@@ -169,7 +169,14 @@ class NoetherTools:
             "verification": built.verification,
         }
 
-    def derive(self, session_id: str, with_respect_to: list[str] | None = None) -> dict[str, Any]:
+    def derive(
+        self,
+        session_id: str,
+        with_respect_to: list[str] | None = None,
+        kind: str = "eom",
+    ) -> dict[str, Any]:
+        if kind not in ("eom", "perturbation"):
+            return {"error": f"unknown derivation kind {kind!r}"}
         try:
             sess = self.store.get(session_id)
         except KeyError as exc:
@@ -186,16 +193,28 @@ class NoetherTools:
             for wrt in with_respect_to:
                 if wrt not in declared:
                     return {"error": f"{wrt!r} is not a declared object"}
-            npr = npr.model_copy(deep=True)
-            npr.task.with_respect_to = with_respect_to
+            if kind == "eom":
+                npr = npr.model_copy(deep=True)
+                npr.task.with_respect_to = with_respect_to
+        adapters = {"cadabra": cadabra, "sympy": SympyKernelAdapter()}
         try:
-            results = derive_eom(
-                npr,
-                llm,
-                {"cadabra": cadabra, "sympy": SympyKernelAdapter()},
-                session_id=session_id,
-                results_root=self.results_root,
-            )
+            if kind == "perturbation":
+                results = derive_perturbation(
+                    npr,
+                    llm,
+                    adapters,
+                    fields=with_respect_to,
+                    session_id=session_id,
+                    results_root=self.results_root,
+                )
+            else:
+                results = derive_eom(
+                    npr,
+                    llm,
+                    adapters,
+                    session_id=session_id,
+                    results_root=self.results_root,
+                )
         except AmbiguityBlocked as exc:
             return {"blocked": True, "questions": exc.questions}
         except (LLMError, NotImplementedError) as exc:
@@ -274,13 +293,19 @@ def create_mcp_server(store: SessionStore | None = None, llm: LLMAdapter | None 
         return tools.plan(session_id)
 
     @server.tool()
-    def noether_derive(session_id: str, with_respect_to: list[str] | None = None) -> dict[str, Any]:
-        """Derive the equations of motion for a well-posed session. Noether
-        parameterizes a Cadabra script for the action, runs it in the kernel,
-        and marks each field equation verified only when the kernel's own
-        residue check confirms it; unverified results are returned as such,
-        never as truth. Optionally restrict to specific declared fields with
-        with_respect_to. If questions remain open this returns blocked=true."""
-        return tools.derive(session_id, with_respect_to)
+    def noether_derive(
+        session_id: str,
+        with_respect_to: list[str] | None = None,
+        kind: str = "eom",
+    ) -> dict[str, Any]:
+        """Derive a result for a well-posed session. kind="eom" varies the
+        action for the equations of motion; kind="perturbation" expands it to
+        quadratic order around a background (scalar fields only today). Noether
+        parameterizes a Cadabra script, runs it in the kernel, and marks each
+        result verified only when the kernel's own residue check confirms it;
+        unverified results are returned as such, never as truth. Optionally
+        restrict to specific declared fields with with_respect_to. If questions
+        remain open this returns blocked=true."""
+        return tools.derive(session_id, with_respect_to, kind)
 
     return server
