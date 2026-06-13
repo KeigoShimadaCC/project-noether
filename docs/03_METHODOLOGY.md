@@ -83,6 +83,30 @@ NORTH_STAR §10 names four properties. Operationally:
   equality `final ≡ initial` under stated assumptions is itself checked (V2/V3
   below) rather than assumed.
 
+### 3.1 Readability shorthands (proposed, never imposed)
+
+The derivatives of function couplings dominate the algebra: a coupling `F(φ)`
+contributes `∂F/∂φ` and `∂²F/∂φ²` throughout the variation and the equations of
+motion, and physicists routinely shorthand these as `F_φ`, `F_φφ`. Noether
+proposes those shorthands (`noether.orchestrator.definitions.propose_definitions`,
+exposed at `GET /sessions/{id}/definitions`, the MCP tool
+`noether_propose_definitions`, and the web client's "Suggested notation" card).
+
+Two boundaries keep this honest:
+
+- These are **definitions, not results.** `F_φ` is introduced as a name for the
+  derivative `∂F/∂φ`; nothing here claims what any particular variation
+  evaluates to, so AGENTS.md rule 1 is not engaged (there is no asserted result,
+  only notation). Proposals are deterministic functions of the declared function
+  couplings and their arguments.
+- Adoption is the **human's choice** (rule 4). Proposing never mutates the NPR;
+  only an accepted proposal is applied, as a new immutable NPR version carrying a
+  `shorthand` `ObjectDecl` whose `definition_tex` records the meaning. Couplings
+  the human has pinned to a constant are not offered (their derivatives vanish),
+  and already-declared symbols are never re-proposed, so the proposal set
+  converges as notation is adopted. Adopting notation neither opens nor closes
+  the ambiguity gate.
+
 ## 4. The verification ladder
 
 Every result climbs as far up the ladder as its class allows. Verdicts ship in

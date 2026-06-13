@@ -111,7 +111,8 @@ Noether does the algorithmic, kernel-backed part and returns verified results.
 
 Status: `noether.mcp.create_mcp_server` (behind the optional `[mcp]` extra;
 `noether mcp` runs it over stdio) exposes the session surface as tools:
-`noether_ingest`, `noether_session(s)`, `noether_resolve`, `noether_plan`,
+`noether_ingest`, `noether_session(s)`, `noether_resolve`,
+`noether_propose_definitions`, `noether_adopt_definitions`, `noether_plan`,
 `noether_kernels`. Refusals are tool results, not exceptions: `noether_plan`
 returns `blocked=true` with the open questions, off-menu resolutions are
 rejected without mutating the session, and the tool instructions direct the
@@ -131,9 +132,12 @@ open question ledger; `POST /sessions/{id}/elicit` returns UNCONFIRMED model
 proposals (off-menu suggestions already discarded; 503 when no agent CLI is
 detected); only `POST /sessions/{id}/resolve`, validated against the listed
 options, mutates the session; `GET /sessions/{id}/plan` returns 409 with the
-open questions until the problem is well posed. Sessions persist as JSON
-through `noether.orchestrator.store.SessionStore` and are shared by CLI, web,
-and MCP frontends. Tested in `tests/test_server.py` (skips without the extra).
+open questions until the problem is well posed. `GET /sessions/{id}/definitions`
+proposes readability shorthands for the derivatives of function couplings
+(notation, not results, see section 3.1) and `POST /sessions/{id}/definitions`
+adopts the accepted ones. Sessions persist as JSON through
+`noether.orchestrator.store.SessionStore` and are shared by CLI, web, and MCP
+frontends. Tested in `tests/test_server.py` (skips without the extra).
 
 ## 3. Orchestrator
 

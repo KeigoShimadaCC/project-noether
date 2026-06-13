@@ -123,3 +123,49 @@ class TestElicit:
         after = client.get(f"/sessions/{body['session_id']}").json()
         assert after["well_posed"] is False
         assert all(q["resolution"] is None for q in after["questions"])
+
+
+SCALAR_TENSOR = r"F(\phi) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi)"
+
+
+class TestDefinitions:
+    def test_proposals_are_notation_not_results(self, client):
+        body = _create(client, SCALAR_TENSOR)
+        payload = client.get(f"/sessions/{body['session_id']}/definitions").json()
+        assert payload["confirmed"] is False
+        symbols = {p["symbol"] for p in payload["proposals"]}
+        assert {"F_phi", "F_phiphi", "V_phi"} <= symbols
+        f_phi = next(p for p in payload["proposals"] if p["symbol"] == "F_phi")
+        assert f_phi["meaning_tex"] == r"\frac{\partial F}{\partial \phi}"
+
+    def test_no_proposals_without_function_coupling(self, client):
+        body = _create(client, "R")
+        payload = client.get(f"/sessions/{body['session_id']}/definitions").json()
+        assert payload["proposals"] == []
+
+    def test_adopt_adds_shorthand_object(self, client):
+        body = _create(client, SCALAR_TENSOR)
+        sid = body["session_id"]
+        response = client.post(f"/sessions/{sid}/definitions", json={"accept": ["def-F-phi"]})
+        assert response.status_code == 200
+        objects = {o["name"]: o for o in response.json()["objects"]}
+        assert "F_phi" in objects
+        assert objects["F_phi"]["definition_tex"].startswith("F_{\\phi}")
+        # it disappears from the remaining proposals (idempotent)
+        again = client.get(f"/sessions/{sid}/definitions").json()
+        assert "F_phi" not in {p["symbol"] for p in again["proposals"]}
+
+    def test_unknown_definition_rejected(self, client):
+        body = _create(client, SCALAR_TENSOR)
+        response = client.post(
+            f"/sessions/{body['session_id']}/definitions", json={"accept": ["def-nope"]}
+        )
+        assert response.status_code == 404
+
+    def test_adopting_notation_does_not_unblock_or_block_plan(self, client):
+        body = _create(client, SCALAR_TENSOR)
+        sid = body["session_id"]
+        before = client.get(f"/sessions/{sid}").json()["well_posed"]
+        client.post(f"/sessions/{sid}/definitions", json={"accept": ["def-V-phi"]})
+        after = client.get(f"/sessions/{sid}").json()["well_posed"]
+        assert before is False and after is False

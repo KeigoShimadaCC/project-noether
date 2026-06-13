@@ -20,7 +20,15 @@ def session_payload(session: Session) -> dict[str, Any]:
             "measure_tex": npr.action.measure_tex,
             "lagrangian_tex": npr.action.lagrangian_tex,
         },
-        "objects": [{"name": o.name, "kind": o.kind, "role": o.role} for o in npr.objects],
+        "objects": [
+            {
+                "name": o.name,
+                "kind": o.kind,
+                "role": o.role,
+                "definition_tex": o.definition_tex,
+            }
+            for o in npr.objects
+        ],
         "questions": [
             {
                 "id": a.id,

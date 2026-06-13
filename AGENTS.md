@@ -87,7 +87,9 @@ noether/             Python package
   orchestrator/      Session state machine, planner with ambiguity gate,
                      ingest (LaTeX action -> draft NPR + open ambiguity ledger),
                      elicit (model proposes resolutions; only human-confirmed
-                     answers mutate the NPR), store (JSON session persistence)
+                     answers mutate the NPR), definitions (propose readability
+                     shorthands like F_phi for dF/dphi; human adopts),
+                     store (JSON session persistence)
   server/            HTTP session API (FastAPI, optional [server] extra):
                      ingest/elicit/resolve/plan with the no-guessing contract
   mcp/               MCP stdio server (optional [mcp] extra): same session

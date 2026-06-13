@@ -89,6 +89,47 @@ class NoetherTools:
         self.store.save(sess)
         return session_payload(sess)
 
+    def propose_definitions(self, session_id: str) -> dict[str, Any]:
+        from noether.orchestrator.definitions import propose_definitions
+
+        try:
+            sess = self.store.get(session_id)
+        except KeyError as exc:
+            return {"error": str(exc)}
+        return {
+            "confirmed": False,
+            "proposals": [
+                {
+                    "id": p.id,
+                    "symbol": p.symbol,
+                    "symbol_tex": p.symbol_tex,
+                    "meaning_tex": p.meaning_tex,
+                    "definition_tex": p.as_object().definition_tex,
+                    "rationale": p.rationale,
+                }
+                for p in propose_definitions(sess.npr)
+            ],
+        }
+
+    def adopt_definitions(self, session_id: str, accept: list[str]) -> dict[str, Any]:
+        from noether.orchestrator.definitions import propose_definitions
+
+        try:
+            sess = self.store.get(session_id)
+        except KeyError as exc:
+            return {"error": str(exc)}
+        if not accept:
+            return {"error": "accept must not be empty"}
+        by_id = {p.id: p for p in propose_definitions(sess.npr)}
+        for def_id in accept:
+            if def_id not in by_id:
+                return {"error": f"no proposed definition {def_id!r}"}
+        for def_id in accept:
+            proposal = by_id[def_id]
+            sess.add_definition(proposal.symbol, proposal.as_object().definition_tex)
+        self.store.save(sess)
+        return session_payload(sess)
+
     def plan(self, session_id: str) -> dict[str, Any]:
         try:
             sess = self.store.get(session_id)
@@ -153,6 +194,20 @@ def create_mcp_server(store: SessionStore | None = None):
         listed options. Off-menu choices are rejected. Only call this with
         answers the human actually confirmed."""
         return tools.resolve(session_id, resolutions)
+
+    @server.tool()
+    def noether_propose_definitions(session_id: str) -> dict[str, Any]:
+        """Propose readability shorthands for the derivatives of function
+        couplings (e.g. F_phi for partial F / partial phi). These are
+        notation, not results; the human chooses which to adopt."""
+        return tools.propose_definitions(session_id)
+
+    @server.tool()
+    def noether_adopt_definitions(session_id: str, accept: list[str]) -> dict[str, Any]:
+        """Adopt human-confirmed notation by proposal id (from
+        noether_propose_definitions). Adds shorthands; never reopens
+        questions."""
+        return tools.adopt_definitions(session_id, accept)
 
     @server.tool()
     def noether_plan(session_id: str) -> dict[str, Any]:

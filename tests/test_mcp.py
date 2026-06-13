@@ -69,6 +69,28 @@ class TestTools:
         assert again["questions"] == body["questions"]
 
 
+SCALAR_TENSOR = r"F(\phi) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi)"
+
+
+class TestDefinitionTools:
+    def test_propose_and_adopt(self, tools):
+        body = tools.ingest(SCALAR_TENSOR)
+        sid = body["session_id"]
+        proposals = tools.propose_definitions(sid)
+        assert proposals["confirmed"] is False
+        assert "F_phi" in {p["symbol"] for p in proposals["proposals"]}
+        adopted = tools.adopt_definitions(sid, ["def-F-phi"])
+        assert "F_phi" in {o["name"] for o in adopted["objects"]}
+
+    def test_unknown_definition_is_data(self, tools):
+        body = tools.ingest(SCALAR_TENSOR)
+        assert "error" in tools.adopt_definitions(body["session_id"], ["def-nope"])
+
+    def test_empty_accept_is_data(self, tools):
+        body = tools.ingest(SCALAR_TENSOR)
+        assert "error" in tools.adopt_definitions(body["session_id"], [])
+
+
 class TestServerWiring:
     def test_expected_tools_registered(self, tmp_path):
         server = create_mcp_server(SessionStore(tmp_path / "sessions"))
@@ -79,5 +101,7 @@ class TestServerWiring:
             "noether_sessions",
             "noether_session",
             "noether_resolve",
+            "noether_propose_definitions",
+            "noether_adopt_definitions",
             "noether_plan",
         }

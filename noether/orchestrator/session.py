@@ -72,6 +72,28 @@ class Session(BaseModel):
         self.npr_versions.append(updated)
         self._log(SessionState.ELICIT, f"resolved {ambiguity_id}: {resolution}")
 
+    def add_definition(self, symbol: str, definition_tex: str) -> None:
+        """Adopt a human-confirmed readability shorthand as a new immutable
+        NPR version. A shorthand only names an expression; it adds notation,
+        not physics, and never reopens the ambiguity gate."""
+        from noether.npr.schema import ObjectDecl
+
+        current = self.npr
+        if any(obj.name == symbol for obj in current.objects):
+            raise ValueError(f"object {symbol!r} already declared")
+        updated = current.model_copy(deep=True)
+        updated.objects.append(
+            ObjectDecl(
+                name=symbol,
+                kind="shorthand",
+                role="shorthand",
+                rank=0,
+                definition_tex=definition_tex,
+            )
+        )
+        self.npr_versions.append(updated)
+        self._log(SessionState.ELICIT, f"adopted notation {symbol}")
+
     def change_assumption(self, ambiguity_id: str, new_resolution: str) -> None:
         """Mid-session change: new NPR version, downstream results go stale."""
         self.resolve(ambiguity_id, new_resolution)

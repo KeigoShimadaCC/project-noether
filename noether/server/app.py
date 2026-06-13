@@ -22,6 +22,7 @@ from noether.kernels.cadabra import CadabraAdapter
 from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import LLMAdapter, LLMError
 from noether.npr.parse import ParseError
+from noether.orchestrator.definitions import propose_definitions
 from noether.orchestrator.elicit import propose_resolutions
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
@@ -39,6 +40,10 @@ class CreateSessionRequest(BaseModel):
 
 class ResolveRequest(BaseModel):
     resolutions: dict[str, str] = Field(min_length=1)
+
+
+class AdoptDefinitionsRequest(BaseModel):
+    accept: list[str] = Field(min_length=1)
 
 
 def create_app(
@@ -139,6 +144,42 @@ def create_app(
                 )
         for amb_id, choice in body.resolutions.items():
             session.resolve(amb_id, choice)
+        app.state.store.save(session)
+        return _session_payload(session)
+
+    @app.get("/sessions/{session_id}/definitions")
+    def definitions(session_id: str) -> dict[str, Any]:
+        session = _get_session(session_id)
+        proposals = propose_definitions(session.npr)
+        return {
+            "confirmed": False,
+            "note": (
+                "readability notation only; these are definitions, not results. "
+                "Adopt the ones you want through POST /sessions/{id}/definitions"
+            ),
+            "proposals": [
+                {
+                    "id": p.id,
+                    "symbol": p.symbol,
+                    "symbol_tex": p.symbol_tex,
+                    "meaning_tex": p.meaning_tex,
+                    "definition_tex": p.as_object().definition_tex,
+                    "rationale": p.rationale,
+                }
+                for p in proposals
+            ],
+        }
+
+    @app.post("/sessions/{session_id}/definitions")
+    def adopt_definitions(session_id: str, body: AdoptDefinitionsRequest) -> dict[str, Any]:
+        session = _get_session(session_id)
+        by_id = {p.id: p for p in propose_definitions(session.npr)}
+        for def_id in body.accept:
+            if def_id not in by_id:
+                raise HTTPException(status_code=404, detail=f"no proposed definition {def_id!r}")
+        for def_id in body.accept:
+            proposal = by_id[def_id]
+            session.add_definition(proposal.symbol, proposal.as_object().definition_tex)
         app.state.store.save(session)
         return _session_payload(session)
 

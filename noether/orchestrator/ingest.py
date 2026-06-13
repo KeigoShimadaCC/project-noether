@@ -48,6 +48,7 @@ class _SymbolInfo:
     seen_indexed: bool = False
     seen_func: bool = False
     differentiated: bool = False
+    func_args: list[str] = field(default_factory=list)
 
 
 def _collect(expr: Expr, into: dict[str, _SymbolInfo], *, under_deriv: bool = False) -> None:
@@ -62,6 +63,10 @@ def _collect(expr: Expr, into: dict[str, _SymbolInfo], *, under_deriv: bool = Fa
             info = into.setdefault(name, _SymbolInfo(name))
             info.seen_func = True
             for a in args:
+                # record scalar argument names so derivative shorthands can be
+                # proposed later; only simple scalar symbols qualify as args
+                if isinstance(a, Sym) and a.name not in info.func_args:
+                    info.func_args.append(a.name)
                 _collect(a, into)
         case Tensor(name=name, indices=indices):
             info = into.setdefault(name, _SymbolInfo(name))
@@ -91,7 +96,9 @@ def _classify(info: _SymbolInfo) -> ObjectDecl:
     if name == "g":
         return ObjectDecl(name="g", kind="metric", role="dynamical", symmetry="symmetric", rank=2)
     if info.seen_func:
-        return ObjectDecl(name=name, kind="function", role="coupling", rank=0)
+        return ObjectDecl(
+            name=name, kind="function", role="coupling", rank=0, args=list(info.func_args)
+        )
     if name in GEOMETRIC_NAMES:
         symmetry = "symmetric" if info.max_rank == 2 else "none"
         return ObjectDecl(

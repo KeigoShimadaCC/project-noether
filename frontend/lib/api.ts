@@ -10,14 +10,36 @@ export interface Question {
   resolution: string | null;
 }
 
+export interface NprObject {
+  name: string;
+  kind: string;
+  role: string;
+  definition_tex: string | null;
+}
+
 export interface SessionPayload {
   session_id: string;
   state: string;
   well_posed: boolean;
   action: { measure_tex: string; lagrangian_tex: string | null };
-  objects: { name: string; kind: string; role: string }[];
+  objects: NprObject[];
   questions: Question[];
   events: { state: string; detail: string }[];
+}
+
+export interface DefinitionProposal {
+  id: string;
+  symbol: string;
+  symbol_tex: string;
+  meaning_tex: string;
+  definition_tex: string;
+  rationale: string;
+}
+
+export interface DefinitionsPayload {
+  confirmed: false;
+  note: string;
+  proposals: DefinitionProposal[];
 }
 
 export interface PlanPayload {
@@ -80,5 +102,11 @@ export const api = {
       body: JSON.stringify({ resolutions }),
     }),
   elicit: (id: string) => request<ElicitPayload>(`/sessions/${id}/elicit`, { method: "POST" }),
+  definitions: (id: string) => request<DefinitionsPayload>(`/sessions/${id}/definitions`),
+  adoptDefinitions: (id: string, accept: string[]) =>
+    request<SessionPayload>(`/sessions/${id}/definitions`, {
+      method: "POST",
+      body: JSON.stringify({ accept }),
+    }),
   plan: (id: string) => request<PlanPayload>(`/sessions/${id}/plan`),
 };

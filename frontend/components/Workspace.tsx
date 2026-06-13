@@ -6,6 +6,7 @@ import NprPanel from "@/components/NprPanel";
 import {
   api,
   ApiError,
+  type DefinitionProposal,
   type PlanPayload,
   type Proposal,
   type Question,
@@ -79,6 +80,38 @@ function QuestionCard({
   );
 }
 
+function NotationCard({
+  proposals,
+  busy,
+  onAdopt,
+}: {
+  proposals: DefinitionProposal[];
+  busy: boolean;
+  onAdopt: (id: string) => void;
+}) {
+  if (proposals.length === 0) return null;
+  return (
+    <div className="card">
+      <h2>Suggested notation</h2>
+      <p className="note">
+        Readability shorthands for the derivatives of your function couplings.
+        These are definitions, not results; adopt the ones you like.
+      </p>
+      {proposals.map((proposal) => (
+        <div key={proposal.id} className="proposal">
+          <div className="defn-row">
+            <Latex tex={proposal.definition_tex} />
+            <button disabled={busy} onClick={() => onAdopt(proposal.id)}>
+              adopt
+            </button>
+          </div>
+          <div className="rationale">{proposal.rationale}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PlanCard({ plan }: { plan: PlanPayload }) {
   return (
     <div className="card">
@@ -114,9 +147,19 @@ export default function Workspace({ sessionId }: { sessionId: string }) {
   const [plan, setPlan] = useState<PlanPayload | null>(null);
   const [proposals, setProposals] = useState<Record<string, Proposal>>({});
   const [proposalSource, setProposalSource] = useState<string | null>(null);
+  const [definitions, setDefinitions] = useState<DefinitionProposal[]>([]);
   const [reopened, setReopened] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const refreshDefinitions = useCallback(async (id: string) => {
+    try {
+      const payload = await api.definitions(id);
+      setDefinitions(payload.proposals);
+    } catch {
+      setDefinitions([]);
+    }
+  }, []);
 
   const refreshPlan = useCallback(async (payload: SessionPayload) => {
     if (!payload.well_posed) {
@@ -137,6 +180,7 @@ export default function Workspace({ sessionId }: { sessionId: string }) {
       .then(async (payload) => {
         setSession(payload);
         await refreshPlan(payload);
+        await refreshDefinitions(payload.session_id);
       })
       .catch((err) =>
         setError(
@@ -145,7 +189,21 @@ export default function Workspace({ sessionId }: { sessionId: string }) {
             : "is the API server running? (noether serve)",
         ),
       );
-  }, [sessionId, refreshPlan]);
+  }, [sessionId, refreshPlan, refreshDefinitions]);
+
+  async function adoptDefinition(definitionId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const payload = await api.adoptDefinitions(sessionId, [definitionId]);
+      setSession(payload);
+      await refreshDefinitions(payload.session_id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "could not adopt notation");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function resolve(questionId: string, choice: string) {
     setBusy(true);
@@ -233,6 +291,7 @@ export default function Workspace({ sessionId }: { sessionId: string }) {
             onResolve={(choice) => resolve(question.id, choice)}
           />
         ))}
+        <NotationCard proposals={definitions} busy={busy} onAdopt={adoptDefinition} />
         {openQuestions.length === 0 && plan && <PlanCard plan={plan} />}
       </div>
       <NprPanel

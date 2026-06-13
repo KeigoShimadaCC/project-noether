@@ -54,7 +54,7 @@ export default function NprPanel({
         <ul className="object-list">
           {objects.map((object) => (
             <li key={object.name}>
-              <Latex tex={symbolTex(object.name)} />{" "}
+              <Latex tex={object.definition_tex ?? symbolTex(object.name)} />{" "}
               <span className="qmeta">
                 {object.kind}, {object.role}
               </span>
