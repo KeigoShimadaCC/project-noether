@@ -75,9 +75,23 @@ class CadabraAdapter:
                 "or set NOETHER_CADABRA"
             )
         template_name = task.payload.get("template")
-        if not template_name:
-            raise ValueError("cadabra tasks must name an audited template")
-        source = templates.get(template_name)
+        inline = task.payload.get("script")
+        if template_name:
+            # Frozen, golden-tested script: the trusted offline core (evals).
+            source = templates.get(template_name)
+            origin = f"template: {template_name}"
+            value_extra: dict[str, Any] = {"template": template_name}
+        elif inline:
+            # Parameterized script (e.g. LLM-generated for an arbitrary action).
+            # It carries no authority: the result is trusted only after the
+            # verification ladder confirms it (AGENTS.md rules 1, 3).
+            source = inline
+            origin = "generated (parameterized; unverified until the ladder confirms it)"
+            value_extra = {"generated": True}
+        else:
+            raise ValueError(
+                "cadabra tasks must name an audited template or provide an inline 'script'"
+            )
 
         script = KernelScript(kernel_name=self.name, language="cadabra", source=source)
         raw = self._execute(source)
@@ -88,8 +102,8 @@ class CadabraAdapter:
             script=script,
             raw=raw,
             expression_tex=result_tex,
-            value={"checks": checks, "template": template_name},
-            notes=[f"template: {template_name}"],
+            value={"checks": checks, **value_extra},
+            notes=[origin],
         )
 
     def _execute(self, source: str) -> KernelRawOutput:

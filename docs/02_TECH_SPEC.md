@@ -113,12 +113,16 @@ Status: `noether.mcp.create_mcp_server` (behind the optional `[mcp]` extra;
 `noether mcp` runs it over stdio) exposes the session surface as tools:
 `noether_ingest`, `noether_session(s)`, `noether_resolve`,
 `noether_propose_definitions`, `noether_adopt_definitions`, `noether_plan`,
-`noether_kernels`. Refusals are tool results, not exceptions: `noether_plan`
-returns `blocked=true` with the open questions, off-menu resolutions are
-rejected without mutating the session, and the tool instructions direct the
-host to relay questions to its human. The richer `derive`/`verify`/`render`
-tools land when the compute surface is generalized beyond the evals. Tested
-in `tests/test_mcp.py` (skips without the extra).
+`noether_derive`, `noether_kernels`. Refusals are tool results, not exceptions:
+`noether_plan` and `noether_derive` return `blocked=true` with the open
+questions until the problem is well posed, off-menu resolutions are rejected
+without mutating the session, and the tool instructions direct the host to
+relay questions to its human. `noether_derive` runs the general derivation
+(section 6, item 7): it returns each field equation with a `verified` flag the
+kernel sets, never the host. Today it covers `vary` (equations of motion); the
+`verify`/`render` tools and the `adm`/`perturb` task types land as those
+compute surfaces are built out. Tested in `tests/test_mcp.py` (skips without
+the extra).
 
 The frontend is deliberately thin. All physics state lives server-side in the NPR
 and session store; the same API drives CLI, web, and MCP.
@@ -135,7 +139,11 @@ options, mutates the session; `GET /sessions/{id}/plan` returns 409 with the
 open questions until the problem is well posed. `GET /sessions/{id}/definitions`
 proposes readability shorthands for the derivatives of function couplings
 (notation, not results, see section 3.1) and `POST /sessions/{id}/definitions`
-adopts the accepted ones. Sessions persist as JSON through
+adopts the accepted ones. `POST /sessions/{id}/derive` runs the general
+derivation (section 6, item 7) for a well-posed session and returns each field
+equation with the kernel's `verified` verdict; it answers 409 with the open
+questions while any remain, and 503 when the Cadabra kernel or an agent CLI is
+missing on the server. Sessions persist as JSON through
 `noether.orchestrator.store.SessionStore` and are shared by CLI, web, and MCP
 frontends. Tested in `tests/test_server.py` (skips without the extra).
 
@@ -338,6 +346,24 @@ perturbative expansion (xPert), Young projection.
    NPR; the planner drives xPert/xCoba (or Cadabra rule sets) and the same
    good-form pipeline finishes the output. Algorithms are kernel-side; sequencing
    and presentation are ours.
+7. **General derivation for arbitrary actions** (`noether.orchestrator.derive`,
+   `noether.kernels.cadabra.generate`). The frozen golden templates only cover
+   the eval actions. For any other well-posed action, the model parameterizes a
+   Cadabra script instead of selecting a template: `generate_script` hands it
+   the matching audited template as a worked example and a contract that the
+   script must derive the equation of motion by `vary()` and then state an
+   independent candidate equation, so the kernel can compute the residue and
+   print `residue_zero`. `derive_field` runs that script and trusts the result
+   only when the kernel reports `residue_zero=True`; anything else comes back
+   marked unverified and is surfaced as such, never as truth. Every run, verified
+   or not, writes a provenance bundle. The bright line holds: the model writes a
+   script, the kernel decides whether the answer is trustworthy. This covers the
+   `vary` task (equations of motion) for the metric, scalar, and gauge-field
+   classes today; `adm` and `perturb` need their own audited Cadabra scaffolds
+   before they can be derived the same way, which is why `derive_eom` refuses
+   those task types rather than guessing. The general path is gated by
+   `evals/test_eval_general.py`, which checks it reproduces eval 3's two
+   kernel-verified equations of motion end to end.
 
 ## 7. Provenance bundles
 

@@ -7,6 +7,7 @@ import {
   api,
   ApiError,
   type DefinitionProposal,
+  type FieldDerivation,
   type PlanPayload,
   type Proposal,
   type Question,
@@ -106,6 +107,78 @@ function NotationCard({
             </button>
           </div>
           <div className="rationale">{proposal.rationale}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DerivationPanel({ sessionId }: { sessionId: string }) {
+  const [results, setResults] = useState<FieldDerivation[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [openScript, setOpenScript] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      const payload = await api.derive(sessionId);
+      setResults(payload.derivations);
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 503
+          ? "The server needs both the Cadabra kernel and an agent CLI to derive. Neither physics nor the answer is guessed without them."
+          : err instanceof ApiError && typeof err.detail === "string"
+            ? err.detail
+            : "derivation failed",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>Equations of motion</h2>
+      <p className="note">
+        Noether parameterizes a Cadabra script for this action, runs it in the
+        kernel, and trusts the result only if the kernel confirms it. Results it
+        cannot confirm are shown as unverified, never as truth. This can take a
+        moment.
+      </p>
+      <button disabled={busy} onClick={run}>
+        {busy ? "Deriving..." : results ? "Re-derive" : "Derive"}
+      </button>
+      {error && <div className="error-box">{error}</div>}
+      {results?.map((d) => (
+        <div key={d.wrt} className="proposal derivation">
+          <div className="defn-row">
+            <span className="mono">
+              δS / δ{d.wrt} = 0
+            </span>
+            <span className={`badge ${d.verified ? "resolved" : "error"}`}>
+              {d.verified ? "kernel-verified" : "unverified"}
+            </span>
+          </div>
+          {d.result_tex ? (
+            <div className="eom">
+              <Latex tex={d.result_tex} block />
+            </div>
+          ) : (
+            <p className="note">the kernel returned no expression</p>
+          )}
+          <div className="rationale">
+            {d.detail}. computed by {d.kernel_name} {d.kernel_version}; script by{" "}
+            {d.llm_name} {d.llm_version}.
+          </div>
+          <button
+            className="secondary"
+            onClick={() => setOpenScript(openScript === d.wrt ? null : d.wrt)}
+          >
+            {openScript === d.wrt ? "hide kernel script" : "show kernel script"}
+          </button>
+          {openScript === d.wrt && <pre className="script">{d.script}</pre>}
         </div>
       ))}
     </div>
@@ -293,6 +366,7 @@ export default function Workspace({ sessionId }: { sessionId: string }) {
         ))}
         <NotationCard proposals={definitions} busy={busy} onAdopt={adoptDefinition} />
         {openQuestions.length === 0 && plan && <PlanCard plan={plan} />}
+        {openQuestions.length === 0 && plan && <DerivationPanel sessionId={sessionId} />}
       </div>
       <NprPanel
         session={session}

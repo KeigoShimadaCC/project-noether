@@ -11,8 +11,14 @@ import pytest
 
 pytest.importorskip("mcp")
 
+from noether.kernels.cadabra import CadabraAdapter, templates  # noqa: E402
+from noether.llm import StubLLMAdapter  # noqa: E402
 from noether.mcp import NoetherTools, create_mcp_server  # noqa: E402
 from noether.orchestrator.store import SessionStore  # noqa: E402
+
+requires_cadabra = pytest.mark.skipif(
+    not CadabraAdapter().available(), reason="cadabra2 not installed"
+)
 
 
 @pytest.fixture()
@@ -91,6 +97,48 @@ class TestDefinitionTools:
         assert "error" in tools.adopt_definitions(body["session_id"], [])
 
 
+def _well_posed_scalar_tensor(tools) -> str:
+    body = tools.ingest(SCALAR_TENSOR)
+    resolutions = {q["id"]: q["options"][0] for q in body["questions"]}
+    resolved = tools.resolve(body["session_id"], resolutions)
+    assert resolved["well_posed"] is True
+    return body["session_id"]
+
+
+@requires_cadabra
+class TestDeriveTools:
+    def _tools(self, tmp_path):
+        return NoetherTools(
+            SessionStore(tmp_path / "sessions"),
+            llm=StubLLMAdapter(reply=templates.get("eval3_scalar_tensor_metric")),
+            results_root=tmp_path / "results",
+        )
+
+    def test_derive_returns_verified_eom(self, tmp_path):
+        tools = self._tools(tmp_path)
+        sid = _well_posed_scalar_tensor(tools)
+        result = tools.derive(sid)
+        derivations = result["derivations"]
+        assert [d["wrt"] for d in derivations] == ["g"]
+        assert derivations[0]["verified"] is True
+        assert derivations[0]["result_tex"]
+
+    def test_derive_blocked_until_resolved(self, tmp_path):
+        tools = self._tools(tmp_path)
+        body = tools.ingest(SCALAR_TENSOR)
+        blocked = tools.derive(body["session_id"])
+        assert blocked["blocked"] is True and blocked["questions"]
+
+    def test_derive_undeclared_field_is_data(self, tmp_path):
+        tools = self._tools(tmp_path)
+        sid = _well_posed_scalar_tensor(tools)
+        assert "error" in tools.derive(sid, ["not_a_field"])
+
+    def test_unknown_session_is_data(self, tmp_path):
+        tools = self._tools(tmp_path)
+        assert "error" in tools.derive("s-doesnotexist")
+
+
 class TestServerWiring:
     def test_expected_tools_registered(self, tmp_path):
         server = create_mcp_server(SessionStore(tmp_path / "sessions"))
@@ -104,4 +152,5 @@ class TestServerWiring:
             "noether_propose_definitions",
             "noether_adopt_definitions",
             "noether_plan",
+            "noether_derive",
         }

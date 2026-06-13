@@ -13,6 +13,7 @@ returns 409 with the questions, never a guess.
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -23,6 +24,7 @@ from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import LLMAdapter, LLMError
 from noether.npr.parse import ParseError
 from noether.orchestrator.definitions import propose_definitions
+from noether.orchestrator.derive import derive_eom
 from noether.orchestrator.elicit import propose_resolutions
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
@@ -46,15 +48,23 @@ class AdoptDefinitionsRequest(BaseModel):
     accept: list[str] = Field(min_length=1)
 
 
+class DeriveRequest(BaseModel):
+    with_respect_to: list[str] | None = None
+
+
 def create_app(
     store: SessionStore | None = None,
     llm: LLMAdapter | None = None,
+    results_root: Path | None = None,
 ) -> FastAPI:
     """Build the app. `llm=None` defers to auto-detecting an agent CLI at
     request time; tests inject a stub instead."""
     app = FastAPI(title="noether", version="0.1.0")
     app.state.store = store if store is not None else SessionStore(DEFAULT_STORE)
     app.state.llm = llm
+    app.state.results_root = (
+        results_root if results_root is not None else app.state.store.root.parent / "results"
+    )
 
     def _get_session(session_id: str) -> Session:
         try:
@@ -201,6 +211,50 @@ def create_app(
                 for s in built.steps
             ],
             "verification": built.verification,
+        }
+
+    @app.post("/sessions/{session_id}/derive")
+    def derive(session_id: str, body: DeriveRequest | None = None) -> dict[str, Any]:
+        session = _get_session(session_id)
+        cadabra = CadabraAdapter()
+        if not cadabra.available():
+            raise HTTPException(
+                status_code=503,
+                detail="cadabra kernel not installed on the server; cannot derive",
+            )
+        adapter = _llm()
+        if not adapter.available():
+            raise HTTPException(
+                status_code=503,
+                detail="no LLM backend available to parameterize the derivation",
+            )
+        npr = session.npr
+        if body is not None and body.with_respect_to:
+            declared = {o.name for o in npr.objects}
+            for wrt in body.with_respect_to:
+                if wrt not in declared:
+                    raise HTTPException(status_code=400, detail=f"{wrt!r} is not a declared object")
+            npr = npr.model_copy(deep=True)
+            npr.task.with_respect_to = body.with_respect_to
+        try:
+            results = derive_eom(
+                npr,
+                adapter,
+                {"cadabra": cadabra, "sympy": SympyKernelAdapter()},
+                session_id=session_id,
+                results_root=app.state.results_root,
+            )
+        except AmbiguityBlocked as exc:
+            raise HTTPException(
+                status_code=409, detail={"blocked": True, "questions": exc.questions}
+            ) from exc
+        except LLMError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except NotImplementedError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {
+            "session_id": session_id,
+            "derivations": [r.model_dump() for r in results],
         }
 
     return app

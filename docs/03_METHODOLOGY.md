@@ -136,6 +136,22 @@ which passed, and which were not applicable.
 The ladder is the product's trust story. "I checked it three ways and it holds"
 (NORTH_STAR §16) means, concretely: V2 + V3 + V4 green.
 
+### 4.1 The general derivation path and its residue check
+
+For the eval actions, the derivation runs a frozen, golden-tested template. For
+any other well-posed action there is no pre-written script, so the model writes
+one (`noether.kernels.cadabra.generate`, `noether.orchestrator.derive`). The
+trust story does not loosen: the generated script must derive the equation of
+motion by `vary()` and then state an independent candidate equation, and the
+kernel canonicalizes the difference and prints whether the residue is zero. That
+residue check is a V3-style equality verified by computation, so `derive_field`
+labels a result verified only when the kernel reports `residue_zero=True`. A
+script that cannot make the residue vanish yields an unverified result, shown as
+such and never as truth. The model writes a script; the kernel decides whether
+the answer holds. This covers the `vary` task for the metric, scalar, and
+gauge-field classes; `adm` and `perturb` wait on their own audited scaffolds
+rather than being guessed.
+
 ## 5. Honesty and failure policy
 
 - If a computation exceeds resource bounds, Noether reports where it stopped,

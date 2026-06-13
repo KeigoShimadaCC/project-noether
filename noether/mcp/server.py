@@ -13,11 +13,14 @@ MCP runtime); create_mcp_server wraps it for stdio transport.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from noether.kernels.cadabra import CadabraAdapter
 from noether.kernels.sympy_kernel import SympyKernelAdapter
+from noether.llm.base import LLMAdapter, LLMError
 from noether.npr.parse import ParseError
+from noether.orchestrator.derive import derive_eom
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
 from noether.orchestrator.store import DEFAULT_STORE, SessionStore
@@ -30,8 +33,24 @@ class NoetherTools:
     """Session tools shared by every MCP host. One store, same sessions as
     the HTTP API and the CLI."""
 
-    def __init__(self, store: SessionStore | None = None) -> None:
+    def __init__(
+        self,
+        store: SessionStore | None = None,
+        llm: LLMAdapter | None = None,
+        results_root: Path | None = None,
+    ) -> None:
         self.store = store if store is not None else SessionStore(DEFAULT_STORE)
+        self.llm = llm
+        self.results_root = (
+            results_root if results_root is not None else self.store.root.parent / "results"
+        )
+
+    def _llm(self) -> LLMAdapter:
+        if self.llm is not None:
+            return self.llm
+        from noether.llm.cli import CliLLMAdapter
+
+        return CliLLMAdapter()
 
     def kernels(self) -> dict[str, Any]:
         adapters = [SympyKernelAdapter(), CadabraAdapter()]
@@ -150,11 +169,47 @@ class NoetherTools:
             "verification": built.verification,
         }
 
+    def derive(self, session_id: str, with_respect_to: list[str] | None = None) -> dict[str, Any]:
+        try:
+            sess = self.store.get(session_id)
+        except KeyError as exc:
+            return {"error": str(exc)}
+        cadabra = CadabraAdapter()
+        if not cadabra.available():
+            return {"error": "cadabra kernel not installed; cannot derive"}
+        llm = self._llm()
+        if not llm.available():
+            return {"error": "no agent CLI / LLM backend available to parameterize the script"}
+        npr = sess.npr
+        if with_respect_to:
+            declared = {o.name for o in npr.objects}
+            for wrt in with_respect_to:
+                if wrt not in declared:
+                    return {"error": f"{wrt!r} is not a declared object"}
+            npr = npr.model_copy(deep=True)
+            npr.task.with_respect_to = with_respect_to
+        try:
+            results = derive_eom(
+                npr,
+                llm,
+                {"cadabra": cadabra, "sympy": SympyKernelAdapter()},
+                session_id=session_id,
+                results_root=self.results_root,
+            )
+        except AmbiguityBlocked as exc:
+            return {"blocked": True, "questions": exc.questions}
+        except (LLMError, NotImplementedError) as exc:
+            return {"error": str(exc)}
+        return {
+            "session_id": session_id,
+            "derivations": [r.model_dump() for r in results],
+        }
 
-def create_mcp_server(store: SessionStore | None = None):
+
+def create_mcp_server(store: SessionStore | None = None, llm: LLMAdapter | None = None):
     from mcp.server.fastmcp import FastMCP
 
-    tools = NoetherTools(store)
+    tools = NoetherTools(store, llm=llm)
     server = FastMCP(
         "noether",
         instructions=(
@@ -162,7 +217,10 @@ def create_mcp_server(store: SessionStore | None = None):
             "noether_ingest, show the returned questions to your human, "
             "confirm answers with noether_resolve (on-menu choices only), "
             "then noether_plan. While questions are open, plan returns "
-            "blocked=true with the question list; relay it, never guess."
+            "blocked=true with the question list; relay it, never guess. "
+            "Once well posed, noether_derive runs a kernel-checked Cadabra "
+            "derivation; it marks each equation verified only if the kernel "
+            "confirmed it, and reports unverified results as such."
         ),
     )
 
@@ -214,5 +272,15 @@ def create_mcp_server(store: SessionStore | None = None):
         """Plan the derivation. If questions remain open this returns
         blocked=true with the question list; relay them to the human."""
         return tools.plan(session_id)
+
+    @server.tool()
+    def noether_derive(session_id: str, with_respect_to: list[str] | None = None) -> dict[str, Any]:
+        """Derive the equations of motion for a well-posed session. Noether
+        parameterizes a Cadabra script for the action, runs it in the kernel,
+        and marks each field equation verified only when the kernel's own
+        residue check confirms it; unverified results are returned as such,
+        never as truth. Optionally restrict to specific declared fields with
+        with_respect_to. If questions remain open this returns blocked=true."""
+        return tools.derive(session_id, with_respect_to)
 
     return server

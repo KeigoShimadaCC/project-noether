@@ -11,12 +11,17 @@ fastapi = pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from noether.kernels.cadabra import CadabraAdapter, templates  # noqa: E402
 from noether.llm import CliLLMAdapter, StubLLMAdapter, stub_reply  # noqa: E402
 from noether.orchestrator.ingest import ingest_action  # noqa: E402
 from noether.orchestrator.store import SessionStore  # noqa: E402
 from noether.server import create_app  # noqa: E402
 
 MEASURE = r"d^4x \sqrt{-g}"
+
+requires_cadabra = pytest.mark.skipif(
+    not CadabraAdapter().available(), reason="cadabra2 not installed"
+)
 
 
 @pytest.fixture()
@@ -169,3 +174,48 @@ class TestDefinitions:
         client.post(f"/sessions/{sid}/definitions", json={"accept": ["def-V-phi"]})
         after = client.get(f"/sessions/{sid}").json()["well_posed"]
         assert before is False and after is False
+
+
+def _well_posed_scalar_tensor(client) -> str:
+    """Create a scalar-tensor session and resolve every question (vary wrt g)."""
+    body = _create(client, SCALAR_TENSOR)
+    resolutions = {q["id"]: q["options"][0] for q in body["questions"]}
+    response = client.post(
+        f"/sessions/{body['session_id']}/resolve", json={"resolutions": resolutions}
+    )
+    assert response.json()["well_posed"] is True, response.text
+    return body["session_id"]
+
+
+@requires_cadabra
+class TestDerive:
+    def _client(self, store, tmp_path, reply):
+        return TestClient(
+            create_app(store=store, llm=StubLLMAdapter(reply=reply), results_root=tmp_path)
+        )
+
+    def test_derive_returns_verified_eom(self, store, tmp_path):
+        client = self._client(store, tmp_path, templates.get("eval3_scalar_tensor_metric"))
+        sid = _well_posed_scalar_tensor(client)
+        response = client.post(f"/sessions/{sid}/derive")
+        assert response.status_code == 200, response.text
+        derivations = response.json()["derivations"]
+        assert [d["wrt"] for d in derivations] == ["g"]  # narrowed by vary-wrt=g
+        g = derivations[0]
+        assert g["verified"] is True, g["checks"]
+        assert g["result_tex"]
+        assert g["kernel_name"] == "cadabra"
+        assert g["bundle_path"]
+
+    def test_derive_blocked_when_questions_open(self, store, tmp_path):
+        client = self._client(store, tmp_path, templates.get("eval3_scalar_tensor_metric"))
+        body = _create(client, SCALAR_TENSOR)  # unresolved
+        response = client.post(f"/sessions/{body['session_id']}/derive")
+        assert response.status_code == 409
+        assert response.json()["detail"]["questions"]
+
+    def test_derive_rejects_undeclared_field(self, store, tmp_path):
+        client = self._client(store, tmp_path, templates.get("eval3_scalar_tensor_metric"))
+        sid = _well_posed_scalar_tensor(client)
+        response = client.post(f"/sessions/{sid}/derive", json={"with_respect_to": ["not_a_field"]})
+        assert response.status_code == 400

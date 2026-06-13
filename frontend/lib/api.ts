@@ -53,6 +53,26 @@ export interface BlockedPlan {
   questions: string[];
 }
 
+export interface FieldDerivation {
+  wrt: string;
+  capability: string;
+  result_tex: string | null;
+  verified: boolean;
+  checks: Record<string, string>;
+  kernel_name: string;
+  kernel_version: string;
+  llm_name: string;
+  llm_version: string;
+  script: string;
+  bundle_path: string | null;
+  detail: string;
+}
+
+export interface DerivePayload {
+  session_id: string;
+  derivations: FieldDerivation[];
+}
+
 export interface Proposal {
   ambiguity_id: string;
   choice: string | null;
@@ -109,4 +129,9 @@ export const api = {
       body: JSON.stringify({ accept }),
     }),
   plan: (id: string) => request<PlanPayload>(`/sessions/${id}/plan`),
+  derive: (id: string, withRespectTo?: string[]) =>
+    request<DerivePayload>(`/sessions/${id}/derive`, {
+      method: "POST",
+      body: JSON.stringify(withRespectTo ? { with_respect_to: withRespectTo } : {}),
+    }),
 };

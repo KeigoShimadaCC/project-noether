@@ -77,8 +77,10 @@ docs/                Design and research documents (00 through 04)
 noether/             Python package
   npr/               Problem representation: conventions, AST, schema, LaTeX,
                      validation, and the LaTeX action parser (parse.py)
-  kernels/           Adapters: base contract, cadabra/ (subprocess), sympy_kernel/;
-                     versions.py pins kernel versions (single source of truth)
+  kernels/           Adapters: base contract, cadabra/ (subprocess; runs both
+                     frozen golden templates and inline LLM-generated scripts,
+                     generate.py parameterizes an audited scaffold for arbitrary
+                     actions), sympy_kernel/; versions.py pins kernel versions
   llm/               LLM adapters behind one interface: ambient-auth CLI
                      subprocess (auto-detects codex/claude/gemini/droid; no API
                      key) plus an in-process stub for tests
@@ -89,11 +91,15 @@ noether/             Python package
                      elicit (model proposes resolutions; only human-confirmed
                      answers mutate the NPR), definitions (propose readability
                      shorthands like F_phi for dF/dphi; human adopts),
+                     derive (general EOM path: model writes a Cadabra script,
+                     kernel's residue check decides verified vs unverified),
                      store (JSON session persistence)
   server/            HTTP session API (FastAPI, optional [server] extra):
-                     ingest/elicit/resolve/plan with the no-guessing contract
+                     ingest/elicit/resolve/plan/derive with the no-guessing
+                     contract
   mcp/               MCP stdio server (optional [mcp] extra): same session
-                     surface as tools; refusals are tool results, not guesses
+                     surface as tools (incl. noether_derive); refusals are tool
+                     results, not guesses
   cli/               `noether chat` / `resume` / `sessions` (conversational
                      loop, chat.py), `noether kernels`, `noether ingest`,
                      `noether elicit`, `noether serve`, `noether mcp`,
@@ -106,9 +112,12 @@ frontend/            Web client (Next.js + KaTeX) over the HTTP session API;
 pyproject.toml       Package, deps, ruff, pytest config
 ```
 
-Planned next (see `docs/02_TECH_SPEC.md`): wiring arbitrary well-posed
-sessions into the compute pipeline beyond the eval-defined tasks, then the
-derivation tree and export views in the web client.
+The general derivation path (model writes a Cadabra script, kernel verifies it
+through an in-script residue check) now serves arbitrary well-posed actions for
+the `vary` task across the metric, scalar, and gauge-field classes; see
+`docs/02_TECH_SPEC.md` section 6, item 7. Planned next: audited Cadabra
+scaffolds for the `adm` and `perturb` tasks so those derive the same way, then
+the derivation tree and export views in the web client.
 
 ## 4.1 Development setup
 
