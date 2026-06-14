@@ -101,6 +101,7 @@ class TestGeneralPathReproducesEval3p:
             build_npr(resolved=True),
             StubLLMAdapter(reply=templates.get("pert_scalar_quadratic")),
             adapters,
+            fields=["phi"],
             session_id="eval-general-pert",
             results_root=tmp_path / "results",
         )

@@ -5,8 +5,9 @@ pinned kernel version (docs/02_TECH_SPEC.md section 5). The LLM never writes
 kernel scripts character by character in production; it parameterizes these.
 
 Status: all registered templates FROZEN (evals 1-5 golden-tested against
-cadabra2 2.5.15 on 2026-06-12; pert_scalar_quadratic added 2026-06-13, same
-kernel; see tests/test_cadabra_adapter.py).
+cadabra2 2.5.15 on 2026-06-12; pert_scalar_quadratic added 2026-06-13 and
+pert_metric_quadratic added 2026-06-15, same kernel; see
+tests/test_cadabra_adapter.py and evals/test_eval3g.py).
 """
 
 _TEMPLATES: dict[str, str] = {}
@@ -729,6 +730,200 @@ sort_product(cross);
 canonicalise(cross);
 rename_dummies(cross);
 meld(cross);
+print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
+""",
+)
+
+
+# ---------------------------------------------------------------------------
+# Perturbation, metric (graviton) sector: quadratic-action expansion of the
+# Einstein-Hilbert action S = \int d^4x \sqrt{-g} R about a flat background
+#   g_{\mu\nu} -> eta_{\mu\nu} + h_{\mu\nu},
+# the linearized-gravity setup behind eval 3s (massless graviton, two TT
+# polarizations on Minkowski). The fluctuation h carries smallness weight
+# eps=1, \nabla inherits the weight of its argument (WeightInherit), so
+# keep_weight isolates the orders we need: with the inverse metric expanded as
+# ginv = eta - h (enough for the Christoffels to second order), the quadratic
+# Lagrangian is
+#   L2 = R^{(2)} + 1/2 h^{gamma}_{gamma} R^{(1)},
+# since R^{(0)} = 0 on a flat background.
+#
+# Two facts about Cadabra drive the script's shape:
+#   - integrate_by_parts peels one derivative at a time, so a second
+#     derivative is moved off the test field dh in two steps (\nabla_{nu}{dh}
+#     first, then bare dh), using \nabla as a ::Derivative;
+#   - ::Derivative does not commute nested derivatives and meld will not melt
+#     terms written at different index heights. The reduce step therefore
+#     contracts every metric, lowers all indices (h, dh, and derivative
+#     indices) to a single explicit-eta convention, then rewrites \nabla as a
+#     ::PartialDerivative so \partial_{mu}\partial_{nu} commute and the
+#     equal-but-differently-written terms finally meld.
+#
+# Two kernel checks, both in noether-default-v1:
+#   residue_zero        -- delta S2 / delta h matches the documented linearized
+#                          Einstein operator -G^{(1)}_{mu nu};
+#   linearized_eom_match -- the same G^{(1)} obtained independently from the
+#                          linearized Christoffels and Ricci tensor reproduces
+#                          it, a second route that does not reuse the first
+#                          target.
+# Both must be True before the result is called verified (eval 3g).
+# ---------------------------------------------------------------------------
+
+register(
+    "pert_metric_quadratic",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\delta,\epsilon,\zeta}::Indices(position=independent).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\delta,\epsilon,\zeta}::Integer(range=0..3).
+\nabla{#}::Derivative.
+\nabla{#}::WeightInherit(label=eps, type=multiplicative).
+\partial{#}::PartialDerivative.
+\partial{#}::WeightInherit(label=eps, type=multiplicative).
+eta_{\mu\nu}::Metric.
+eta^{\mu\nu}::InverseMetric.
+Gam^{\lambda}_{\mu\nu}::TableauSymmetry(shape={2}, indices={1,2}).
+h_{\mu\nu}::Symmetric.
+h{#}::Weight(label=eps, value=1).
+h{#}::Depends(\nabla{#}).
+dh_{\mu\nu}::Symmetric.
+dh{#}::Weight(label=eps, value=1).
+dh{#}::Depends(\nabla{#}).
+
+def lower_all(e):
+    for i in range(6):
+        substitute(e, $\nabla^{\mu}{A??} -> eta^{\mu\nu} \nabla_{\nu}{A??}$)
+        distribute(e)
+        product_rule(e)
+        distribute(e)
+        substitute(e, $\nabla_{\mu}{eta^{\alpha\beta}} -> 0$)
+        distribute(e)
+    substitute(e, $h^{\mu\nu} -> eta^{\mu\alpha} eta^{\nu\beta} h_{\alpha\beta}$)
+    substitute(e, $h^{\mu}_{\nu} -> eta^{\mu\alpha} h_{\alpha\nu}$)
+    substitute(e, $h_{\mu}^{\nu} -> eta^{\nu\alpha} h_{\mu\alpha}$)
+    substitute(e, $h^{\rho}_{\rho} -> eta^{\alpha\beta} h_{\alpha\beta}$)
+    substitute(e, $h_{\rho}^{\rho} -> eta^{\alpha\beta} h_{\alpha\beta}$)
+    substitute(e, $dh^{\mu\nu} -> eta^{\mu\alpha} eta^{\nu\beta} dh_{\alpha\beta}$)
+    substitute(e, $dh^{\mu}_{\nu} -> eta^{\mu\alpha} dh_{\alpha\nu}$)
+    substitute(e, $dh_{\mu}^{\nu} -> eta^{\nu\alpha} dh_{\mu\alpha}$)
+    substitute(e, $dh^{\rho}_{\rho} -> eta^{\alpha\beta} dh_{\alpha\beta}$)
+    substitute(e, $dh_{\rho}^{\rho} -> eta^{\alpha\beta} dh_{\alpha\beta}$)
+    distribute(e)
+    for i in range(6):
+        product_rule(e)
+        distribute(e)
+        substitute(e, $\nabla_{\mu}{eta^{\alpha\beta}} -> 0$)
+        distribute(e)
+    return e
+
+def reduce(e):
+    for i in range(8):
+        eliminate_metric(e)
+        eliminate_kronecker(e)
+        distribute(e)
+        canonicalise(e)
+        rename_dummies(e)
+    lower_all(e)
+    substitute(e, $\nabla_{\mu}{A??} -> \partial_{\mu}{A??}$)
+    substitute(e, $\nabla_{\mu}{A??} -> \partial_{\mu}{A??}$)
+    substitute(e, $\nabla_{\mu}{A??} -> \partial_{\mu}{A??}$)
+    distribute(e)
+    for i in range(10):
+        canonicalise(e)
+        rename_dummies(e)
+        meld(e)
+    return e
+
+def finalize(e):
+    for i in range(12):
+        sort_product(e)
+        canonicalise(e)
+        rename_dummies(e)
+        meld(e)
+    return e
+
+Rexpr := ginv^{\mu\nu} ( \nabla_{\lambda}{Gam^{\lambda}_{\mu\nu}} - \nabla_{\nu}{Gam^{\lambda}_{\mu\lambda}} + Gam^{\lambda}_{\lambda\rho} Gam^{\rho}_{\mu\nu} - Gam^{\lambda}_{\nu\rho} Gam^{\rho}_{\mu\lambda} );
+substitute(Rexpr, $Gam^{\lambda}_{\mu\nu} -> 1/2 ginv^{\lambda\rho} ( \nabla_{\mu}{h_{\nu\rho}} + \nabla_{\nu}{h_{\mu\rho}} - \nabla_{\rho}{h_{\mu\nu}} )$);
+substitute(Rexpr, $ginv^{\mu\nu} -> eta^{\mu\nu} - h^{\mu\nu}$);
+distribute(Rexpr);
+product_rule(Rexpr);
+distribute(Rexpr);
+substitute(Rexpr, $\nabla_{\mu}{eta^{\alpha\beta}} -> 0$);
+distribute(Rexpr);
+
+R1 := @(Rexpr):
+keep_weight(R1, $eps=1$);
+R2 := @(Rexpr):
+keep_weight(R2, $eps=2$);
+
+L := @(R2) + 1/2 h^{\gamma}_{\gamma} @(R1);
+distribute(L);
+canonicalise(L);
+rename_dummies(L);
+print("NOETHER_RESULT: " + str(L));
+
+ex := \int{ @(L) }{x};
+vary(ex, $h_{\mu\nu} -> dh_{\mu\nu}, h^{\mu\nu} -> dh^{\mu\nu}, h^{\mu}_{\nu} -> dh^{\mu}_{\nu}$);
+distribute(ex);
+substitute(ex, $dh^{\mu\nu} -> eta^{\mu\rho} eta^{\nu\sigma} dh_{\rho\sigma}$);
+substitute(ex, $dh^{\mu}_{\nu} -> eta^{\mu\rho} dh_{\rho\nu}$);
+distribute(ex);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{eta^{\alpha\beta}} -> 0$);
+distribute(ex);
+integrate_by_parts(ex, $\nabla_{\nu}{dh_{\rho\sigma}}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{eta^{\alpha\beta}} -> 0$);
+distribute(ex);
+integrate_by_parts(ex, $dh_{\rho\sigma}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{eta^{\alpha\beta}} -> 0$);
+distribute(ex);
+substitute(ex, $\int{A??}{x} -> A??$);
+distribute(ex);
+reduce(ex);
+
+target_doc := - ( 1/2 ( eta^{\lambda\kappa} \nabla_{\alpha}{\nabla_{\kappa}{h_{\lambda\beta}}}
+   + eta^{\lambda\kappa} \nabla_{\beta}{\nabla_{\kappa}{h_{\lambda\alpha}}}
+   - eta^{\lambda\kappa} \nabla_{\lambda}{\nabla_{\kappa}{h_{\alpha\beta}}}
+   - eta^{\lambda\kappa} \nabla_{\alpha}{\nabla_{\beta}{h_{\lambda\kappa}}} )
+   - 1/2 eta_{\alpha\beta} ( eta^{\mu\rho} eta^{\nu\sigma} \nabla_{\rho}{\nabla_{\sigma}{h_{\mu\nu}}}
+   - eta^{\mu\nu} eta^{\lambda\kappa} \nabla_{\mu}{\nabla_{\nu}{h_{\lambda\kappa}}} ) ) dh^{\alpha\beta};
+distribute(target_doc);
+substitute(target_doc, $dh^{\mu\nu} -> eta^{\mu\rho} eta^{\nu\sigma} dh_{\rho\sigma}$);
+distribute(target_doc);
+reduce(target_doc);
+
+residue := @(ex) - @(target_doc);
+distribute(residue);
+finalize(residue);
+print("NOETHER_CHECK: residue=" + str(residue));
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"));
+
+Ric1 := \nabla_{\lambda}{Gam^{\lambda}_{\alpha\beta}} - \nabla_{\beta}{Gam^{\lambda}_{\alpha\lambda}};
+substitute(Ric1, $Gam^{\lambda}_{\mu\nu} -> 1/2 eta^{\lambda\rho} ( \nabla_{\mu}{h_{\nu\rho}} + \nabla_{\nu}{h_{\mu\rho}} - \nabla_{\rho}{h_{\mu\nu}} )$);
+distribute(Ric1);
+product_rule(Ric1);
+distribute(Ric1);
+substitute(Ric1, $\nabla_{\mu}{eta^{\gamma\delta}} -> 0$);
+distribute(Ric1);
+
+Rsc1 := eta^{\alpha\beta} @(Ric1);
+distribute(Rsc1);
+
+G1 := @(Ric1) - 1/2 eta_{\alpha\beta} @(Rsc1);
+distribute(G1);
+
+target_ricci := - @(G1) dh^{\alpha\beta};
+distribute(target_ricci);
+substitute(target_ricci, $dh^{\mu\nu} -> eta^{\mu\rho} eta^{\nu\sigma} dh_{\rho\sigma}$);
+distribute(target_ricci);
+reduce(target_ricci);
+
+cross := @(ex) - @(target_ricci);
+distribute(cross);
+finalize(cross);
 print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
 """,
 )

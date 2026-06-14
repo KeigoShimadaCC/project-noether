@@ -121,10 +121,17 @@ class TestPerturbationPromptGeneration:
         assert "quadratic order" in prompt
         assert templates.get("pert_scalar_quadratic") in prompt
 
-    def test_perturbation_rejects_nonscalar_field(self):
+    def test_metric_perturbation_prompt_uses_quadratic_scaffold(self):
         npr = build_npr(resolved=True)
+        _, prompt = build_generation_prompt(npr, "g", kind="perturbation")
+        assert templates.get("pert_metric_quadratic") in prompt
+
+    def test_perturbation_rejects_unsupported_field(self):
+        from evals.eval4_maxwell import build_npr as build_maxwell_npr
+
+        npr = build_maxwell_npr(resolved=True)
         with pytest.raises(NotImplementedError):
-            build_generation_prompt(npr, "g", kind="perturbation")
+            build_generation_prompt(npr, "A", kind="perturbation")
 
 
 class TestPerturbationGate:
@@ -140,14 +147,16 @@ class TestPerturbationGate:
                 session_id="s",
             )
 
-    def test_perturbation_refuses_nonscalar(self):
-        npr = build_npr(resolved=True)
+    def test_perturbation_refuses_unsupported_field(self):
+        from evals.eval4_maxwell import build_npr as build_maxwell_npr
+
+        npr = build_maxwell_npr(resolved=True)
         with pytest.raises(NotImplementedError):
             derive_perturbation(
                 npr,
                 StubLLMAdapter(),
                 {"cadabra": CadabraAdapter()},
-                fields=["g"],
+                fields=["A"],
                 session_id="s",
             )
 
@@ -168,9 +177,23 @@ class TestVerifiedPerturbation:
         assert d.checks.get("linearized_eom_match") == "True"
         assert d.result_tex
 
-    def test_perturbation_defaults_to_dynamical_scalars(self):
+    def test_metric_quadratic_action_verified(self):
+        npr = build_npr(resolved=True)
+        stub = StubLLMAdapter(reply=templates.get("pert_metric_quadratic"))
+        results = derive_perturbation(
+            npr, stub, {"cadabra": CadabraAdapter()}, fields=["g"], session_id="s-test"
+        )
+        assert [r.wrt for r in results] == ["g"]
+        d = results[0]
+        assert d.kind == "perturbation"
+        assert d.verified is True, d.checks
+        assert d.checks.get("residue_zero") == "True"
+        assert d.checks.get("linearized_eom_match") == "True"
+        assert d.result_tex
+
+    def test_perturbation_defaults_to_dynamical_fields(self):
         npr = build_npr(resolved=True)
         stub = StubLLMAdapter(reply=templates.get("pert_scalar_quadratic"))
         results = derive_perturbation(npr, stub, {"cadabra": CadabraAdapter()}, session_id="s")
-        # phi is the only dynamical scalar in the scalar-tensor NPR
-        assert [r.wrt for r in results] == ["phi"]
+        # both the dynamical metric and the dynamical scalar are perturbable
+        assert [r.wrt for r in results] == ["g", "phi"]

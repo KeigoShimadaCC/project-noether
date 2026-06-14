@@ -105,7 +105,7 @@ noether/             Python package
                      `noether elicit`, `noether serve`, `noether mcp`,
                      `noether eval{1..5}`, `noether eval1s` (ADM of GR),
                      `noether eval3s` (Minkowski spectrum)
-evals/               Executable evals 1-5, 1s, 3s, 3p + a general-path eval
+evals/               Executable evals 1-5, 1s, 3s, 3p, 3g + a general-path eval
                      (test_eval_general) + registry + pytest gates
 tests/               Unit and adapter tests (cadabra golden test included)
 frontend/            Web client (Next.js + KaTeX) over the HTTP session API;
@@ -117,13 +117,14 @@ The general derivation path (model writes a Cadabra script, kernel verifies it
 through an in-script residue check) now serves arbitrary well-posed actions for
 the `vary` task across the metric, scalar, and gauge-field classes; see
 `docs/02_TECH_SPEC.md` section 6, item 7. The `perturb` task runs through the
-same path for scalar fields: `derive_perturbation`, reachable as
+same path for scalar fields and the metric: `derive_perturbation`, reachable as
 `kind="perturbation"` on the server, MCP, and web clients, drives the frozen
-`pert_scalar_quadratic` scaffold, which expands a scalar action to quadratic
-order and checks the linearized EOM two ways (eval 3p); both checks must pass
-before a result is called verified. Planned next: widen `perturb` past the
-scalar sector, add an `adm` scaffold, then the derivation tree and export
-views in the web client.
+`pert_scalar_quadratic` scaffold (eval 3p) for scalars and
+`pert_metric_quadratic` (eval 3g) for the metric, expanding the action to
+quadratic order and checking the linearized EOM two ways; all checks must pass
+before a result is called verified. Other field kinds (a gauge potential, say)
+are refused rather than guessed. Planned next: add an `adm` scaffold, then the
+derivation tree and export views in the web client.
 
 ## 4.1 Development setup
 

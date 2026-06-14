@@ -76,6 +76,7 @@ class TestTools:
 
 
 SCALAR_TENSOR = r"F(\phi) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi)"
+MAXWELL = r"-\tfrac14 F_{\mu\nu} F^{\mu\nu}"
 
 
 class TestDefinitionTools:
@@ -150,20 +151,35 @@ class TestDeriveTools:
             results_root=tmp_path / "results",
         )
         sid = _well_posed_scalar_tensor(tools)
-        result = tools.derive(sid, kind="perturbation")
+        result = tools.derive(sid, ["phi"], kind="perturbation")
         derivations = result["derivations"]
         assert [d["wrt"] for d in derivations] == ["phi"]
         assert derivations[0]["kind"] == "perturbation"
         assert derivations[0]["verified"] is True
 
-    def test_perturbation_refuses_nonscalar(self, tmp_path):
+    def test_perturbation_metric_returns_verified_quadratic_action(self, tmp_path):
+        tools = NoetherTools(
+            SessionStore(tmp_path / "sessions"),
+            llm=StubLLMAdapter(reply=templates.get("pert_metric_quadratic")),
+            results_root=tmp_path / "results",
+        )
+        sid = _well_posed_scalar_tensor(tools)
+        result = tools.derive(sid, ["g"], kind="perturbation")
+        g = result["derivations"][0]
+        assert g["wrt"] == "g"
+        assert g["kind"] == "perturbation"
+        assert g["verified"] is True
+
+    def test_perturbation_refuses_unsupported_field(self, tmp_path):
         tools = NoetherTools(
             SessionStore(tmp_path / "sessions"),
             llm=StubLLMAdapter(reply=templates.get("pert_scalar_quadratic")),
             results_root=tmp_path / "results",
         )
-        sid = _well_posed_scalar_tensor(tools)
-        assert "error" in tools.derive(sid, ["g"], kind="perturbation")
+        body = tools.ingest(MAXWELL)
+        resolutions = {q["id"]: q["options"][0] for q in body["questions"]}
+        assert tools.resolve(body["session_id"], resolutions)["well_posed"] is True
+        assert "error" in tools.derive(body["session_id"], ["F"], kind="perturbation")
 
 
 class TestServerWiring:

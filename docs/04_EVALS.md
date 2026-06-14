@@ -1,8 +1,8 @@
 # 04 — Evaluation suite: five action-to-result pairs
 
 **Status:** stable; all five evals plus the stretch tasks 1s (ADM of GR),
-3s (spectrum around Minkowski), and 3p (scalar quadratic action in Cadabra)
-implemented and kernel-verified.
+3s (spectrum around Minkowski), 3p (scalar quadratic action in Cadabra), and
+3g (graviton quadratic action in Cadabra) implemented and kernel-verified.
 **Implementation (2026-06-12):** all five evals are executable (`evals/`, run
 via `noether eval1` .. `noether eval5`) and kernel-checked against cadabra2
 2.5.15: the eval 1 and 3 variation residues are zero against the targets
@@ -345,8 +345,29 @@ background. This scaffold now runs through the model-written derivation path:
 `derive_perturbation` (and `kind="perturbation"` on the server, MCP, and web
 clients) drives it for dynamical scalar fields, and `evals/test_eval_general.py`
 gates that the orchestration reproduces this kernel-verified quadratic action
-end to end. The expansion is still scalar-only; other field kinds are refused
-rather than guessed.
+end to end.
+
+### Eval 3g — graviton quadratic action
+
+**Status: implemented (eval 3g; `evals/eval3g_graviton_perturbation.py`,
+template `pert_metric_quadratic`).** Eval 3g is the spin-2 counterpart of
+eval 3p. For pure gravity `S = ∫d⁴x √-g R` it expands about a flat background
+`g → η + h` and keeps the quadratic part. With `ginv = η - h` (enough for the
+Christoffels to second order) and `R⁽⁰⁾ = 0` on a flat background, the quadratic
+Lagrangian is `L₂ = R⁽²⁾ + ½ h^γ_γ R⁽¹⁾`, whose variation is the linearized
+vacuum Einstein equation `G⁽¹⁾_μν = 0`, the massless graviton. Two kernel checks,
+both `noether-default-v1`: `δS₂/δh` matches the documented linearized Einstein
+operator `-G⁽¹⁾` (`residue_zero`), and a `G⁽¹⁾` built independently from the
+linearized Christoffels and Ricci tensor reproduces it (`linearized_eom_match`).
+Two Cadabra mechanics matter here. A second derivative comes off the test field
+in two `integrate_by_parts` passes, because the routine peels one derivative at
+a time and `∇` is declared a `::Derivative`. And `meld` will not collapse equal
+terms written at different index heights, so the scaffold lowers every index to
+one explicit-`η` convention and rewrites `∇` as a commuting `::PartialDerivative`
+before the equal-but-differently-written terms cancel. This is the second sector
+`derive_perturbation` drives through the model-written path; only the scalar and
+metric sectors have audited scaffolds, so other field kinds (a gauge potential,
+say) are refused rather than guessed.
 
 ---
 

@@ -120,7 +120,8 @@ without mutating the session, and the tool instructions direct the host to
 relay questions to its human. `noether_derive` runs the general derivation
 (section 6, item 7): it returns each result with a `verified` flag the kernel
 sets, never the host. `kind="eom"` (the default) varies the action; for the
-scalar sector `kind="perturbation"` expands it to quadratic order instead.
+scalar and metric sectors `kind="perturbation"` expands it to quadratic order
+instead.
 The `verify`/`render` tools and the `adm` task type land as those compute
 surfaces are built out. Tested in `tests/test_mcp.py` (skips without the
 extra).
@@ -364,14 +365,24 @@ perturbative expansion (xPert), Young projection.
    which checks it reproduces eval 3's two kernel-verified equations of motion
    end to end. The `perturb` task now runs through the same model-written path:
    `derive_perturbation` (and `kind="perturbation"` on the server, MCP, and web
-   clients) hands the model the `pert_scalar_quadratic` scaffold (eval 3p),
-   which expands a scalar action to quadratic order using Cadabra weights to
-   track fluctuation order, then checks the linearized equation of motion twice,
-   against the documented operator and by linearizing the full nonlinear
-   equation. Both checks must pass before the result is called verified. That
-   scaffold only covers dynamical scalar fields, so `derive_perturbation`
-   refuses other field kinds rather than guessing, and `adm` still has no
-   scaffold at all, so `derive_eom` declines non-`vary` task types.
+   clients) hands the model one of two scaffolds depending on the field kind:
+   `pert_scalar_quadratic` (eval 3p) expands a scalar action to quadratic order,
+   and `pert_metric_quadratic` (eval 3g) expands the Einstein-Hilbert action
+   about a flat background to recover the linearized vacuum Einstein equation,
+   the massless graviton. Both use Cadabra weights to track fluctuation order
+   and check the linearized equation of motion twice, against the documented
+   operator and by an independent route (linearizing the full nonlinear scalar
+   equation, or rebuilding the linearized Einstein tensor from the linearized
+   Christoffels). All checks must pass before the result is called verified.
+   The metric expansion has two extra wrinkles the scaffold handles: a second
+   derivative comes off the test field through two `integrate_by_parts` passes
+   with `\nabla` as a `::Derivative`, and equal terms written at different index
+   heights only meld after everything is lowered to one explicit-`eta`
+   convention and `\nabla` is rewritten as a commuting `::PartialDerivative`.
+   The two scaffolds cover dynamical scalar fields and the metric, so
+   `derive_perturbation` refuses other field kinds (a gauge potential, say)
+   rather than guessing, and `adm` still has no scaffold at all, so `derive_eom`
+   declines non-`vary` task types.
 
 ## 7. Provenance bundles
 

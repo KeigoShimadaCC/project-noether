@@ -150,15 +150,15 @@ script that cannot make the residue vanish yields an unverified result, shown as
 such and never as truth. The model writes a script; the kernel decides whether
 the answer holds. This covers the `vary` task for the metric, scalar, and
 gauge-field classes. The `perturb` task now runs through the same model-written
-path for scalar fields: `derive_perturbation` (reachable as `kind="perturbation"`
-on the server, MCP, and web clients) hands the model the `pert_scalar_quadratic`
-scaffold, which expands a scalar action to quadratic order (tracking fluctuation
-order through Cadabra weights) and confirms the linearized equation of motion
-both against the documented operator and by linearizing the full nonlinear
-equation independently (eval 3p). Both checks must pass for the result to count
-as verified. The scaffold only covers dynamical scalars, so the path refuses
-other field kinds; `adm` still waits on its own audited scaffold rather than
-being guessed.
+path for scalar fields and the metric: `derive_perturbation` (reachable as
+`kind="perturbation"` on the server, MCP, and web clients) hands the model the
+`pert_scalar_quadratic` scaffold for scalars (eval 3p) or `pert_metric_quadratic`
+for the metric (eval 3g), expanding the action to quadratic order (tracking
+fluctuation order through Cadabra weights) and confirming the linearized equation
+of motion both against the documented operator and by an independent route. All
+checks must pass for the result to count as verified. The two scaffolds cover
+dynamical scalars and the metric, so the path refuses other field kinds; `adm`
+still waits on its own audited scaffold rather than being guessed.
 
 ## 5. Honesty and failure policy
 

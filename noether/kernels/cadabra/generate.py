@@ -32,6 +32,7 @@ _EXAMPLE_TEMPLATE: dict[str, str] = {
     "vary-scalar": "eval3_scalar_tensor_scalar",
     "vary-gauge": "eval4_maxwell",
     "perturb-scalar": "pert_scalar_quadratic",
+    "perturb-metric": "pert_metric_quadratic",
 }
 
 CADABRA_CONTRACT = r"""You are a Cadabra2 scripting backend for Noether, a symbolic-physics tool.
@@ -129,8 +130,10 @@ def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
     if kind == "perturbation":
         if obj is not None and obj.kind == "scalar-field":
             return "perturb-scalar"
+        if obj is not None and obj.kind == "metric":
+            return "perturb-metric"
         raise NotImplementedError(
-            "perturbation currently has an audited scaffold only for scalar "
+            "perturbation currently has audited scaffolds for scalar and metric "
             f"fields; no quadratic-action example for {wrt!r}"
         )
     if obj is None:

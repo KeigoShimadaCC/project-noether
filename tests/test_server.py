@@ -131,6 +131,7 @@ class TestElicit:
 
 
 SCALAR_TENSOR = r"F(\phi) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi)"
+MAXWELL = r"-\tfrac14 F_{\mu\nu} F^{\mu\nu}"
 
 
 class TestDefinitions:
@@ -229,7 +230,9 @@ class TestDerive:
     def test_perturbation_returns_verified_quadratic_action(self, store, tmp_path):
         client = self._client(store, tmp_path, templates.get("pert_scalar_quadratic"))
         sid = _well_posed_scalar_tensor(client)
-        response = client.post(f"/sessions/{sid}/derive", json={"kind": "perturbation"})
+        response = client.post(
+            f"/sessions/{sid}/derive", json={"kind": "perturbation", "with_respect_to": ["phi"]}
+        )
         assert response.status_code == 200, response.text
         derivations = response.json()["derivations"]
         assert [d["wrt"] for d in derivations] == ["phi"]
@@ -238,10 +241,30 @@ class TestDerive:
         assert phi["verified"] is True, phi["checks"]
         assert phi["result_tex"]
 
-    def test_perturbation_refuses_nonscalar(self, store, tmp_path):
-        client = self._client(store, tmp_path, templates.get("pert_scalar_quadratic"))
+    def test_perturbation_metric_returns_verified_quadratic_action(self, store, tmp_path):
+        client = self._client(store, tmp_path, templates.get("pert_metric_quadratic"))
         sid = _well_posed_scalar_tensor(client)
         response = client.post(
             f"/sessions/{sid}/derive", json={"kind": "perturbation", "with_respect_to": ["g"]}
+        )
+        assert response.status_code == 200, response.text
+        g = response.json()["derivations"][0]
+        assert g["wrt"] == "g"
+        assert g["kind"] == "perturbation"
+        assert g["verified"] is True, g["checks"]
+
+    def test_perturbation_refuses_unsupported_field(self, store, tmp_path):
+        client = self._client(store, tmp_path, templates.get("pert_scalar_quadratic"))
+        body = _create(client, MAXWELL)
+        resolutions = {q["id"]: q["options"][0] for q in body["questions"]}
+        assert (
+            client.post(
+                f"/sessions/{body['session_id']}/resolve", json={"resolutions": resolutions}
+            ).json()["well_posed"]
+            is True
+        )
+        response = client.post(
+            f"/sessions/{body['session_id']}/derive",
+            json={"kind": "perturbation", "with_respect_to": ["F"]},
         )
         assert response.status_code == 422

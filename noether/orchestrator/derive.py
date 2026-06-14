@@ -208,24 +208,27 @@ def derive_perturbation(
     results_root: Path | None = None,
 ) -> list[FieldDerivation]:
     """Expand the action to quadratic order around a background for each
-    dynamical scalar field (the only sector with an audited scaffold today).
+    dynamical scalar field or metric (the sectors with an audited scaffold
+    today: pert_scalar_quadratic and pert_metric_quadratic).
 
     Raises NotImplementedError naming any requested field whose kind has no
     quadratic-action example yet, rather than guessing one.
     """
+    perturbable = ("scalar-field", "metric")
     by_name = {o.name: o for o in npr.objects}
     if fields is None:
-        fields = [o.name for o in npr.objects if o.kind == "scalar-field" and o.role == "dynamical"]
+        fields = [o.name for o in npr.objects if o.kind in perturbable and o.role == "dynamical"]
     if not fields:
         raise NotImplementedError(
-            "perturbation currently supports dynamical scalar fields; this action declares none"
+            "perturbation currently supports dynamical scalar fields and the "
+            "metric; this action declares neither"
         )
     for name in fields:
         obj = by_name.get(name)
-        if obj is None or obj.kind != "scalar-field":
+        if obj is None or obj.kind not in perturbable:
             raise NotImplementedError(
-                "perturbation currently has an audited scaffold only for scalar "
-                f"fields; cannot expand {name!r}"
+                "perturbation currently has audited scaffolds for scalar and "
+                f"metric fields; cannot expand {name!r}"
             )
     return [
         derive_field(
