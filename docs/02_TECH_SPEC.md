@@ -85,9 +85,12 @@ and the NPR side panel on the right (problem card with the rendered action,
 assumptions with a change control, event history). The browser talks only to
 Next; `/api/*` is rewritten to the FastAPI server (`NOETHER_API_URL`,
 default `http://127.0.0.1:8754`), so no physics state lives client-side.
-Still pending: the derivation tree and exports, which arrive when arbitrary
-well-posed sessions are wired into the compute pipeline (today derivations
-and provenance run through the eval commands). CI builds the frontend with
+The workspace also derives in place: eom, perturbation, and adm each render as
+a provenance tree (action, plan, kernel script, every check the kernel
+reported, then the result with its verdict), and the kernel-verified results
+export as a publication-LaTeX document (copy or download). Both are pure
+presentation over data the server already returned; the browser formats
+verified expressions but never computes physics. CI builds the frontend with
 type checking on every push.
 
 ### Horizon 2+: MCP server (implemented for the session surface)

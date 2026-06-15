@@ -299,3 +299,64 @@ ul.session-list a {
   gap: 0.6rem;
   margin: 0.4rem 0;
 }
+
+.dtree {
+  margin: 0.8rem 0 0.4rem;
+  border-left: 2px solid var(--line);
+  padding-left: 1rem;
+}
+
+.dtree-node {
+  position: relative;
+  margin-bottom: 0.75rem;
+}
+
+.dtree-node::before {
+  content: "";
+  position: absolute;
+  left: -1.32rem;
+  top: 0.35rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--card);
+}
+
+.dtree-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.dtree-body {
+  margin: 0.1rem 0;
+}
+
+ul.checks {
+  list-style: none;
+  padding: 0;
+  margin: 0.2rem 0;
+}
+
+ul.checks li {
+  padding: 0.13rem 0;
+  font-size: 0.85rem;
+}
+
+.dtree-node.result .dtree-body {
+  border-left: 3px solid var(--good);
+  padding-left: 0.7rem;
+}
+
+textarea.export-tex {
+  margin-top: 0.6rem;
+  min-height: 12rem;
+  font-size: 0.78rem;
+  white-space: pre;
+  color: var(--ink);
+  background: #fbfaf6;
+}

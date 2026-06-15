@@ -130,8 +130,12 @@ ADM (3+1) decomposition of the gravitational sector, the Gauss-Codazzi split
 and the normal/tangential projections of the Einstein tensor, verified by the
 SymPy component kernel rather than Cadabra (it writes no model script); see
 eval 1s. Any well-posed action carrying a metric is accepted; one with no
-metric is refused. Planned next: the derivation tree and publication-LaTeX
-export views in the web client.
+metric is refused. The web client renders each derivation as a provenance tree
+(action, plan, kernel script, every check the kernel reported, result) and
+exports the kernel-verified results as a publication-LaTeX document; both are
+presentation over data the server already returned, so no physics runs in the
+browser. Planned next: persisted result history and the xAct cross-check
+kernel.
 
 ## 4.1 Development setup
 

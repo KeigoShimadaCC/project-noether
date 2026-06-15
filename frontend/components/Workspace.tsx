@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import DerivationTree from "@/components/DerivationTree";
+import ExportPanel from "@/components/ExportPanel";
 import Latex from "@/components/Latex";
 import NprPanel from "@/components/NprPanel";
 import {
@@ -113,11 +115,18 @@ function NotationCard({
   );
 }
 
-function DerivationPanel({ sessionId }: { sessionId: string }) {
+function DerivationPanel({
+  sessionId,
+  action,
+  plan,
+}: {
+  sessionId: string;
+  action: SessionPayload["action"];
+  plan: PlanPayload | null;
+}) {
   const [results, setResults] = useState<FieldDerivation[] | null>(null);
   const [busyKind, setBusyKind] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [openScript, setOpenScript] = useState<string | null>(null);
 
   async function run(kind: "eom" | "perturbation" | "adm") {
     setBusyKind(kind);
@@ -169,44 +178,10 @@ function DerivationPanel({ sessionId }: { sessionId: string }) {
         exists yet.
       </p>
       {error && <div className="error-box">{error}</div>}
-      {results?.map((d) => {
-        const heading =
-          d.kind === "adm"
-            ? d.wrt
-            : d.kind === "perturbation"
-              ? `S₂[${d.wrt}] (quadratic action)`
-              : `δS / δ${d.wrt} = 0`;
-        return (
-          <div key={`${d.kind}-${d.wrt}`} className="proposal derivation">
-            <div className="defn-row">
-              <span className="mono">{heading}</span>
-              <span className={`badge ${d.verified ? "resolved" : "error"}`}>
-                {d.verified ? "kernel-verified" : "unverified"}
-              </span>
-            </div>
-            {d.result_tex ? (
-              <div className="eom">
-                <Latex tex={d.result_tex} block />
-              </div>
-            ) : (
-              <p className="note">the kernel returned no expression</p>
-            )}
-            <div className="rationale">
-              {d.detail}. computed by {d.kernel_name} {d.kernel_version}
-              {d.llm_name ? `; script by ${d.llm_name} ${d.llm_version}` : ""}.
-            </div>
-            <button
-              className="secondary"
-              onClick={() =>
-                setOpenScript(openScript === `${d.kind}-${d.wrt}` ? null : `${d.kind}-${d.wrt}`)
-              }
-            >
-              {openScript === `${d.kind}-${d.wrt}` ? "hide kernel script" : "show kernel script"}
-            </button>
-            {openScript === `${d.kind}-${d.wrt}` && <pre className="script">{d.script}</pre>}
-          </div>
-        );
-      })}
+      {results?.map((d) => (
+        <DerivationTree key={`${d.kind}-${d.wrt}`} derivation={d} action={action} plan={plan} />
+      ))}
+      {results && <ExportPanel action={action} derivations={results} />}
     </div>
   );
 }
@@ -233,9 +208,10 @@ function PlanCard({ plan }: { plan: PlanPayload }) {
         ))}
       </p>
       <p className="note">
-        Derivations for the supported task types run through the eval commands
-        (noether eval1 .. eval5, eval1s, eval3s), which write full provenance
-        bundles: kernel scripts, assumptions, and every check result.
+        Run a derivation below to see its full provenance tree, the plan, the
+        kernel script, and every check the kernel reported, then export the
+        verified results as publication LaTeX. Each run also writes a provenance
+        bundle server-side.
       </p>
     </div>
   );
@@ -392,7 +368,9 @@ export default function Workspace({ sessionId }: { sessionId: string }) {
         ))}
         <NotationCard proposals={definitions} busy={busy} onAdopt={adoptDefinition} />
         {openQuestions.length === 0 && plan && <PlanCard plan={plan} />}
-        {openQuestions.length === 0 && plan && <DerivationPanel sessionId={sessionId} />}
+        {openQuestions.length === 0 && plan && (
+          <DerivationPanel sessionId={sessionId} action={session.action} plan={plan} />
+        )}
       </div>
       <NprPanel
         session={session}
