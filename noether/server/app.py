@@ -24,7 +24,7 @@ from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import LLMAdapter, LLMError
 from noether.npr.parse import ParseError
 from noether.orchestrator.definitions import propose_definitions
-from noether.orchestrator.derive import derive_eom, derive_perturbation
+from noether.orchestrator.derive import derive_adm, derive_eom, derive_perturbation
 from noether.orchestrator.elicit import propose_resolutions
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
@@ -217,6 +217,31 @@ def create_app(
     @app.post("/sessions/{session_id}/derive")
     def derive(session_id: str, body: DeriveRequest | None = None) -> dict[str, Any]:
         session = _get_session(session_id)
+        kind = body.kind if body is not None else "eom"
+        if kind not in ("eom", "perturbation", "adm"):
+            raise HTTPException(status_code=422, detail=f"unknown derivation kind {kind!r}")
+        npr = session.npr
+
+        # ADM writes no model script: it needs only the SymPy component kernel.
+        if kind == "adm":
+            try:
+                results = derive_adm(
+                    npr,
+                    {"sympy": SympyKernelAdapter()},
+                    session_id=session_id,
+                    results_root=app.state.results_root,
+                )
+            except AmbiguityBlocked as exc:
+                raise HTTPException(
+                    status_code=409, detail={"blocked": True, "questions": exc.questions}
+                ) from exc
+            except NotImplementedError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            return {
+                "session_id": session_id,
+                "derivations": [r.model_dump() for r in results],
+            }
+
         cadabra = CadabraAdapter()
         if not cadabra.available():
             raise HTTPException(
@@ -229,10 +254,6 @@ def create_app(
                 status_code=503,
                 detail="no LLM backend available to parameterize the derivation",
             )
-        kind = body.kind if body is not None else "eom"
-        if kind not in ("eom", "perturbation"):
-            raise HTTPException(status_code=422, detail=f"unknown derivation kind {kind!r}")
-        npr = session.npr
         fields = body.with_respect_to if body is not None else None
         if fields:
             declared = {o.name for o in npr.objects}

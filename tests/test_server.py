@@ -268,3 +268,34 @@ class TestDerive:
             json={"kind": "perturbation", "with_respect_to": ["F"]},
         )
         assert response.status_code == 422
+
+
+class TestDeriveAdm:
+    """ADM is verified by the SymPy component kernel, so it needs neither the
+    Cadabra kernel nor an LLM backend on the server."""
+
+    def _well_posed(self, client, lagrangian) -> str:
+        body = _create(client, lagrangian)
+        resolutions = {q["id"]: q["options"][0] for q in body["questions"]}
+        resolved = client.post(
+            f"/sessions/{body['session_id']}/resolve", json={"resolutions": resolutions}
+        )
+        assert resolved.json()["well_posed"] is True, resolved.text
+        return body["session_id"]
+
+    def test_adm_returns_verified_decomposition(self, store, tmp_path):
+        client = TestClient(create_app(store=store, results_root=tmp_path))
+        sid = self._well_posed(client, "R")
+        response = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        assert response.status_code == 200, response.text
+        derivations = response.json()["derivations"]
+        assert len(derivations) == 3
+        assert all(d["kind"] == "adm" and d["verified"] for d in derivations)
+        assert derivations[0]["checks"]["lagrangian-split"] == "True"
+        assert derivations[0]["kernel_name"] == "sympy"
+
+    def test_unknown_kind_still_rejected(self, store, tmp_path):
+        client = TestClient(create_app(store=store, results_root=tmp_path))
+        sid = self._well_posed(client, "R")
+        response = client.post(f"/sessions/{sid}/derive", json={"kind": "bogus"})
+        assert response.status_code == 422

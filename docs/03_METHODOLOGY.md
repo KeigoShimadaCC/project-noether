@@ -157,8 +157,12 @@ for the metric (eval 3g), expanding the action to quadratic order (tracking
 fluctuation order through Cadabra weights) and confirming the linearized equation
 of motion both against the documented operator and by an independent route. All
 checks must pass for the result to count as verified. The two scaffolds cover
-dynamical scalars and the metric, so the path refuses other field kinds; `adm`
-still waits on its own audited scaffold rather than being guessed.
+dynamical scalars and the metric, so the path refuses other field kinds. The
+`adm` task (reachable as `kind="adm"`) returns the ADM (3+1) decomposition of
+the gravitational sector, the Gauss-Codazzi split and the Einstein-tensor
+projections, verified by the SymPy component kernel on an explicit background
+(eval 1s) rather than by a model-written Cadabra script. Any action carrying a
+metric is accepted; one without a metric is refused rather than guessed.
 
 ## 5. Honesty and failure policy
 

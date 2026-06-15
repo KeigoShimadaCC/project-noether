@@ -91,8 +91,9 @@ noether/             Python package
                      elicit (model proposes resolutions; only human-confirmed
                      answers mutate the NPR), definitions (propose readability
                      shorthands like F_phi for dF/dphi; human adopts),
-                     derive (general EOM path: model writes a Cadabra script,
-                     kernel's residue check decides verified vs unverified),
+                     derive (general EOM / perturbation path: model writes a
+                     Cadabra script, kernel's residue check decides verified vs
+                     unverified; plus derive_adm, a SymPy-verified ADM split),
                      store (JSON session persistence)
   server/            HTTP session API (FastAPI, optional [server] extra):
                      ingest/elicit/resolve/plan/derive with the no-guessing
@@ -123,8 +124,14 @@ same path for scalar fields and the metric: `derive_perturbation`, reachable as
 `pert_metric_quadratic` (eval 3g) for the metric, expanding the action to
 quadratic order and checking the linearized EOM two ways; all checks must pass
 before a result is called verified. Other field kinds (a gauge potential, say)
-are refused rather than guessed. Planned next: add an `adm` scaffold, then the
-derivation tree and export views in the web client.
+are refused rather than guessed. The `adm` task is reachable the same way:
+`derive_adm` (`kind="adm"` on the server, MCP, and web clients) returns the
+ADM (3+1) decomposition of the gravitational sector, the Gauss-Codazzi split
+and the normal/tangential projections of the Einstein tensor, verified by the
+SymPy component kernel rather than Cadabra (it writes no model script); see
+eval 1s. Any well-posed action carrying a metric is accepted; one with no
+metric is refused. Planned next: the derivation tree and publication-LaTeX
+export views in the web client.
 
 ## 4.1 Development setup
 

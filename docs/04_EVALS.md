@@ -135,6 +135,15 @@ equations. The component background switches on every structural feature
 lapse) and the falsifier check confirms none of the verified forms vanish
 identically on it.
 
+This decomposition is reachable through the derive pipeline: `derive_adm`
+(`kind="adm"` on the server, MCP, and web clients) returns the Gauss-Codazzi
+split and the Einstein-tensor projections, with the six component checks above
+as its verdict. The split and the projections are universal foliation geometry,
+so any well-posed action carrying a metric is accepted (an action with no metric
+is refused); for pure GR in vacuum the projection left-hand sides vanish and
+recover the constraints stated here. `evals/test_eval_general.py` gates that the
+orchestration reproduces the kernel-verified decomposition end to end.
+
 ---
 
 ## Eval 2 — Palatini in trace form (metric + independent connection)

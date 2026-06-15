@@ -188,6 +188,7 @@ class SympyKernelAdapter:
         detail = "; ".join(
             f"{name}: {'PASS' if ok else 'FAIL'} ({d})" for name, (ok, d) in results.items()
         )
+        checks = {name: ("True" if ok else "False") for name, (ok, _) in results.items()}
         duration = time.monotonic() - start
         script = KernelScript(
             kernel_name=self.name,
@@ -200,7 +201,7 @@ class SympyKernelAdapter:
             kernel_version=self.version(),
             script=script,
             raw=raw,
-            value={"passed": passed, "detail": detail, "check": payload["check"]},
+            value={"passed": passed, "detail": detail, "check": payload["check"], "checks": checks},
             notes=[note],
         )
 

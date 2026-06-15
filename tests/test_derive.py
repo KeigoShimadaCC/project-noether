@@ -8,6 +8,7 @@ live model is needed; the kernel-backed cases skip when cadabra is absent.
 
 import pytest
 
+from evals.eval1s_adm import build_npr as build_adm_npr
 from evals.eval3_scalar_tensor import build_npr
 from noether.kernels.cadabra import CadabraAdapter, templates
 from noether.kernels.cadabra.generate import (
@@ -15,8 +16,16 @@ from noether.kernels.cadabra.generate import (
     generate_script,
     strip_fences,
 )
+from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import StubLLMAdapter
-from noether.orchestrator.derive import derive_eom, derive_field, derive_perturbation
+from noether.npr import NOETHER_DEFAULT_V1, NPR, Action, Geometry, ObjectDecl, Task
+from noether.npr.ast import tensor
+from noether.orchestrator.derive import (
+    derive_adm,
+    derive_eom,
+    derive_field,
+    derive_perturbation,
+)
 from noether.orchestrator.planner import AmbiguityBlocked
 
 requires_cadabra = pytest.mark.skipif(
@@ -197,3 +206,56 @@ class TestVerifiedPerturbation:
         results = derive_perturbation(npr, stub, {"cadabra": CadabraAdapter()}, session_id="s")
         # both the dynamical metric and the dynamical scalar are perturbable
         assert [r.wrt for r in results] == ["g", "phi"]
+
+
+def _scalar_only_npr() -> NPR:
+    """A well-posed action with no metric, to exercise the ADM refusal."""
+    return NPR(
+        conventions=NOETHER_DEFAULT_V1,
+        geometry=Geometry(),
+        objects=[ObjectDecl(name="phi", kind="scalar-field", role="dynamical", rank=0)],
+        action=Action(measure_tex="d^4x", lagrangian=tensor("phi"), lagrangian_tex="phi"),
+        task=Task(type="adm", with_respect_to=["phi"]),
+        ambiguities=[],
+    )
+
+
+class TestVerifiedAdm:
+    """ADM writes no model script: the SymPy component kernel verifies the
+    Gauss-Codazzi split and the Einstein-tensor projections, so these run
+    without cadabra or an LLM."""
+
+    def test_adm_decomposition_verified(self):
+        results = derive_adm(
+            build_adm_npr(resolved=True), {"sympy": SympyKernelAdapter()}, session_id="s-adm"
+        )
+        assert len(results) == 3
+        assert all(d.kind == "adm" for d in results)
+        assert all(d.verified for d in results), [d.checks for d in results]
+        assert all(d.result_tex for d in results)
+        assert results[0].kernel_name == "sympy"
+        # every named component check passed
+        assert results[0].checks.get("lagrangian-split") == "True"
+        assert results[0].checks.get("hamiltonian-projection") == "True"
+        assert results[0].checks.get("momentum-projection") == "True"
+
+    def test_adm_writes_provenance_bundle(self, tmp_path):
+        results = derive_adm(
+            build_adm_npr(resolved=True),
+            {"sympy": SympyKernelAdapter()},
+            session_id="s-adm",
+            results_root=tmp_path,
+        )
+        assert results[0].bundle_path is not None
+        assert (tmp_path / "s-adm").exists()
+        assert any((tmp_path / "s-adm").rglob("checks.json"))
+
+    def test_adm_refuses_action_without_metric(self):
+        with pytest.raises(NotImplementedError):
+            derive_adm(_scalar_only_npr(), {"sympy": SympyKernelAdapter()}, session_id="s")
+
+    def test_adm_blocked_when_questions_open(self):
+        with pytest.raises(AmbiguityBlocked):
+            derive_adm(
+                build_adm_npr(resolved=False), {"sympy": SympyKernelAdapter()}, session_id="s"
+            )

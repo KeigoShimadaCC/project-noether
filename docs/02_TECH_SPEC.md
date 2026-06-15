@@ -121,10 +121,10 @@ relay questions to its human. `noether_derive` runs the general derivation
 (section 6, item 7): it returns each result with a `verified` flag the kernel
 sets, never the host. `kind="eom"` (the default) varies the action; for the
 scalar and metric sectors `kind="perturbation"` expands it to quadratic order
-instead.
-The `verify`/`render` tools and the `adm` task type land as those compute
-surfaces are built out. Tested in `tests/test_mcp.py` (skips without the
-extra).
+instead; and `kind="adm"` returns the ADM (3+1) decomposition of the
+gravitational sector, verified by the SymPy component kernel.
+The `verify`/`render` tools land as those compute surfaces are built out.
+Tested in `tests/test_mcp.py` (skips without the extra).
 
 The frontend is deliberately thin. All physics state lives server-side in the NPR
 and session store; the same API drives CLI, web, and MCP.
@@ -381,8 +381,17 @@ perturbative expansion (xPert), Young projection.
    convention and `\nabla` is rewritten as a commuting `::PartialDerivative`.
    The two scaffolds cover dynamical scalar fields and the metric, so
    `derive_perturbation` refuses other field kinds (a gauge potential, say)
-   rather than guessing, and `adm` still has no scaffold at all, so `derive_eom`
-   declines non-`vary` task types.
+   rather than guessing. The `adm` task takes a different route: `derive_adm`
+   (`kind="adm"` on the server, MCP, and web clients) writes no model script.
+   Its deliverable is the ADM (3+1) decomposition of the gravitational sector,
+   the Gauss-Codazzi split `sqrt(-g) R = N sqrt(h)(R3 + K_ij K^ij - K^2) -
+   2 d_mu(sqrt(-g) v^mu)` and the normal/tangential projections of the Einstein
+   tensor, which are universal foliation geometry independent of the action.
+   The SymPy component kernel verifies all six identities (the split, both
+   projections, the extrinsic-curvature identity K_ij = nabla_i n_j, and the
+   lapse Euler-Lagrange equation) on a nondegenerate 1+2 background (eval 1s);
+   `verified` is set from that suite. Any well-posed action carrying a metric is
+   accepted; one with no metric is refused.
 
 ## 7. Provenance bundles
 

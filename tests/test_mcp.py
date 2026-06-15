@@ -182,6 +182,34 @@ class TestDeriveTools:
         assert "error" in tools.derive(body["session_id"], ["F"], kind="perturbation")
 
 
+class TestAdmTools:
+    """ADM is verified by the SymPy component kernel, so the MCP tool needs
+    neither cadabra nor an LLM backend."""
+
+    def _tools(self, tmp_path):
+        return NoetherTools(SessionStore(tmp_path / "sessions"), results_root=tmp_path / "results")
+
+    def _well_posed(self, tools, lagrangian) -> str:
+        body = tools.ingest(lagrangian)
+        resolutions = {q["id"]: q["options"][0] for q in body["questions"]}
+        assert tools.resolve(body["session_id"], resolutions)["well_posed"] is True
+        return body["session_id"]
+
+    def test_adm_returns_verified_decomposition(self, tmp_path):
+        tools = self._tools(tmp_path)
+        sid = self._well_posed(tools, "R")
+        result = tools.derive(sid, kind="adm")
+        derivations = result["derivations"]
+        assert len(derivations) == 3
+        assert all(d["kind"] == "adm" and d["verified"] for d in derivations)
+        assert derivations[0]["checks"]["lagrangian-split"] == "True"
+
+    def test_unknown_kind_is_data(self, tmp_path):
+        tools = self._tools(tmp_path)
+        sid = self._well_posed(tools, "R")
+        assert "error" in tools.derive(sid, kind="bogus")
+
+
 class TestServerWiring:
     def test_expected_tools_registered(self, tmp_path):
         server = create_mcp_server(SessionStore(tmp_path / "sessions"))

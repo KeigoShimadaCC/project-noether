@@ -20,7 +20,7 @@ from noether.kernels.cadabra import CadabraAdapter
 from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import LLMAdapter, LLMError
 from noether.npr.parse import ParseError
-from noether.orchestrator.derive import derive_eom, derive_perturbation
+from noether.orchestrator.derive import derive_adm, derive_eom, derive_perturbation
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
 from noether.orchestrator.store import DEFAULT_STORE, SessionStore
@@ -175,12 +175,31 @@ class NoetherTools:
         with_respect_to: list[str] | None = None,
         kind: str = "eom",
     ) -> dict[str, Any]:
-        if kind not in ("eom", "perturbation"):
+        if kind not in ("eom", "perturbation", "adm"):
             return {"error": f"unknown derivation kind {kind!r}"}
         try:
             sess = self.store.get(session_id)
         except KeyError as exc:
             return {"error": str(exc)}
+
+        # ADM writes no model script: it needs only the SymPy component kernel.
+        if kind == "adm":
+            try:
+                results = derive_adm(
+                    sess.npr,
+                    {"sympy": SympyKernelAdapter()},
+                    session_id=session_id,
+                    results_root=self.results_root,
+                )
+            except AmbiguityBlocked as exc:
+                return {"blocked": True, "questions": exc.questions}
+            except NotImplementedError as exc:
+                return {"error": str(exc)}
+            return {
+                "session_id": session_id,
+                "derivations": [r.model_dump() for r in results],
+            }
+
         cadabra = CadabraAdapter()
         if not cadabra.available():
             return {"error": "cadabra kernel not installed; cannot derive"}
@@ -300,12 +319,14 @@ def create_mcp_server(store: SessionStore | None = None, llm: LLMAdapter | None 
     ) -> dict[str, Any]:
         """Derive a result for a well-posed session. kind="eom" varies the
         action for the equations of motion; kind="perturbation" expands it to
-        quadratic order around a background (scalar fields only today). Noether
-        parameterizes a Cadabra script, runs it in the kernel, and marks each
-        result verified only when the kernel's own residue check confirms it;
-        unverified results are returned as such, never as truth. Optionally
-        restrict to specific declared fields with with_respect_to. If questions
-        remain open this returns blocked=true."""
+        quadratic order around a background (scalar fields and the metric);
+        kind="adm" returns the ADM (3+1) decomposition of the gravitational
+        sector. For eom/perturbation Noether parameterizes a Cadabra script and
+        marks the result verified only when the kernel's residue check confirms
+        it; adm is verified by the SymPy component kernel instead. Unverified
+        results are returned as such, never as truth. Optionally restrict to
+        specific declared fields with with_respect_to. If questions remain open
+        this returns blocked=true."""
         return tools.derive(session_id, with_respect_to, kind)
 
     return server

@@ -37,7 +37,7 @@ class FieldDerivation(BaseModel):
     """One field's derived result (EOM or quadratic action), with its verdict."""
 
     wrt: str
-    kind: str = "eom"  # "eom" | "perturbation"
+    kind: str = "eom"  # "eom" | "perturbation" | "adm"
     capability: Capability
     result_tex: str | None = None
     verified: bool = False
@@ -241,4 +241,132 @@ def derive_perturbation(
             results_root=results_root,
         )
         for wrt in fields
+    ]
+
+
+# The ADM (3+1) decomposition of the gravitational sector. These are the
+# Gauss-Codazzi identities the SymPy component kernel verifies on a
+# nondegenerate 1+2 background (noether.kernels.sympy_kernel.adm, eval 1s):
+# universal geometry that holds for any foliated metric, independent of the
+# action. For pure GR in vacuum the projection left-hand sides vanish through
+# the Einstein equations, giving the familiar Hamiltonian and momentum
+# constraints; for an action with matter they are sourced by the stress tensor.
+_ADM_SPLIT_TEX = (
+    r"\sqrt{-g}\,R = N\sqrt{h}\left(R^{(3)} + K_{ab}K^{ab} - K^{2}\right)"
+    r" - 2\,\partial_{\mu}\!\left(\sqrt{-g}\,v^{\mu}\right),\quad"
+    r"v^{\mu} = n^{\nu}\nabla_{\nu}n^{\mu} - n^{\mu}\nabla_{\nu}n^{\nu}"
+)
+_ADM_HAMILTONIAN_TEX = r"2\,G_{\mu\nu}\,n^{\mu}n^{\nu} = R^{(3)} + K^{2} - K_{ab}K^{ab}"
+_ADM_MOMENTUM_TEX = r"G_{\mu i}\,n^{\mu} = D_{a}\!\left(K^{a}{}_{i} - \delta^{a}{}_{i}\,K\right)"
+_ADM_K_TEX = (
+    r"K_{ij} = \tfrac{1}{2N}\left(\partial_{t}h_{ij} - D_{i}N_{j} - D_{j}N_{i}\right)"
+    r" = \nabla_{i}n_{j}"
+)
+
+_ADM_OUTPUTS: list[tuple[str, str]] = [
+    ("Gauss-Codazzi split of the gravitational Lagrangian", _ADM_SPLIT_TEX),
+    ("Hamiltonian (normal-normal) projection", _ADM_HAMILTONIAN_TEX),
+    ("momentum (normal-tangential) projection", _ADM_MOMENTUM_TEX),
+]
+
+
+def _ladder_from_components(computed: ComputedResult, verified: bool, detail: str) -> LadderReport:
+    """Represent the SymPy component-eval suite as a one-rung ladder. Each
+    identity is checked on an explicit nondegenerate background, a V2-style
+    falsifier that a wrong tensor relation cannot survive."""
+    return LadderReport(
+        results=[
+            CheckResult(
+                name="adm-split-on-components",
+                rung="V2",
+                passed=verified,
+                detail=detail,
+                computed_by=computed.kernel_name,
+                artifacts=[computed],
+            )
+        ]
+    )
+
+
+def derive_adm(
+    npr: NPR,
+    adapters: dict,
+    *,
+    session_id: str,
+    results_root: Path | None = None,
+) -> list[FieldDerivation]:
+    """Decompose the gravitational sector into its ADM (3+1) form for a
+    well-posed metric action, verified by the SymPy component kernel.
+
+    Unlike `vary`/`perturb`, this path writes no model script: the deliverable
+    is the Gauss-Codazzi split and the normal/tangential projections of the
+    Einstein tensor, universal foliation geometry that the kernel confirms on
+    an explicit background. Any well-posed action carrying a metric is
+    accepted; an action with no metric is refused rather than guessed.
+    """
+    build_plan(npr)  # raises AmbiguityBlocked unless the problem is well posed
+
+    if not any(o.kind == "metric" for o in npr.objects):
+        raise NotImplementedError(
+            "ADM decomposition needs a metric and a foliation; this action declares no metric"
+        )
+
+    sympy = adapters.get("sympy")
+    if sympy is None or not sympy.available():
+        raise RuntimeError("sympy kernel unavailable; cannot verify the ADM split")
+
+    computed = sympy.run(
+        KernelTask(
+            capability=Capability.COMPONENT_EVAL,
+            description="ADM 3+1 split of the gravitational sector",
+            payload={"check": "adm-gr-1p2"},
+        )
+    )
+    checks = computed.value.get("checks", {})
+    verified = bool(computed.value.get("passed"))
+    detail = (
+        "kernel confirmed the ADM split, both Einstein-tensor projections, the "
+        "extrinsic-curvature identity, and the lapse Euler-Lagrange equation on "
+        "an explicit 1+2 background"
+        if verified
+        else "kernel did not confirm the ADM split; surfaced as unverified"
+    )
+
+    bundle_path: str | None = None
+    if results_root is not None:
+        ladder = _ladder_from_components(computed, verified, detail)
+        result_hash = hashlib.sha1(npr.action.lagrangian_tex.encode()).hexdigest()[:8]
+        bundle = ResultBundle(
+            session_id=session_id,
+            result_id=f"adm-{result_hash}",
+            result_tex=_ADM_SPLIT_TEX,
+            npr_snapshot=npr,
+            plan=[],
+            computed=[computed],
+            ladder=ladder,
+            narrative=(
+                "ADM (3+1) decomposition of the gravitational sector. The split "
+                f"and projections were verified by {computed.kernel_name} "
+                f"{computed.kernel_version} on a nondegenerate 1+2 background; "
+                f"K_{{ij}} = nabla_i n_j and the lapse Euler-Lagrange equation are "
+                f"part of the same suite. verified={verified}."
+            ),
+        )
+        bundle_path = str(write_bundle(results_root, bundle))
+
+    return [
+        FieldDerivation(
+            wrt=label,
+            kind="adm",
+            capability=Capability.ADM,
+            result_tex=tex,
+            verified=verified,
+            checks=checks,
+            kernel_name=computed.kernel_name,
+            kernel_version=computed.kernel_version,
+            script=computed.script.source,
+            detail=detail,
+            bundle_path=bundle_path,
+        )
+        for label, tex in _ADM_OUTPUTS
     ]

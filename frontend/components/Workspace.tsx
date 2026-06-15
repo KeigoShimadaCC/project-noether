@@ -119,7 +119,7 @@ function DerivationPanel({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [openScript, setOpenScript] = useState<string | null>(null);
 
-  async function run(kind: "eom" | "perturbation") {
+  async function run(kind: "eom" | "perturbation" | "adm") {
     setBusyKind(kind);
     setError(null);
     try {
@@ -158,16 +158,24 @@ function DerivationPanel({ sessionId }: { sessionId: string }) {
             ? "Expanding..."
             : "Expand to quadratic order"}
         </button>
+        <button disabled={busy} onClick={() => run("adm")}>
+          {busyKind === "adm" ? "Splitting..." : "ADM (3+1) split"}
+        </button>
       </div>
       <p className="note">
         Quadratic-order expansion has a kernel-verified scaffold for scalar
-        fields today; other sectors report honestly that no audited scaffold
+        fields and the metric today; the ADM split is verified by the SymPy
+        component kernel. Other sectors report honestly that no audited scaffold
         exists yet.
       </p>
       {error && <div className="error-box">{error}</div>}
       {results?.map((d) => {
         const heading =
-          d.kind === "perturbation" ? `S₂[${d.wrt}] (quadratic action)` : `δS / δ${d.wrt} = 0`;
+          d.kind === "adm"
+            ? d.wrt
+            : d.kind === "perturbation"
+              ? `S₂[${d.wrt}] (quadratic action)`
+              : `δS / δ${d.wrt} = 0`;
         return (
           <div key={`${d.kind}-${d.wrt}`} className="proposal derivation">
             <div className="defn-row">
@@ -184,8 +192,8 @@ function DerivationPanel({ sessionId }: { sessionId: string }) {
               <p className="note">the kernel returned no expression</p>
             )}
             <div className="rationale">
-              {d.detail}. computed by {d.kernel_name} {d.kernel_version}; script by{" "}
-              {d.llm_name} {d.llm_version}.
+              {d.detail}. computed by {d.kernel_name} {d.kernel_version}
+              {d.llm_name ? `; script by ${d.llm_name} ${d.llm_version}` : ""}.
             </div>
             <button
               className="secondary"

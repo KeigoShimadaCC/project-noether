@@ -15,11 +15,12 @@ template, so a green residue here is the kernel's verdict, not the stub's.
 
 import pytest
 
+from evals.eval1s_adm import build_npr as build_adm_npr
 from evals.eval3_scalar_tensor import build_npr
 from noether.kernels.cadabra import CadabraAdapter, templates
 from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import StubLLMAdapter
-from noether.orchestrator.derive import derive_eom, derive_perturbation
+from noether.orchestrator.derive import derive_adm, derive_eom, derive_perturbation
 from noether.orchestrator.planner import AmbiguityBlocked
 
 
@@ -112,3 +113,34 @@ class TestGeneralPathReproducesEval3p:
         assert d.checks.get("linearized_eom_match") == "True"
         assert d.result_tex
         assert d.bundle_path
+
+
+class TestGeneralPathReproducesEval1s:
+    """The general ADM path drives the same SymPy component checks as eval 1s.
+    No model script and no cadabra are involved: the deliverable is the
+    Gauss-Codazzi split and the Einstein-tensor projections, verified on an
+    explicit background before the orchestrator calls them verified."""
+
+    def test_adm_decomposition_is_kernel_verified(self, tmp_path):
+        derivations = derive_adm(
+            build_adm_npr(resolved=True),
+            {"sympy": SympyKernelAdapter()},
+            session_id="eval-general-adm",
+            results_root=tmp_path / "results",
+        )
+        assert len(derivations) == 3
+        assert all(d.kind == "adm" and d.verified for d in derivations), [
+            d.checks for d in derivations
+        ]
+        assert derivations[0].checks.get("lagrangian-split") == "True"
+        assert derivations[0].checks.get("hamiltonian-projection") == "True"
+        assert derivations[0].checks.get("momentum-projection") == "True"
+        assert derivations[0].bundle_path
+
+    def test_adm_refuses_unresolved_problem(self):
+        with pytest.raises(AmbiguityBlocked):
+            derive_adm(
+                build_adm_npr(resolved=False),
+                {"sympy": SympyKernelAdapter()},
+                session_id="eval-general-adm",
+            )
