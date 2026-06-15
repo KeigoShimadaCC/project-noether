@@ -26,6 +26,9 @@ class ResultBundle(BaseModel):
     computed: list[ComputedResult] = Field(default_factory=list)
     ladder: LadderReport
     narrative: str = ""
+    # The presentation-shaped FieldDerivation dicts backed by this bundle.
+    # Stored so result history can be reloaded without re-running the kernel.
+    derivations: list[dict] = Field(default_factory=list)
 
 
 def write_bundle(root: Path, bundle: ResultBundle) -> Path:
@@ -44,6 +47,7 @@ def write_bundle(root: Path, bundle: ResultBundle) -> Path:
     _dump(base / "assumptions.json", bundle.npr_snapshot.model_dump(mode="json"))
     _dump(base / "plan.json", bundle.plan)
     _dump(base / "checks.json", bundle.ladder.model_dump(mode="json"))
+    _dump(base / "derivations.json", bundle.derivations)
 
     for i, computed in enumerate(bundle.computed):
         ext = {"cadabra": "cdb", "python-sympy": "py", "wolfram": "wl"}.get(
@@ -66,6 +70,26 @@ def write_bundle(root: Path, bundle: ResultBundle) -> Path:
 
     (base / "narrative.md").write_text(bundle.narrative)
     return base
+
+
+def read_results(root: Path, session_id: str, result_ids: list[str]) -> list[dict]:
+    """Reload the FieldDerivation dicts for a session's recorded results.
+
+    Reads each bundle's derivations.json in the given order; a result whose
+    bundle is missing or unreadable is skipped rather than failing the lot.
+    """
+    out: list[dict] = []
+    for result_id in result_ids:
+        path = root / session_id / result_id / "derivations.json"
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(data, list):
+            out.extend(d for d in data if isinstance(d, dict))
+    return out
 
 
 def _dump(path: Path, data) -> None:

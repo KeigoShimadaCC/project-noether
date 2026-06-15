@@ -5,9 +5,11 @@ Presentation only; never mutates the session and never invents physics.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from noether.orchestrator.session import Session
+from noether.provenance.bundle import read_results
 
 
 def session_payload(session: Session) -> dict[str, Any]:
@@ -40,4 +42,15 @@ def session_payload(session: Session) -> dict[str, Any]:
             for a in npr.ambiguities
         ],
         "events": [{"state": e.state.value, "detail": e.detail} for e in session.events],
+    }
+
+
+def results_payload(session: Session, results_root: Path) -> dict[str, Any]:
+    """The session's recorded derivations, reloaded from their provenance
+    bundles. Presentation only: it reads what the kernel already produced and
+    flags which results an assumption change has since made stale."""
+    return {
+        "session_id": session.session_id,
+        "results": read_results(Path(results_root), session.session_id, session.result_ids),
+        "stale_result_ids": list(session.stale_result_ids),
     }

@@ -24,7 +24,7 @@ from noether.orchestrator.derive import derive_adm, derive_eom, derive_perturbat
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
 from noether.orchestrator.store import DEFAULT_STORE, SessionStore
-from noether.orchestrator.view import session_payload
+from noether.orchestrator.view import results_payload, session_payload
 
 DEFAULT_MEASURE = r"d^4x \sqrt{-g}"
 
@@ -51,6 +51,17 @@ class NoetherTools:
         from noether.llm.cli import CliLLMAdapter
 
         return CliLLMAdapter()
+
+    def _record(self, sess, results: list) -> None:
+        """Record each derivation's result into the session, deduped, and save,
+        so the same surface as the HTTP API can reload result history."""
+        seen = set(sess.result_ids)
+        for derivation in results:
+            rid = derivation.result_id
+            if rid and rid not in seen:
+                sess.record_result(rid)
+                seen.add(rid)
+        self.store.save(sess)
 
     def kernels(self) -> dict[str, Any]:
         adapters = [SympyKernelAdapter(), CadabraAdapter()]
@@ -105,6 +116,8 @@ class NoetherTools:
                 }
         for amb_id, choice in resolutions.items():
             sess.resolve(amb_id, choice)
+        if sess.result_ids:
+            sess.mark_results_stale("assumption resolved after results existed")
         self.store.save(sess)
         return session_payload(sess)
 
@@ -195,6 +208,7 @@ class NoetherTools:
                 return {"blocked": True, "questions": exc.questions}
             except NotImplementedError as exc:
                 return {"error": str(exc)}
+            self._record(sess, results)
             return {
                 "session_id": session_id,
                 "derivations": [r.model_dump() for r in results],
@@ -238,10 +252,18 @@ class NoetherTools:
             return {"blocked": True, "questions": exc.questions}
         except (LLMError, NotImplementedError) as exc:
             return {"error": str(exc)}
+        self._record(sess, results)
         return {
             "session_id": session_id,
             "derivations": [r.model_dump() for r in results],
         }
+
+    def results(self, session_id: str) -> dict[str, Any]:
+        try:
+            sess = self.store.get(session_id)
+        except KeyError as exc:
+            return {"error": str(exc)}
+        return results_payload(sess, self.results_root)
 
 
 def create_mcp_server(store: SessionStore | None = None, llm: LLMAdapter | None = None):
@@ -328,5 +350,12 @@ def create_mcp_server(store: SessionStore | None = None, llm: LLMAdapter | None 
         specific declared fields with with_respect_to. If questions remain open
         this returns blocked=true."""
         return tools.derive(session_id, with_respect_to, kind)
+
+    @server.tool()
+    def noether_results(session_id: str) -> dict[str, Any]:
+        """List the derivations already computed for a session, reloaded from
+        their provenance bundles, with stale_result_ids naming any result an
+        assumption change has since invalidated. Reading only; runs nothing."""
+        return tools.results(session_id)
 
     return server

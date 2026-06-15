@@ -19,10 +19,12 @@ export default function DerivationTree({
   derivation: d,
   action,
   plan,
+  stale = false,
 }: {
   derivation: FieldDerivation;
   action: SessionPayload["action"];
   plan: PlanPayload | null;
+  stale?: boolean;
 }) {
   const [openScript, setOpenScript] = useState(false);
   const checks = Object.entries(d.checks ?? {});
@@ -93,8 +95,11 @@ export default function DerivationTree({
         <div className="dtree-body">
           <div className="defn-row">
             <span className="mono">{headingFor(d)}</span>
-            <span className={`badge ${d.verified ? "resolved" : "error"}`}>
-              {d.verified ? "kernel-verified" : "unverified"}
+            <span>
+              {stale && <span className="badge open">stale: assumptions changed</span>}{" "}
+              <span className={`badge ${d.verified ? "resolved" : "error"}`}>
+                {d.verified ? "kernel-verified" : "unverified"}
+              </span>
             </span>
           </div>
           {d.result_tex ? (

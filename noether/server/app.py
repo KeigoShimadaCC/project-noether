@@ -30,6 +30,7 @@ from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked
 from noether.orchestrator.session import Session
 from noether.orchestrator.store import DEFAULT_STORE, SessionStore
+from noether.orchestrator.view import results_payload as _results_payload
 from noether.orchestrator.view import session_payload as _session_payload
 
 DEFAULT_MEASURE = r"d^4x \sqrt{-g}"
@@ -79,6 +80,18 @@ def create_app(
         from noether.llm.cli import CliLLMAdapter
 
         return CliLLMAdapter()
+
+    def _record(session: Session, results: list) -> None:
+        """Record each derivation's result into the session, deduped, and save.
+        A re-run of the same derivation yields the same result id, so history
+        does not grow on repeat."""
+        seen = set(session.result_ids)
+        for derivation in results:
+            rid = derivation.result_id
+            if rid and rid not in seen:
+                session.record_result(rid)
+                seen.add(rid)
+        app.state.store.save(session)
 
     @app.get("/health")
     def health() -> dict[str, Any]:
@@ -155,6 +168,8 @@ def create_app(
                 )
         for amb_id, choice in body.resolutions.items():
             session.resolve(amb_id, choice)
+        if session.result_ids:
+            session.mark_results_stale("assumption resolved after results existed")
         app.state.store.save(session)
         return _session_payload(session)
 
@@ -237,6 +252,7 @@ def create_app(
                 ) from exc
             except NotImplementedError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+            _record(session, results)
             return {
                 "session_id": session_id,
                 "derivations": [r.model_dump() for r in results],
@@ -290,9 +306,15 @@ def create_app(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         except NotImplementedError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        _record(session, results)
         return {
             "session_id": session_id,
             "derivations": [r.model_dump() for r in results],
         }
+
+    @app.get("/sessions/{session_id}/results")
+    def results(session_id: str) -> dict[str, Any]:
+        session = _get_session(session_id)
+        return _results_payload(session, app.state.results_root)
 
     return app

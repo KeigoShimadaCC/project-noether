@@ -39,6 +39,7 @@ class FieldDerivation(BaseModel):
     wrt: str
     kind: str = "eom"  # "eom" | "perturbation" | "adm"
     capability: Capability
+    result_id: str = ""
     result_tex: str | None = None
     verified: bool = False
     checks: dict[str, str] = Field(default_factory=dict)
@@ -133,10 +134,18 @@ def derive_field(
             else "kernel did not confirm the result; surfaced as unverified"
         )
 
+    prefix = "perturb" if kind == "perturbation" else "vary"
+    result_id = "{}-{}-{}".format(
+        prefix,
+        wrt.strip("\\").replace("\\", "").replace("{", "").replace("}", "") or "field",
+        hashlib.sha1(generated.source.encode()).hexdigest()[:8],
+    )
+
     derivation = FieldDerivation(
         wrt=wrt,
         kind=kind,
         capability=capability,
+        result_id=result_id,
         result_tex=computed.expression_tex,
         verified=verified,
         checks=checks,
@@ -149,13 +158,8 @@ def derive_field(
     )
 
     if results_root is not None:
+        derivation.bundle_path = str(results_root / session_id / result_id)
         ladder = _ladder_from_kernel(computed, verified, detail)
-        prefix = "perturb" if kind == "perturbation" else "vary"
-        result_id = "{}-{}-{}".format(
-            prefix,
-            wrt.strip("\\").replace("\\", "").replace("{", "").replace("}", "") or "field",
-            hashlib.sha1(generated.source.encode()).hexdigest()[:8],
-        )
         bundle = ResultBundle(
             session_id=session_id,
             result_id=result_id,
@@ -169,9 +173,9 @@ def derive_field(
                 f"{generated.llm_name} {generated.llm_version}; "
                 f"verified={verified} (kernel residue check)."
             ),
+            derivations=[derivation.model_dump(mode="json")],
         )
-        base = write_bundle(results_root, bundle)
-        derivation.bundle_path = str(base)
+        write_bundle(results_root, bundle)
 
     return derivation
 
@@ -332,13 +336,32 @@ def derive_adm(
         else "kernel did not confirm the ADM split; surfaced as unverified"
     )
 
-    bundle_path: str | None = None
+    result_id = f"adm-{hashlib.sha1(npr.action.lagrangian_tex.encode()).hexdigest()[:8]}"
+    bundle_path = str(results_root / session_id / result_id) if results_root is not None else None
+
+    derivations = [
+        FieldDerivation(
+            wrt=label,
+            kind="adm",
+            capability=Capability.ADM,
+            result_id=result_id,
+            result_tex=tex,
+            verified=verified,
+            checks=checks,
+            kernel_name=computed.kernel_name,
+            kernel_version=computed.kernel_version,
+            script=computed.script.source,
+            detail=detail,
+            bundle_path=bundle_path,
+        )
+        for label, tex in _ADM_OUTPUTS
+    ]
+
     if results_root is not None:
         ladder = _ladder_from_components(computed, verified, detail)
-        result_hash = hashlib.sha1(npr.action.lagrangian_tex.encode()).hexdigest()[:8]
         bundle = ResultBundle(
             session_id=session_id,
-            result_id=f"adm-{result_hash}",
+            result_id=result_id,
             result_tex=_ADM_SPLIT_TEX,
             npr_snapshot=npr,
             plan=[],
@@ -351,22 +374,8 @@ def derive_adm(
                 f"K_{{ij}} = nabla_i n_j and the lapse Euler-Lagrange equation are "
                 f"part of the same suite. verified={verified}."
             ),
+            derivations=[d.model_dump(mode="json") for d in derivations],
         )
-        bundle_path = str(write_bundle(results_root, bundle))
+        write_bundle(results_root, bundle)
 
-    return [
-        FieldDerivation(
-            wrt=label,
-            kind="adm",
-            capability=Capability.ADM,
-            result_tex=tex,
-            verified=verified,
-            checks=checks,
-            kernel_name=computed.kernel_name,
-            kernel_version=computed.kernel_version,
-            script=computed.script.source,
-            detail=detail,
-            bundle_path=bundle_path,
-        )
-        for label, tex in _ADM_OUTPUTS
-    ]
+    return derivations

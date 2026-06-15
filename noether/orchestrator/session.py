@@ -111,3 +111,17 @@ class Session(BaseModel):
     def record_result(self, result_id: str) -> None:
         self.result_ids.append(result_id)
         self._log(SessionState.PRESENT, f"result {result_id} presented")
+
+    def mark_results_stale(self, reason: str) -> None:
+        """Flag every recorded result as stale after an assumption change.
+
+        Used when a resolution lands after results already exist: the results
+        still hold for the NPR version they were computed against, but no
+        longer for the current one, so they are surfaced as stale rather than
+        silently dropped or trusted.
+        """
+        newly = [rid for rid in self.result_ids if rid not in self.stale_result_ids]
+        if not newly:
+            return
+        self.stale_result_ids.extend(newly)
+        self._log(SessionState.ELICIT, f"{len(newly)} result(s) marked stale: {reason}")

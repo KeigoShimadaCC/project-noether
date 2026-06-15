@@ -125,15 +125,30 @@ function DerivationPanel({
   plan: PlanPayload | null;
 }) {
   const [results, setResults] = useState<FieldDerivation[] | null>(null);
+  const [staleIds, setStaleIds] = useState<string[]>([]);
   const [busyKind, setBusyKind] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const payload = await api.results(sessionId);
+      setResults(payload.results);
+      setStaleIds(payload.stale_result_ids);
+    } catch {
+      // history is best-effort; a failed reload leaves the current view intact
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   async function run(kind: "eom" | "perturbation" | "adm") {
     setBusyKind(kind);
     setError(null);
     try {
-      const payload = await api.derive(sessionId, undefined, kind);
-      setResults(payload.derivations);
+      await api.derive(sessionId, undefined, kind);
+      await refresh();
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 503
@@ -179,9 +194,17 @@ function DerivationPanel({
       </p>
       {error && <div className="error-box">{error}</div>}
       {results?.map((d) => (
-        <DerivationTree key={`${d.kind}-${d.wrt}`} derivation={d} action={action} plan={plan} />
+        <DerivationTree
+          key={`${d.kind}-${d.wrt}`}
+          derivation={d}
+          action={action}
+          plan={plan}
+          stale={staleIds.includes(d.result_id)}
+        />
       ))}
-      {results && <ExportPanel action={action} derivations={results} />}
+      {results && (
+        <ExportPanel action={action} derivations={results} staleResultIds={staleIds} />
+      )}
     </div>
   );
 }

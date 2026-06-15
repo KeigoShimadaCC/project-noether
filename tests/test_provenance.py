@@ -4,7 +4,7 @@ import json
 
 from evals.eval1_eh_trace import build_npr, target_eom
 from noether.npr.latex import render
-from noether.provenance.bundle import ResultBundle, write_bundle
+from noether.provenance.bundle import ResultBundle, read_results, write_bundle
 from noether.verify.checks import CheckResult
 from noether.verify.ladder import LadderReport
 
@@ -57,3 +57,26 @@ class TestBundle:
         base = write_bundle(tmp_path, bundle)
         result = json.loads((base / "result.json").read_text())
         assert result["verified"] is False
+
+
+class TestResultHistory:
+    def test_derivations_round_trip(self, tmp_path):
+        bundle = make_bundle()
+        bundle.derivations = [
+            {"wrt": "g", "kind": "eom", "result_id": "r1", "verified": True},
+        ]
+        write_bundle(tmp_path, bundle)
+        loaded = read_results(tmp_path, "s1", ["r1"])
+        assert loaded == bundle.derivations
+
+    def test_read_results_preserves_order_and_skips_missing(self, tmp_path):
+        first = make_bundle()
+        first.result_id = "r1"
+        first.derivations = [{"wrt": "g", "result_id": "r1"}]
+        second = make_bundle()
+        second.result_id = "r2"
+        second.derivations = [{"wrt": "phi", "result_id": "r2"}]
+        write_bundle(tmp_path, first)
+        write_bundle(tmp_path, second)
+        loaded = read_results(tmp_path, "s1", ["r2", "absent", "r1"])
+        assert [d["wrt"] for d in loaded] == ["phi", "g"]

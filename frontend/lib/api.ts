@@ -57,6 +57,7 @@ export interface FieldDerivation {
   wrt: string;
   kind: string;
   capability: string;
+  result_id: string;
   result_tex: string | null;
   verified: boolean;
   checks: Record<string, string>;
@@ -72,6 +73,12 @@ export interface FieldDerivation {
 export interface DerivePayload {
   session_id: string;
   derivations: FieldDerivation[];
+}
+
+export interface ResultsPayload {
+  session_id: string;
+  results: FieldDerivation[];
+  stale_result_ids: string[];
 }
 
 export interface Proposal {
@@ -138,4 +145,5 @@ export const api = {
         ...(withRespectTo ? { with_respect_to: withRespectTo } : {}),
       }),
     }),
+  results: (id: string) => request<ResultsPayload>(`/sessions/${id}/results`),
 };

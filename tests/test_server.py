@@ -299,3 +299,60 @@ class TestDeriveAdm:
         sid = self._well_posed(client, "R")
         response = client.post(f"/sessions/{sid}/derive", json={"kind": "bogus"})
         assert response.status_code == 422
+
+
+class TestResultHistory:
+    """Derivations are recorded into the session and reloadable, verified by
+    the SymPy ADM path so the test needs neither Cadabra nor an LLM."""
+
+    def _well_posed(self, client, lagrangian="R") -> str:
+        body = _create(client, lagrangian)
+        resolutions = {q["id"]: q["options"][0] for q in body["questions"]}
+        resolved = client.post(
+            f"/sessions/{body['session_id']}/resolve", json={"resolutions": resolutions}
+        )
+        assert resolved.json()["well_posed"] is True, resolved.text
+        return body["session_id"]
+
+    def test_results_empty_before_any_derivation(self, store, tmp_path):
+        client = TestClient(create_app(store=store, results_root=tmp_path))
+        sid = self._well_posed(client)
+        payload = client.get(f"/sessions/{sid}/results").json()
+        assert payload == {"session_id": sid, "results": [], "stale_result_ids": []}
+
+    def test_derivation_is_recorded_and_reloadable(self, store, tmp_path):
+        client = TestClient(create_app(store=store, results_root=tmp_path))
+        sid = self._well_posed(client)
+        client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        # a fresh app over the same store proves the history persisted to disk
+        reread = TestClient(create_app(store=store, results_root=tmp_path))
+        payload = reread.get(f"/sessions/{sid}/results").json()
+        assert len(payload["results"]) == 3
+        assert all(d["result_id"].startswith("adm-") for d in payload["results"])
+        assert payload["stale_result_ids"] == []
+
+    def test_repeat_derivation_does_not_duplicate_history(self, store, tmp_path):
+        client = TestClient(create_app(store=store, results_root=tmp_path))
+        sid = self._well_posed(client)
+        client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        payload = client.get(f"/sessions/{sid}/results").json()
+        assert len(payload["results"]) == 3
+
+    def test_resolution_after_results_marks_them_stale(self, store, tmp_path):
+        client = TestClient(create_app(store=store, results_root=tmp_path))
+        body = _create(client, "R")
+        sid = body["session_id"]
+        resolutions = {q["id"]: q["options"][0] for q in body["questions"]}
+        client.post(f"/sessions/{sid}/resolve", json={"resolutions": resolutions})
+        client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        before = client.get(f"/sessions/{sid}/results").json()
+        # re-confirm one assumption now that a result exists
+        first = body["questions"][0]
+        client.post(
+            f"/sessions/{sid}/resolve",
+            json={"resolutions": {first["id"]: first["options"][0]}},
+        )
+        after = client.get(f"/sessions/{sid}/results").json()
+        assert before["stale_result_ids"] == []
+        assert after["stale_result_ids"] == [after["results"][0]["result_id"]]

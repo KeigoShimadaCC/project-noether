@@ -85,7 +85,9 @@ noether/             Python package
                      subprocess (auto-detects codex/claude/gemini/droid; no API
                      key) plus an in-process stub for tests
   verify/            Check registry (V0..V3 implemented) and ladder runner
-  provenance/        Result bundle writer
+  provenance/        Result bundle writer and reader (write_bundle stores a
+                     derivations.json per result; read_results reloads a
+                     session's recorded derivations for history)
   orchestrator/      Session state machine, planner with ambiguity gate,
                      ingest (LaTeX action -> draft NPR + open ambiguity ledger),
                      elicit (model proposes resolutions; only human-confirmed
@@ -94,13 +96,14 @@ noether/             Python package
                      derive (general EOM / perturbation path: model writes a
                      Cadabra script, kernel's residue check decides verified vs
                      unverified; plus derive_adm, a SymPy-verified ADM split),
-                     store (JSON session persistence)
+                     store (JSON session persistence; derive records each
+                     result id into the session so history reloads)
   server/            HTTP session API (FastAPI, optional [server] extra):
-                     ingest/elicit/resolve/plan/derive with the no-guessing
-                     contract
+                     ingest/elicit/resolve/plan/derive plus a results history
+                     endpoint, all under the no-guessing contract
   mcp/               MCP stdio server (optional [mcp] extra): same session
-                     surface as tools (incl. noether_derive); refusals are tool
-                     results, not guesses
+                     surface as tools (incl. noether_derive and
+                     noether_results); refusals are tool results, not guesses
   cli/               `noether chat` / `resume` / `sessions` (conversational
                      loop, chat.py), `noether kernels`, `noether ingest`,
                      `noether elicit`, `noether serve`, `noether mcp`,
@@ -134,8 +137,12 @@ metric is refused. The web client renders each derivation as a provenance tree
 (action, plan, kernel script, every check the kernel reported, result) and
 exports the kernel-verified results as a publication-LaTeX document; both are
 presentation over data the server already returned, so no physics runs in the
-browser. Planned next: persisted result history and the xAct cross-check
-kernel.
+browser. Derivations persist: each run records its result id into the session
+and writes the presentation-shaped derivations into its provenance bundle, so
+the same history reloads across the server (`GET /sessions/{id}/results`), MCP
+(`noether_results`), and web. A resolution that lands after results already
+exist marks them stale rather than dropping or silently trusting them. Planned
+next: the xAct cross-check kernel.
 
 ## 4.1 Development setup
 

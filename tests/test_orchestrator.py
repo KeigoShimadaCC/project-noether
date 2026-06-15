@@ -53,6 +53,20 @@ class TestSession:
         assert "eom-1" in session.stale_result_ids
         assert session.state is SessionState.ELICIT
 
+    def test_mark_results_stale_is_deduped_and_logged(self):
+        session = Session(session_id="t4")
+        session.ingest(build_npr(resolved=True))
+        session.record_result("eom-1")
+        session.record_result("eom-2")
+        events_before = len(session.events)
+        session.mark_results_stale("assumption resolved")
+        assert session.stale_result_ids == ["eom-1", "eom-2"]
+        assert len(session.events) == events_before + 1
+        # a second call adds nothing: the results are already stale
+        session.mark_results_stale("assumption resolved again")
+        assert session.stale_result_ids == ["eom-1", "eom-2"]
+        assert len(session.events) == events_before + 1
+
 
 class TestResolutionPropagation:
     """A confirmed vary-wrt answer must reach task.with_respect_to; the

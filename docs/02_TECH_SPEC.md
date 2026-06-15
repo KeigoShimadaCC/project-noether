@@ -88,9 +88,11 @@ default `http://127.0.0.1:8754`), so no physics state lives client-side.
 The workspace also derives in place: eom, perturbation, and adm each render as
 a provenance tree (action, plan, kernel script, every check the kernel
 reported, then the result with its verdict), and the kernel-verified results
-export as a publication-LaTeX document (copy or download). Both are pure
-presentation over data the server already returned; the browser formats
-verified expressions but never computes physics. CI builds the frontend with
+export as a publication-LaTeX document (copy or download). On load it reloads
+any earlier derivations from the results history endpoint, flagging stale ones
+and leaving them out of the export. All of this is pure presentation over data
+the server already returned; the browser formats verified expressions but never
+computes physics. CI builds the frontend with
 type checking on every push.
 
 ### Horizon 2+: MCP server (implemented for the session surface)
@@ -148,9 +150,13 @@ adopts the accepted ones. `POST /sessions/{id}/derive` runs the general
 derivation (section 6, item 7) for a well-posed session and returns each field
 equation with the kernel's `verified` verdict; it answers 409 with the open
 questions while any remain, and 503 when the Cadabra kernel or an agent CLI is
-missing on the server. Sessions persist as JSON through
-`noether.orchestrator.store.SessionStore` and are shared by CLI, web, and MCP
-frontends. Tested in `tests/test_server.py` (skips without the extra).
+missing on the server. Each derivation records its result id into the session
+and stores the presentation-shaped derivations in its provenance bundle, so
+`GET /sessions/{id}/results` reloads the full history (with `stale_result_ids`
+naming any result a later resolution invalidated) without re-running a kernel;
+the MCP `noether_results` tool returns the same shape. Sessions persist as JSON
+through `noether.orchestrator.store.SessionStore` and are shared by CLI, web,
+and MCP frontends. Tested in `tests/test_server.py` (skips without the extra).
 
 ## 3. Orchestrator
 
@@ -408,6 +414,8 @@ results/<session>/<result-id>/
   scripts/           exact kernel scripts, as executed
   raw/               kernel stdout/stderr, versions, timings
   checks.json        verification ladder verdicts (V0..V4, see 03_METHODOLOGY)
+  derivations.json   presentation-shaped FieldDerivation records, so result
+                     history reloads without re-running a kernel
   narrative.md       the human-readable derivation story shown to the user
 ```
 

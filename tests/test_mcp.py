@@ -209,6 +209,28 @@ class TestAdmTools:
         sid = self._well_posed(tools, "R")
         assert "error" in tools.derive(sid, kind="bogus")
 
+    def test_results_record_reload_dedupe_and_stale(self, tmp_path):
+        tools = self._tools(tmp_path)
+        body = tools.ingest("R")
+        sid = body["session_id"]
+        resolutions = {q["id"]: q["options"][0] for q in body["questions"]}
+        assert tools.resolve(sid, resolutions)["well_posed"] is True
+        assert tools.results(sid) == {"session_id": sid, "results": [], "stale_result_ids": []}
+        tools.derive(sid, kind="adm")
+        tools.derive(sid, kind="adm")  # repeat must not duplicate history
+        recorded = tools.results(sid)
+        assert len(recorded["results"]) == 3
+        assert recorded["stale_result_ids"] == []
+        # a resolution after results exist marks them stale
+        first = body["questions"][0]
+        tools.resolve(sid, {first["id"]: first["options"][0]})
+        stale = tools.results(sid)
+        assert stale["stale_result_ids"] == [stale["results"][0]["result_id"]]
+
+    def test_unknown_session_results_is_data(self, tmp_path):
+        tools = self._tools(tmp_path)
+        assert "error" in tools.results("s-doesnotexist")
+
 
 class TestServerWiring:
     def test_expected_tools_registered(self, tmp_path):
@@ -224,4 +246,5 @@ class TestServerWiring:
             "noether_adopt_definitions",
             "noether_plan",
             "noether_derive",
+            "noether_results",
         }
