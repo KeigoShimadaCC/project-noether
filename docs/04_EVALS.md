@@ -510,6 +510,8 @@ field equations; regression against the published Lovelock literature form.
 | 5 | Lovelock / Gauss-Bonnet | identity reduction to fixpoint, dimension handling | H2 |
 | 1s | ADM of GR | foliation, constraint/evolution split | H2 |
 | 3s | spectrum around Minkowski | perturbation, gauge, kinetic diagonalization | H2 |
+| 3p | scalar quadratic action | symbolic quadratic expansion on a general background | H2 |
+| 3g | graviton quadratic action | spin-2 expansion, linearized vacuum Einstein equation | H2 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and
 an executable spec under `evals/` (machine-checkable: input transcript, expected

@@ -130,8 +130,11 @@ which passed, and which were not applicable.
   Targets come from the regression corpus.
 - **V4 — independent recomputation.** A second kernel (or the component
   spot-check: evaluate both sides on pseudo-random explicit backgrounds via
-  SymPy/SageManifolds) reproduces the canonical form. Mandatory for novel-theory
-  results once the second kernel lands (H2); spot-check variant available in H1.
+  SymPy/SageManifolds) reproduces the canonical form. The SymPy component
+  spot-check variant is in use today (it is what verifies the ADM split and
+  anchors the perturbation linearizations); the second symbolic kernel (xAct)
+  that makes full cross-kernel recomputation mandatory for novel-theory results
+  is Horizon 3.
 
 The ladder is the product's trust story. "I checked it three ways and it holds"
 (NORTH_STAR §16) means, concretely: V2 + V3 + V4 green.

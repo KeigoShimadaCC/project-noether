@@ -1,7 +1,7 @@
 # GitHub repository metadata
 
-No remote exists yet. When the repo is first pushed to GitHub, apply this
-metadata with the command at the bottom (requires `gh` authenticated).
+The repo lives at `github.com/KeigoShimadaCC/project-noether`. Apply or refresh
+this metadata with the command at the bottom (requires `gh` authenticated).
 
 ## Description (under 350 chars)
 

@@ -162,6 +162,12 @@ combination is the product.
 2. **Horizon 2 adds xAct** via `wolframscript` subprocess for perturbation theory
    and as the independent cross-check kernel. License handling becomes a real
    workstream at that point (Wolfram Engine free tier vs. user-supplied licenses).
+   Implementation note (2026-06): Horizon 2 shipped its perturbation and ADM
+   work on the kernels already in hand rather than waiting on xAct, the scalar
+   and graviton quadratic actions on Cadabra (evals 3p, 3g) and the ADM (3+1)
+   split on the SymPy component kernel (eval 1s). xAct therefore moves to
+   Horizon 3 as the independent cross-check kernel, where its strongest
+   contribution (a second engine recomputing a result for V4) lands.
 3. **SymPy ships from day one** as the utility and component-check engine.
 4. **The NPR (problem representation) is ours to design** (see `02_TECH_SPEC.md`).
    Nothing off the shelf plays this role; the MCP-style wrappers confirm that a

@@ -11,7 +11,7 @@ explicit revision), `living` (expected to change continuously).
 | 01 | `01_RESEARCH.md` | CAS landscape, prior art, kernel selection rationale | draft |
 | 02 | `02_TECH_SPEC.md` | Architecture, stack, NPR schema, adapters, algorithms | draft |
 | 03 | `03_METHODOLOGY.md` | Elicitation, good form, verification ladder, dev process | draft |
-| 04 | `04_EVALS.md` | Five acceptance evaluations with worked solutions | stable; all five implemented and kernel-verified |
+| 04 | `04_EVALS.md` | Five acceptance evaluations with worked solutions | stable; all five plus the H2 stretch tasks (1s, 3s, 3p, 3g) implemented and kernel-verified |
 
 ## Relationships
 
@@ -21,7 +21,10 @@ explicit revision), `living` (expected to change continuously).
   behaves (elicitation, verification) and how we build it (eval-driven).
 - `04_EVALS.md` is the executable meaning of "Horizon 1 / Horizon 2 done". Evals
   1 to 4 gate Horizon 1 (equations of motion loop); eval 5 plus the stretch tasks
-  gate Horizon 2 (identities, ADM, perturbation).
+  gate Horizon 2 (identities, ADM, perturbation). Both horizons' evals pass today,
+  and the general derive path reaches arbitrary well-posed actions for the vary,
+  perturb, and adm tasks across the HTTP, MCP, and web surfaces (with persisted
+  result history); the remaining Horizon 3 work is the xAct cross-check kernel.
 
 ## Pending documents (create when the work starts)
 

@@ -61,11 +61,12 @@ ingest, questions as numbered options plus free-form answers, plan once well
 posed); `propose` inside the loop asks the detected agent CLI for suggestions
 that take effect only when the human accepts them one by one. `noether
 resume <id>` continues a stored session and `noether sessions` lists them;
-the store is shared with the HTTP and MCP frontends. Derivations for the
-supported task types currently run through the eval commands, which carry the
-provenance bundles; wiring arbitrary well-posed sessions into the compute
-pipeline is the remaining Horizon 1 gap. Tested in `tests/test_chat.py` with
-scripted IO.
+the store is shared with the HTTP and MCP frontends. Arbitrary well-posed
+sessions now derive through the general path (section 6, item 7) on the HTTP,
+MCP, and web surfaces, which also record and reload result history; the
+conversational `noether chat` loop itself stops at planning, and the eval
+commands still carry their own provenance bundles. Tested in
+`tests/test_chat.py` with scripted IO.
 
 ### Horizon 2+: web app
 
