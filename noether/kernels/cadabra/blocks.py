@@ -28,10 +28,20 @@ What composes today is the scalar sector under noether-default-v1:
 
 where X = -1/2 (nabla phi)^2 is expanded to its primitive in-kernel and only
 collapsed back to the shorthand for display (the operational-definition path).
+A nonminimal F(phi) R term adds F_phi R to the scalar EOM.
+
+The metric equation of motion (delta S / delta g = 0) composes the same way,
+through the second half of this module: an additive Lagrangian decomposes into
+Einstein-Hilbert (R), nonminimal F(phi) R, kinetic, and potential blocks, and
+the eval-3 metric-variation machinery (vary into dGamma, two IBP passes, lower
+h to one explicit-g convention) is assembled once and residue-checked. So the
+full nonminimal scalar-tensor theory yields both equations of motion with no
+per-theory template.
+
 A term matching no block leaves the decomposition incomplete and the caller
-refuses rather than guessing (rule 4). Curvature-coupled blocks (G4, G5,
-nonminimal F(phi) R) are not registered yet; those actions fall back to the
-model-written script path or are refused.
+refuses rather than guessing (rule 4). The higher Horndeski densities (an
+X-dependent G4(phi, X) R, and G5) are held out until they verify, so they match
+no block and fall back to the model-written script path or are refused.
 """
 
 from __future__ import annotations
@@ -39,12 +49,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from fractions import Fraction
 
-from noether.npr.ast import Deriv, Expr, Func, Num, Prod, Sum, Sym
+from noether.npr.ast import Deriv, Expr, Func, Num, Prod, Sum, Sym, Tensor
 
 KINETIC = "kinetic"
 POTENTIAL = "potential"
 CUBIC = "cubic"
 KESSENCE = "kessence"
+NONMINIMAL = "nonminimal"  # F(phi) R
+EINSTEIN_HILBERT = "einstein_hilbert"  # bare R
 
 
 @dataclass(frozen=True)
@@ -122,6 +134,11 @@ def _is_grad_sq(factors: list[Expr], fieldname: str) -> bool:
     return i0.name == i1.name and i0.variance != i1.variance
 
 
+def _is_curvature_scalar(e: Expr) -> bool:
+    """The bare Ricci scalar R (a tensor with no free indices)."""
+    return isinstance(e, Tensor) and e.name == "R" and not e.indices
+
+
 def _scalar_func(factors: list[Expr], fieldname: str) -> Func | None:
     """The single Func factor if `factors` is exactly one function."""
     if len(factors) == 1 and isinstance(factors[0], Func):
@@ -142,6 +159,10 @@ def _match_term(term: Expr, fieldname: str) -> BlockMatch | None:
     if _is_grad_sq(rest, fieldname):
         return BlockMatch(KINETIC, coeff, None)
 
+    # bare Ricci scalar: an Einstein-Hilbert term, inert under phi-variation.
+    if len(rest) == 1 and _is_curvature_scalar(rest[0]):
+        return BlockMatch(EINSTEIN_HILBERT, coeff, None)
+
     # k-essence: a single function of (phi, X). Requires both, so it is the
     # general Horndeski G2; a pure K(X) or K(phi) is handled elsewhere.
     fn = _scalar_func(rest, fieldname)
@@ -152,9 +173,15 @@ def _match_term(term: Expr, fieldname: str) -> BlockMatch | None:
         if args == {fieldname}:
             return BlockMatch(POTENTIAL, coeff, fn.name)
 
-    # cubic Galileon: G(phi) box phi.
     if len(rest) == 2:
         funcs = [f for f in rest if isinstance(f, Func)]
+        # nonminimal coupling F(phi) R: a curvature scalar times a function of
+        # phi alone. A function of (phi, X) here would be Horndeski G4, which is
+        # held out until it verifies, so it stays unmatched and falls back.
+        curvs = [f for f in rest if _is_curvature_scalar(f)]
+        if len(funcs) == 1 and len(curvs) == 1 and _func_args(funcs[0]) == {fieldname}:
+            return BlockMatch(NONMINIMAL, coeff, funcs[0].name)
+        # cubic Galileon: G(phi) box phi.
         boxes = [f for f in rest if _is_box(f, fieldname)]
         if len(funcs) == 1 and len(boxes) == 1 and _func_args(funcs[0]) == {fieldname}:
             return BlockMatch(CUBIC, coeff, funcs[0].name)
@@ -187,7 +214,7 @@ def coupling_symbols(match: BlockMatch) -> dict[str, str]:
     if match.coupling is None:
         return {}
     b = _base(match.coupling)
-    if match.block == POTENTIAL:
+    if match.block in (POTENTIAL, NONMINIMAL):
         return {"d1": f"{b}p"}
     if match.block == CUBIC:
         return {"d1": f"{b}p", "d2": f"{b}pp"}
@@ -233,13 +260,18 @@ def _render_cadabra(monomials: list[tuple[Fraction, str]]) -> str:
     return out or "0"
 
 
-def _integrand_monomial(match: BlockMatch) -> tuple[Fraction, str]:
+def _integrand_monomial(match: BlockMatch) -> tuple[Fraction, str] | None:
     c = match.coeff
     if match.block == KINETIC:
         return (c, r"sg g^{\alpha\beta} \nabla_{\alpha}{\phi} \nabla_{\beta}{\phi}")
+    if match.block == EINSTEIN_HILBERT:
+        # inert under phi-variation; carried for completeness, contributes nothing.
+        return (c, "sg R")
     name = match.coupling
     if match.block == POTENTIAL:
         return (c, f"sg {name}")
+    if match.block == NONMINIMAL:
+        return (c, f"sg {name} R")
     if match.block == CUBIC:
         return (
             c,
@@ -255,9 +287,13 @@ def _target_monomials(match: BlockMatch) -> list[tuple[Fraction, str]]:
     box = r"sg g^{\alpha\beta} \nabla_{\alpha}{\nabla_{\beta}{\phi}} dphi"
     if match.block == KINETIC:
         return [(-2 * c, box)]
+    if match.block == EINSTEIN_HILBERT:
+        return []
     sym = coupling_symbols(match)
     if match.block == POTENTIAL:
         return [(c, f"sg {sym['d1']} dphi")]
+    if match.block == NONMINIMAL:
+        return [(c, f"sg {sym['d1']} R dphi")]
     if match.block == CUBIC:
         return [
             (
@@ -292,6 +328,7 @@ def _target_monomials(match: BlockMatch) -> list[tuple[Fraction, str]]:
 def _declarations(matches: list[BlockMatch]) -> str:
     depends = {"\\phi", "dphi"}
     has_kessence = False
+    has_curvature = False
     for m in matches:
         for s in coupling_symbols(m).values():
             depends.add(s)
@@ -300,8 +337,12 @@ def _declarations(matches: list[BlockMatch]) -> str:
             depends.add(m.coupling)
         if m.block == KESSENCE:
             has_kessence = True
+        if m.block in (NONMINIMAL, EINSTEIN_HILBERT):
+            has_curvature = True
     if has_kessence:
         depends.update({"X", "dX"})
+    if has_curvature:
+        depends.add("R")
     ordered = ", ".join(sorted(depends, key=lambda s: (s.startswith("\\"), s)))
     return f"{_DECL_HEAD}\n{{{ordered}}}::Depends(\\nabla{{#}})."
 
@@ -310,7 +351,7 @@ def _vary_rules(matches: list[BlockMatch]) -> str:
     rules = [r"\phi -> dphi"]
     for m in matches:
         sym = coupling_symbols(m)
-        if m.block == POTENTIAL:
+        if m.block in (POTENTIAL, NONMINIMAL):
             rules.append(f"{m.coupling} -> {sym['d1']} dphi")
         elif m.block == CUBIC:
             rules.append(f"{m.coupling} -> {sym['d1']} dphi")
@@ -331,7 +372,9 @@ def assemble_scalar_eom_script(matches: list[BlockMatch], fieldname: str = "phi"
     scalar EOM of the matched blocks. The script carries the real action and
     an independent candidate; the kernel's residue_zero is the verdict."""
     decl = _declarations(matches)
-    integrand = _render_cadabra([_integrand_monomial(m) for m in matches])
+    integrand = _render_cadabra(
+        [mono for m in matches if (mono := _integrand_monomial(m)) is not None]
+    )
     vary_rules = _vary_rules(matches)
     has_kessence = any(m.block == KESSENCE for m in matches)
 
@@ -447,9 +490,13 @@ def _display_monomials(match: BlockMatch) -> list[tuple[Fraction, str]]:
     c = match.coeff
     if match.block == KINETIC:
         return [(-2 * c, r"\Box\phi")]
+    if match.block == EINSTEIN_HILBERT:
+        return []
     name = match.coupling
     if match.block == POTENTIAL:
         return [(c, f"{name}_{{\\phi}}")]
+    if match.block == NONMINIMAL:
+        return [(c, f"{name}_{{\\phi}} R")]
     if match.block == CUBIC:
         return [
             (2 * c, f"{name}_{{\\phi}}\\Box\\phi"),
@@ -482,9 +529,236 @@ def block_summary(matches: list[BlockMatch]) -> list[str]:
         POTENTIAL: "potential",
         CUBIC: "cubic Galileon (Horndeski G3)",
         KESSENCE: "k-essence (Horndeski G2)",
+        NONMINIMAL: "nonminimal coupling F(phi) R",
+        EINSTEIN_HILBERT: "Einstein-Hilbert",
     }
     out = []
     for m in matches:
         name = f" in {m.coupling}" if m.coupling else ""
         out.append(f"{labels[m.block]}{name}")
     return out
+
+
+# ===========================================================================
+# Metric sector: the gravitational equation of motion delta S / delta g = 0.
+#
+# The same additive Lagrangian is decomposed for the metric variation. The
+# derivation machinery (vary g^{ab} -> -h, the Ricci-tensor variation into
+# dGamma, two integration-by-parts passes, lowering h to one explicit-g
+# convention) is generic; only the integrand and the candidate EOM tensor
+# change per block. The blocks that compose are Einstein-Hilbert (R),
+# nonminimal F(phi) R, canonical kinetic, and potential, in any additive
+# combination. A G4(phi, X) R term (a function that also depends on X) matches
+# no block and is held out, so the action falls back to the model path.
+#
+# Block contributions to the EOM tensor E_{mu nu} = 0 (noether-default-v1):
+#   Einstein-Hilbert c R : c (R_{mu nu} - 1/2 g_{mu nu} R)
+#   nonminimal c F R     : c (F R_{mu nu} - 1/2 g_{mu nu} F R
+#                              + g_{mu nu} box F - nabla_mu nabla_nu F)
+#   kinetic c (nabla phi)^2 : c (nabla_mu phi nabla_nu phi
+#                                  - 1/2 g_{mu nu} (nabla phi)^2)
+#   potential c V        : -c/2 g_{mu nu} V
+# ===========================================================================
+
+
+def _match_metric_term(term: Expr, fieldname: str) -> BlockMatch | None:
+    coeff, rest = _split_coeff(term)
+
+    if len(rest) == 1 and _is_curvature_scalar(rest[0]):
+        return BlockMatch(EINSTEIN_HILBERT, coeff, None)
+
+    if _is_grad_sq(rest, fieldname):
+        return BlockMatch(KINETIC, coeff, None)
+
+    fn = _scalar_func(rest, fieldname)
+    if fn is not None and _func_args(fn) == {fieldname}:
+        return BlockMatch(POTENTIAL, coeff, fn.name)
+
+    if len(rest) == 2:
+        funcs = [f for f in rest if isinstance(f, Func)]
+        curvs = [f for f in rest if _is_curvature_scalar(f)]
+        # nonminimal F(phi) R; a function of (phi, X) here is Horndeski G4, held
+        # out until it verifies, so it stays unmatched and the caller falls back.
+        if len(funcs) == 1 and len(curvs) == 1 and _func_args(funcs[0]) == {fieldname}:
+            return BlockMatch(NONMINIMAL, coeff, funcs[0].name)
+
+    return None
+
+
+def decompose_metric(lag: Expr, fieldname: str = "phi") -> Decomposition:
+    """Decompose a Lagrangian into metric-sector building blocks. `fieldname`
+    is the dynamical scalar (rendered as phi in the assembled script)."""
+    dec = Decomposition(field="g")
+    for term in _terms(lag):
+        match = _match_metric_term(term, fieldname)
+        if match is None:
+            dec.unmatched.append(term)
+        else:
+            dec.matches.append(match)
+    return dec
+
+
+def _metric_integrand_monomial(match: BlockMatch) -> tuple[Fraction, str]:
+    c = match.coeff
+    if match.block == EINSTEIN_HILBERT:
+        return (c, r"sg g^{\alpha\beta} R_{\alpha\beta}")
+    if match.block == NONMINIMAL:
+        return (c, f"sg {match.coupling} g^{{\\alpha\\beta}} R_{{\\alpha\\beta}}")
+    if match.block == KINETIC:
+        return (c, r"sg g^{\alpha\beta} \nabla_{\alpha}{\phi} \nabla_{\beta}{\phi}")
+    if match.block == POTENTIAL:
+        return (c, f"sg {match.coupling}")
+    raise ValueError(match.block)
+
+
+def _metric_target_monomials(match: BlockMatch) -> list[tuple[Fraction, str]]:
+    c = match.coeff
+    if match.block == EINSTEIN_HILBERT:
+        return [
+            (-c, r"sg R_{\mu\nu} h^{\mu\nu}"),
+            (c / 2, r"sg g^{\mu\nu} h_{\mu\nu} g^{\alpha\beta} R_{\alpha\beta}"),
+        ]
+    if match.block == NONMINIMAL:
+        n = match.coupling
+        ddF = f"\\nabla_{{\\alpha}}{{\\nabla_{{\\beta}}{{{n}}}}}"
+        return [
+            (-c, f"sg {n} R_{{\\mu\\nu}} h^{{\\mu\\nu}}"),
+            (
+                c / 2,
+                f"sg {n} g^{{\\mu\\nu}} h_{{\\mu\\nu}} g^{{\\alpha\\beta}} R_{{\\alpha\\beta}}",
+            ),
+            (-c, f"sg g^{{\\mu\\nu}} h_{{\\mu\\nu}} g^{{\\alpha\\beta}} {ddF}"),
+            (c, f"sg h_{{\\mu\\nu}} g^{{\\mu\\alpha}} g^{{\\nu\\beta}} {ddF}"),
+        ]
+    if match.block == KINETIC:
+        return [
+            (
+                -c,
+                r"sg h_{\mu\nu} g^{\mu\alpha} g^{\nu\beta} \nabla_{\alpha}{\phi} \nabla_{\beta}{\phi}",
+            ),
+            (
+                c / 2,
+                r"sg g^{\mu\nu} h_{\mu\nu} g^{\alpha\beta} \nabla_{\alpha}{\phi} \nabla_{\beta}{\phi}",
+            ),
+        ]
+    if match.block == POTENTIAL:
+        return [(c / 2, f"sg g^{{\\mu\\nu}} h_{{\\mu\\nu}} {match.coupling}")]
+    raise ValueError(match.block)
+
+
+def _metric_declarations(matches: list[BlockMatch]) -> str:
+    depends = {"h{#}", "R_{\\mu\\nu}", "dGamma^{\\lambda}_{\\mu\\nu}"}
+    for m in matches:
+        if m.block in (NONMINIMAL, KINETIC):
+            depends.add("\\phi")
+        if m.coupling is not None:
+            depends.add(m.coupling)
+    ordered = ", ".join(sorted(depends, key=lambda s: (s.startswith("\\"), s)))
+    head = (
+        f"{_DECL_HEAD}\n"
+        "h_{\\mu\\nu}::Symmetric.\n"
+        "h^{\\mu\\nu}::Symmetric.\n"
+        "R_{\\mu\\nu}::Symmetric.\n"
+        f"{{{ordered}}}::Depends(\\nabla{{#}})."
+    )
+    return head
+
+
+_METRIC_VARY = (
+    r"vary(ex, $g^{\alpha\beta} -> -h^{\alpha\beta}, "
+    r"sg -> 1/2 sg g^{\mu\nu} h_{\mu\nu}, "
+    r"R_{\alpha\beta} -> \nabla_{\lambda}{dGamma^{\lambda}_{\beta\alpha}} "
+    r"- \nabla_{\beta}{dGamma^{\lambda}_{\lambda\alpha}}$);"
+)
+_METRIC_DGAMMA = (
+    r"substitute(ex, $dGamma^{\lambda}_{\nu\sigma} -> 1/2 g^{\lambda\rho} "
+    r"( \nabla_{\nu}{h_{\rho\sigma}} + \nabla_{\sigma}{h_{\rho\nu}} "
+    r"- \nabla_{\rho}{h_{\nu\sigma}} )$);"
+)
+
+
+def assemble_metric_eom_script(matches: list[BlockMatch]) -> str:
+    """Assemble one Cadabra script for the metric EOM of the matched blocks.
+    The script varies the real action and residue-checks it against a candidate
+    built from the same blocks; the kernel's residue_zero is the verdict."""
+    decl = _metric_declarations(matches)
+    integrand = _render_cadabra([_metric_integrand_monomial(m) for m in matches])
+    target = _render_cadabra([mono for m in matches for mono in _metric_target_monomials(m)])
+
+    lines: list[str] = [
+        decl,
+        "",
+        f"ex := \\int{{ {integrand} }}{{x}};",
+        _METRIC_VARY,
+        _METRIC_DGAMMA,
+        "distribute(ex);",
+        "product_rule(ex);",
+        _METRIC_SUBS,
+        "canonicalise(ex);",
+        r"integrate_by_parts(ex, $\nabla_{\nu}{h_{\rho\sigma}}$);",
+        "product_rule(ex);",
+        "distribute(ex);",
+        _METRIC_SUBS,
+        r"substitute(ex, $\nabla_{\mu}{sg} -> 0$);",
+        r"integrate_by_parts(ex, $h_{\rho\sigma}$);",
+        "product_rule(ex);",
+        "distribute(ex);",
+        _METRIC_SUBS,
+        r"substitute(ex, $\nabla_{\mu}{sg} -> 0$);",
+        r"substitute(ex, $\int{A??}{x} -> A??$);",
+        r"substitute(ex, $h^{\alpha\beta} -> g^{\alpha\gamma} g^{\beta\chi} h_{\gamma\chi}$);",
+        "distribute(ex);",
+        "eliminate_kronecker(ex);",
+        "sort_product(ex);",
+        "canonicalise(ex);",
+        "rename_dummies(ex);",
+        'print("NOETHER_RESULT: " + str(ex))',
+        "",
+        f"target := {target};",
+        "distribute(target);",
+        r"substitute(target, $h^{\alpha\beta} -> g^{\alpha\gamma} g^{\beta\chi} h_{\gamma\chi}$);",
+        "distribute(target);",
+        "eliminate_kronecker(target);",
+        "sort_product(target);",
+        "canonicalise(target);",
+        "rename_dummies(target);",
+        "",
+        "residue := @(ex) - @(target);",
+        "distribute(residue);",
+        "eliminate_kronecker(residue);",
+        "sort_product(residue);",
+        "canonicalise(residue);",
+        "rename_dummies(residue);",
+        "meld(residue);",
+        'print("NOETHER_CHECK: residue=" + str(residue))',
+        'print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))',
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _metric_display_monomials(match: BlockMatch) -> list[tuple[Fraction, str]]:
+    c = match.coeff
+    if match.block == EINSTEIN_HILBERT:
+        return [(c, r"R_{\mu\nu}"), (-c / 2, r"g_{\mu\nu} R")]
+    if match.block == NONMINIMAL:
+        n = match.coupling
+        return [
+            (c, f"{n} R_{{\\mu\\nu}}"),
+            (-c / 2, f"g_{{\\mu\\nu}} {n} R"),
+            (c, f"g_{{\\mu\\nu}}\\Box {n}"),
+            (-c, f"\\nabla_{{\\mu}}\\nabla_{{\\nu}} {n}"),
+        ]
+    if match.block == KINETIC:
+        return [
+            (c, r"\nabla_{\mu}\phi\,\nabla_{\nu}\phi"),
+            (-c / 2, r"g_{\mu\nu}(\nabla\phi)^2"),
+        ]
+    if match.block == POTENTIAL:
+        return [(-c / 2, f"g_{{\\mu\\nu}} {match.coupling}")]
+    raise ValueError(match.block)
+
+
+def compose_metric_display_tex(matches: list[BlockMatch]) -> str:
+    """The composed metric EOM tensor E_{mu nu} = 0, for display."""
+    monomials = [mono for m in matches for mono in _metric_display_monomials(m)]
+    return f"{_render_tex(monomials)} = 0"

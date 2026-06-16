@@ -11,7 +11,7 @@ explicit revision), `living` (expected to change continuously).
 | 01 | `01_RESEARCH.md` | CAS landscape, prior art, kernel selection rationale | draft |
 | 02 | `02_TECH_SPEC.md` | Architecture, stack, NPR schema, adapters, algorithms | draft |
 | 03 | `03_METHODOLOGY.md` | Elicitation, good form, verification ladder, dev process | draft |
-| 04 | `04_EVALS.md` | Five acceptance evaluations with worked solutions | stable; all five plus the stretch tasks (1s, 3s, 3p, 3g), eval 6 (cubic Galileon, first verified Horndeski member), and eval 7 (k-essence / general scalar Horndeski by block decomposition) implemented and kernel-verified |
+| 04 | `04_EVALS.md` | Five acceptance evaluations with worked solutions | stable; all five plus the stretch tasks (1s, 3s, 3p, 3g), eval 6 (cubic Galileon, first verified Horndeski member), eval 7 (k-essence / general scalar Horndeski by block decomposition), and eval 8 (nonminimal scalar-tensor by composition, metric sector and the F(phi)R block, both EOMs) implemented and kernel-verified |
 
 ## Relationships
 

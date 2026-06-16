@@ -3,9 +3,11 @@
 **Status:** stable; all five evals plus the stretch tasks 1s (ADM of GR),
 3s (spectrum around Minkowski), 3p (scalar quadratic action in Cadabra),
 3g (graviton quadratic action in Cadabra), 6 (cubic Galileon scalar EOM,
-the first verified Horndeski member past scalar-tensor), and 7 (k-essence and
-the general scalar Horndeski sector by block decomposition, no per-theory
-template) implemented and kernel-verified.
+the first verified Horndeski member past scalar-tensor), 7 (k-essence and the
+general scalar Horndeski sector by block decomposition, no per-theory template),
+and 8 (nonminimal scalar-tensor by composition, the metric sector and the
+curvature-coupled `F(φ)R` block, both equations of motion) implemented and
+kernel-verified.
 **Implementation (2026-06-12):** all five evals are executable (`evals/`, run
 via `noether eval1` .. `noether eval5`) and kernel-checked against cadabra2
 2.5.15: the eval 1 and 3 variation residues are zero against the targets
@@ -612,12 +614,78 @@ blocks, then peels derivatives with the two-pass `integrate_by_parts`, expands
 `X` and the coupling chain rules in the kernel, and checks the residue. This is
 not a trusted sum of pre-blessed formulas: the kernel verifies the assembled
 action, so a wrong block contribution would leave a nonzero residue. A term that
-matches no block (a nonminimal `F(φ)R`, say) leaves the decomposition partial,
-and the caller falls back to the model-written path or refuses, rather than
-guessing. `evals/test_eval7.py` checks the full composition, the k-essence block
-alone, and the refusal. Curvature-coupled blocks (G4, G5, `F(φ)R`) are not
-registered yet, so the metric sector and the higher Horndeski terms stay out of
-this path for now.
+matches no block (an `X`-dependent curvature coupling `G(φ,X)R`, the Horndeski
+G4 density) leaves the decomposition partial, and the caller falls back to the
+model-written path or refuses, rather than guessing. `evals/test_eval7.py`
+checks the full composition, the k-essence block alone, and the refusal. The
+nonminimal `F(φ)R` term and the metric sector are eval 8; the higher Horndeski
+densities (G4, G5) stay out of this path until they verify.
+
+---
+
+## Eval 8 — nonminimal scalar-tensor gravity by composition
+
+**Capabilities tested:** a curvature-coupled block (`F(φ)R`); the metric
+equation of motion derived compositionally, not only the scalar one; both
+equations of motion of one theory from the same building blocks; refusing the
+X-dependent curvature coupling that is Horndeski G4.
+
+**Status: implemented (eval 8; `evals/eval8_nonminimal.py`,
+`noether/kernels/cadabra/blocks.py`).** This is the same theory as eval 3, the
+nonminimal scalar-tensor action, but derived with no per-theory template. It is
+the first compositional capability that reaches the metric sector, so the
+curvature-coupled `F(φ)R` block and the Einstein-Hilbert block join the scalar
+blocks of eval 7.
+
+### Input
+
+```latex
+S = \int d^4x \, \sqrt{-g}\, \left( F(\phi) R
+    - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi) \right)
+```
+
+User intent: `F(φ)` and `V(φ)` are arbitrary functions of `φ`, vary with respect
+to both `g` and `φ`. Ask: both equations of motion.
+
+### Result (noether-default-v1)
+
+Scalar equation (vary `φ`):
+
+```
+F_φ R + □φ - V_φ = 0
+```
+
+Metric equation (vary `g`):
+
+```
+F R_{μν} - ½g_{μν}FR + g_{μν}□F - ∇_μ∇_νF
+    - ½∇_μφ∇_νφ + ¼g_{μν}(∇φ)² + ½g_{μν}V = 0
+```
+
+### Derivation sketch
+
+Both equations are sums of block contributions. The scalar equation adds the
+nonminimal `F_φ R` (the `φ`-variation of `F(φ)R`, with `R` inert) to the
+canonical `□φ - V_φ`. The metric equation runs the eval-3 metric machinery once
+over the assembled integrand: vary `g^{αβ} → -h^{αβ}` and the Ricci tensor into
+`δΓ`, substitute the connection variation, integrate by parts twice to peel the
+two derivatives off `h`, and lower every `h` to one explicit-`g` convention
+before comparing. Per block: Einstein-Hilbert `R` gives `G_{μν}`, nonminimal
+`F(φ)R` gives `F G_{μν} + g_{μν}□F - ∇_μ∇_νF`, the kinetic term gives the scalar
+stress, and the potential gives `½g_{μν}V`.
+
+### Verification
+
+`decompose_metric` matches each term to a metric block; `assemble_metric_eom_script`
+emits one Cadabra script that varies the real action and residue-checks it
+against a candidate built from the same blocks. The four metric blocks were each
+confirmed against the kernel before wiring: Einstein-Hilbert alone returns the
+Einstein tensor, and `F(φ)R + kinetic + potential` reproduces eval 3's residue.
+`evals/test_eval8.py` runs both equations of motion through `derive_eom`, checks
+the kernel residue is zero for each, and confirms a vacuum action (`R` alone)
+verifies as `G_{μν} = 0`. An X-dependent curvature coupling `G(φ,X)R` (Horndeski
+G4) matches no block and is refused. G4 and G5 stay out of this path until their
+covariant equations of motion verify; they are held rather than added partially.
 
 ---
 
@@ -636,6 +704,7 @@ this path for now.
 | 3g | graviton quadratic action | spin-2 expansion, linearized vacuum Einstein equation | H2 |
 | 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule | H3 |
 | 7 | k-essence / general scalar Horndeski | X-dependent coupling, block decomposition, no per-theory template | H3 |
+| 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and
 an executable spec under `evals/` (machine-checkable: input transcript, expected

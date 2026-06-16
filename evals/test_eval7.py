@@ -69,10 +69,11 @@ class TestDecomposition:
         assert kinds == ["cubic", "kessence", "potential"]
         assert any(m.block == KESSENCE and m.coupling == "K" for m in dec.matches)
 
-    def test_curvature_term_is_not_decomposed(self):
-        # the scalar EOM of a nonminimal F(phi) R term has no registered block;
-        # the decomposition is left partial so the caller refuses, not guesses.
-        lag = parse_lagrangian(r"K(\phi, X) + F(\phi) R")
+    def test_higher_horndeski_term_is_not_decomposed(self):
+        # an X-dependent curvature coupling G(phi, X) R is Horndeski G4, which
+        # has no registered block; the decomposition is left partial so the
+        # caller refuses rather than guesses.
+        lag = parse_lagrangian(r"K(\phi, X) + G(\phi, X) R")
         dec = decompose_scalar(lag, "phi")
         assert not dec.full
         assert len(dec.unmatched) == 1

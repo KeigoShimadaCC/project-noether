@@ -26,9 +26,12 @@ from pydantic import BaseModel, Field
 from noether.kernels.base import Capability, ComputedResult, KernelTask
 from noether.kernels.cadabra.blocks import (
     Decomposition,
+    assemble_metric_eom_script,
     assemble_scalar_eom_script,
     block_summary,
     compose_display_tex,
+    compose_metric_display_tex,
+    decompose_metric,
     decompose_scalar,
 )
 from noether.kernels.cadabra.generate import generate_script
@@ -145,16 +148,27 @@ def _compositional_detail(
 
 
 def _compositional_decomposition(npr: NPR, wrt: str, kind: str) -> Decomposition | None:
-    """Decompose the scalar Lagrangian into building blocks, when the
-    compositional path applies: an EOM for a dynamical scalar field rendered
-    as phi. Returns None when the path does not apply; a partial Decomposition
-    (``full`` False) when some term matches no registered block."""
-    if kind != "eom" or wrt != "phi":
+    """Decompose the Lagrangian into building blocks, when the compositional
+    path applies: an EOM for a dynamical scalar field rendered as phi, or the
+    metric EOM of an action whose scalar (if any) is rendered as phi. Returns
+    None when the path does not apply; a partial Decomposition (``full`` False)
+    when some term matches no registered block.
+
+    The assembled scripts render the scalar as `phi`, so a scalar field under
+    any other name routes to the model path rather than being mislabeled."""
+    if kind != "eom":
         return None
     obj = next((o for o in npr.objects if o.name == wrt), None)
-    if obj is None or obj.kind != "scalar-field":
+    if obj is None:
         return None
-    return decompose_scalar(npr.action.lagrangian, wrt)
+    if obj.kind == "scalar-field" and wrt == "phi":
+        return decompose_scalar(npr.action.lagrangian, wrt)
+    if obj.kind == "metric":
+        scalars = [o.name for o in npr.objects if o.kind == "scalar-field"]
+        if any(s != "phi" for s in scalars):
+            return None
+        return decompose_metric(npr.action.lagrangian, "phi")
+    return None
 
 
 def _verdict(kind: str, checks: dict[str, str]) -> bool:
@@ -203,7 +217,12 @@ def derive_field(
     # rather than guessing at the unmatched term.
     dec = _compositional_decomposition(npr, wrt, kind)
     if dec is not None and dec.full:
-        script = assemble_scalar_eom_script(dec.matches, wrt)
+        if dec.field == "g":
+            script = assemble_metric_eom_script(dec.matches)
+            display_tex = compose_metric_display_tex(dec.matches)
+        else:
+            script = assemble_scalar_eom_script(dec.matches, wrt)
+            display_tex = compose_display_tex(dec.matches, wrt)
         computed = cadabra.run(
             KernelTask(
                 capability=capability,
@@ -214,7 +233,7 @@ def derive_field(
         checks = computed.value.get("checks", {})
         verified = checks.get("residue_zero") == "True"
         detail = _compositional_detail(verified, dec, checks, computed)
-        result_tex = compose_display_tex(dec.matches, wrt) if verified else computed.expression_tex
+        result_tex = display_tex if verified else computed.expression_tex
         source = script
         llm_name, llm_version = "compositional", "blocks-v1"
     else:

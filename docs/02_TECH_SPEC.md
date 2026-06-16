@@ -373,15 +373,19 @@ perturbative expansion (xPert), Young projection.
    `vary` task (equations of motion) for the metric, scalar, and gauge-field
    classes today. The general path is gated by `evals/test_eval_general.py`,
    which checks it reproduces eval 3's two kernel-verified equations of motion
-   end to end. For the scalar `vary` task there is also a compositional path
-   that needs no model: when an additive scalar Lagrangian decomposes fully into
-   registered building blocks (canonical kinetic, potential, cubic Galileon,
-   k-essence `K(phi, X)`; `noether.kernels.cadabra.blocks`), `derive_field`
-   assembles one Cadabra script for the actual action and an independent
-   candidate from the same blocks, and the kernel residue-checks it. This is the
-   non-tailored route to the general scalar Horndeski sector (eval 7): any sum of
+   end to end. The `vary` task also has a compositional path that needs no
+   model: when an additive Lagrangian decomposes fully into registered building
+   blocks, `derive_field` assembles one Cadabra script for the actual action and
+   an independent candidate from the same blocks, and the kernel residue-checks
+   it (`noether.kernels.cadabra.blocks`). The scalar EOM blocks are canonical
+   kinetic, potential, cubic Galileon, k-essence `K(phi, X)`, and the nonminimal
+   `F(phi) R` term (eval 7 and 8); the metric EOM blocks are Einstein-Hilbert,
+   nonminimal `F(phi) R`, kinetic, and potential (eval 8). So the full nonminimal
+   scalar-tensor theory yields both equations of motion compositionally. This is
+   the non-tailored route to the general scalar Horndeski sector: any sum of
    registered blocks verifies without a new template, and an unrecognized term
-   leaves the decomposition partial so the model-written path runs instead. The `perturb` task now runs through the same model-written path:
+   (an `X`-dependent `G4(phi, X) R`, say) leaves the decomposition partial so the
+   model-written path runs instead. The `perturb` task now runs through the same model-written path:
    `derive_perturbation` (and `kind="perturbation"` on the server, MCP, and web
    clients) hands the model one of two scaffolds depending on the field kind:
    `pert_scalar_quadratic` (eval 3p) expands a scalar action to quadratic order,
@@ -457,13 +461,28 @@ operational-definition path). When a term matches no block, the decomposition is
 left partial and `derive_field` falls back to the model-written script path
 rather than guessing.
 
-What still does not verify: the registered blocks are the scalar sector only, so
-curvature-coupled terms (the nonminimal `F(phi) R`, the Horndeski G4 and G5
-densities) and the metric equation of motion of any of these have no block and
-no audited template yet; a model-written script for them will not clear the
-residue check. The `perturb` scaffolds likewise do not expand `X`, so a
-quadratic action for an `X`-dependent coupling is still unverified. The ADM split
-verifies for any metric action, but it is the universal foliation geometry, not
+Composition then reached the metric sector and the first curvature coupling
+(eval 8). The same module decomposes an additive Lagrangian into metric-sector
+blocks (Einstein-Hilbert `R`, nonminimal `F(phi) R`, kinetic, potential) and
+assembles one script for the metric equation of motion, reusing the eval-3
+machinery: vary `g` and the Ricci tensor into `dGamma`, two `integrate_by_parts`
+passes to peel the derivatives off `h`, and lower `h` to one explicit-`g`
+convention before the residue check. So the full nonminimal scalar-tensor theory
+now yields both equations of motion compositionally, with no per-theory
+template, and a vacuum action (`R` alone) verifies as the Einstein tensor. Each
+metric block was confirmed against the kernel before wiring (Einstein-Hilbert
+alone returns `G_{mu nu}`; `F(phi) R` + kinetic + potential reproduces eval 3's
+residue).
+
+What still does not verify: the higher Horndeski densities (an `X`-dependent
+`G4(phi, X) R`, and G5) have no block and no audited template. Their covariant
+equations of motion carry curvature derivatives and the no-Ostrogradski
+counterterms, so they are held out until they residue-check cleanly rather than
+added as a partial path; a term like `G(phi, X) R` matches no block and falls
+back to the model path or is refused. The `perturb` scaffolds likewise do not
+expand `X`, so a quadratic action for an `X`-dependent coupling is still
+unverified. The ADM split verifies for any metric action, but it is the
+universal foliation geometry, not
 a Horndeski-specific Hamiltonian.
 
 ## 7. Provenance bundles

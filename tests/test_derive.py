@@ -73,10 +73,13 @@ class TestCompositionalRouting:
         dec = _compositional_decomposition(build_kessence_npr(resolved=True), "phi", "eom")
         assert dec is not None and dec.full
 
-    def test_metric_field_is_not_compositional(self):
+    def test_kessence_metric_eom_falls_back(self):
+        # k-essence has no metric-sector block yet, so its metric EOM decomposes
+        # only partially and the model path runs rather than guessing.
         from evals.eval7_kessence import build_npr as build_kessence_npr
 
-        assert _compositional_decomposition(build_kessence_npr(resolved=True), "g", "eom") is None
+        dec = _compositional_decomposition(build_kessence_npr(resolved=True), "g", "eom")
+        assert dec is not None and not dec.full
 
     def test_perturbation_is_not_compositional(self):
         from evals.eval7_kessence import build_npr as build_kessence_npr
@@ -84,11 +87,30 @@ class TestCompositionalRouting:
         npr = build_kessence_npr(resolved=True)
         assert _compositional_decomposition(npr, "phi", "perturbation") is None
 
-    def test_curvature_action_decomposes_partially(self):
-        # scalar-tensor F(phi)R does not fully decompose, so the model path runs
-        npr = build_npr(resolved=True)
-        dec = _compositional_decomposition(npr, "phi", "eom")
-        assert dec is not None and not dec.full
+    def test_scalar_tensor_scalar_eom_composes(self):
+        # nonminimal F(phi)R now contributes F_phi R to the scalar EOM, so the
+        # scalar-tensor scalar equation decomposes fully.
+        from evals.eval8_nonminimal import build_npr as build_st_npr
+
+        dec = _compositional_decomposition(build_st_npr(resolved=True), "phi", "eom")
+        assert dec is not None and dec.full
+
+    def test_scalar_tensor_metric_eom_composes(self):
+        # F(phi)R + kinetic + potential is a full metric-sector decomposition.
+        from evals.eval8_nonminimal import build_npr as build_st_npr
+
+        dec = _compositional_decomposition(build_st_npr(resolved=True), "g", "eom")
+        assert dec is not None and dec.full
+
+    def test_g4_curvature_term_stays_partial(self):
+        # an X-dependent curvature coupling G(phi, X) R is Horndeski G4, held out
+        # until it verifies; it matches no block in either sector.
+        from noether.kernels.cadabra.blocks import decompose_metric, decompose_scalar
+        from noether.npr.parse import parse_lagrangian
+
+        lag = parse_lagrangian(r"G(\phi, X) R - V(\phi)")
+        assert not decompose_metric(lag, "phi").full
+        assert not decompose_scalar(lag, "phi").full
 
     def test_strip_fences_removes_markdown(self):
         fenced = "```cadabra\nex := A;\n```"
