@@ -39,6 +39,33 @@ from noether.npr.schema import (
     Task,
 )
 
+_GREEK_SCALARS = {
+    "alpha",
+    "beta",
+    "gamma",
+    "delta",
+    "epsilon",
+    "zeta",
+    "eta",
+    "theta",
+    "iota",
+    "kappa",
+    "lambda",
+    "mu",
+    "nu",
+    "xi",
+    "pi",
+    "rho",
+    "sigma",
+    "tau",
+    "upsilon",
+    "phi",
+    "varphi",
+    "chi",
+    "psi",
+    "omega",
+}
+
 
 @dataclass
 class _SymbolInfo:
@@ -109,6 +136,41 @@ def _classify(info: _SymbolInfo) -> ObjectDecl:
     return ObjectDecl(name=name, kind="scalar-field", role="dynamical", rank=0)
 
 
+def _scalar_tex(name: str) -> str:
+    return f"\\{name}" if name in _GREEK_SCALARS else name
+
+
+def _recognize_kinetic_scalar(
+    objects: list[ObjectDecl], symbols: dict[str, _SymbolInfo]
+) -> str | None:
+    """Reclassify a bare `X` as the convention-named kinetic shorthand.
+
+    `noether-default-v1` names the canonical kinetic scalar X = -1/2
+    nabla_mu phi nabla^mu phi (AGENTS.md section 5). When the action carries
+    exactly one dynamical scalar field and `X` only ever appears as a plain
+    scalar (never indexed, differentiated, or called), treat it as that
+    shorthand of the scalar rather than as an independent dynamical field, so
+    it is not silently offered as something to vary. The reading is still put
+    to the human as `amb-kinetic-X`; this only sets the conservative default.
+    """
+    x = next((o for o in objects if o.name == "X"), None)
+    if x is None or x.kind != "scalar-field":
+        return None
+    info = symbols.get("X")
+    if info is None or info.seen_indexed or info.differentiated or info.seen_func:
+        return None
+    scalars = [o for o in objects if o.kind == "scalar-field" and o.name != "X"]
+    if len(scalars) != 1:
+        return None
+    phi = scalars[0].name
+    tex = _scalar_tex(phi)
+    x.kind = "shorthand"
+    x.role = "shorthand"
+    x.rank = 0
+    x.definition_tex = rf"-\tfrac12 \nabla_\mu {tex} \nabla^\mu {tex}"
+    return phi
+
+
 def _measure_dimension(measure_tex: str) -> int | str | None:
     """Pull the dimension out of a measure like 'd^4x' or 'd^Dx'."""
     toks = tokenize(measure_tex)
@@ -156,6 +218,8 @@ def ingest_action(
             continue
         objects.append(_classify(symbols[name]))
 
+    kinetic_scalar = _recognize_kinetic_scalar(objects, symbols)
+
     vary_candidates = sorted(
         obj.name for obj in objects if obj.kind in ("metric", "scalar-field", "tensor-field")
     )
@@ -192,7 +256,7 @@ def ingest_action(
                     options=["arbitrary-function", "constant"],
                 )
             )
-        if obj.kind == "shorthand" and obj.name != "R":
+        if obj.kind == "shorthand" and obj.name in GEOMETRIC_NAMES and obj.name != "R":
             ambiguities.append(
                 Ambiguity(
                     id=f"amb-composite-{obj.name}",
@@ -204,6 +268,21 @@ def ingest_action(
                     options=[f"{obj.name}-of-metric", "independent-field"],
                 )
             )
+
+    if kinetic_scalar is not None:
+        tex = _scalar_tex(kinetic_scalar)
+        ambiguities.append(
+            Ambiguity(
+                id="amb-kinetic-X",
+                question=(
+                    rf"Is X the canonical kinetic scalar -\tfrac12 \nabla_\mu {tex} "
+                    rf"\nabla^\mu {tex} of {kinetic_scalar} (noether-default-v1), "
+                    "or an independent field?"
+                ),
+                kind="conventional",
+                options=["kinetic-scalar", "independent-field"],
+            )
+        )
 
     connection = ConnectionSpec(type="levi-civita")
     if parsed.connection_annotated:

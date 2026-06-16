@@ -103,6 +103,19 @@ class TestPrimitives:
     def test_function_call(self):
         assert parse_lagrangian(r"F(\phi)") == Func(name="F", args=[Sym(name="phi")])
 
+    def test_subscripted_coupling_name(self):
+        # Horndeski writes its couplings G_2..G_5; a numeric subscript followed
+        # by an argument list is one function with a compound name.
+        phi, x = Sym(name="phi"), Sym(name="X")
+        assert parse_lagrangian(r"G_2(\phi,X)") == Func(name="G_2", args=[phi, x])
+        assert parse_lagrangian(r"G_{4}(\phi,X)") == Func(name="G_4", args=[phi, x])
+
+    def test_subscripted_name_without_args_is_rejected(self):
+        # Without an argument list there is nothing to tell us G_2 is a
+        # function rather than a malformed token, so we refuse rather than guess.
+        with pytest.raises(ParseError):
+            parse_lagrangian(r"G_2 R")
+
     def test_geometric_scalar_vs_plain_symbol(self):
         assert parse_lagrangian(r"R") == tensor("R")  # curvature scalar
         assert parse_lagrangian(r"V") == Sym(name="V")  # generic scalar

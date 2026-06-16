@@ -73,6 +73,49 @@ def _ladder_from_kernel(computed: ComputedResult, verified: bool, detail: str) -
     )
 
 
+def _stderr_tail(stderr: str, *, limit: int = 240) -> str:
+    lines = [ln.strip() for ln in (stderr or "").splitlines() if ln.strip()]
+    tail = " | ".join(lines[-3:])
+    return tail[-limit:] if len(tail) > limit else tail
+
+
+def _result_detail(
+    kind: str, verified: bool, checks: dict[str, str], computed: ComputedResult
+) -> str:
+    """Explain the verdict, and when unverified, say *why*.
+
+    A run can fail to verify two very different ways: the generated script may
+    never reach the kernel's residue check (a script or kernel error), or it
+    may run and report a nonzero residue (the model's candidate disagrees with
+    its own derivation). Collapsing both into one message hides which happened,
+    so we distinguish them and surface the kernel's stderr for the first."""
+    if verified:
+        if kind == "perturbation":
+            return "kernel confirmed the quadratic action reproduces the linearized equation"
+        return "kernel confirmed the variation matches the candidate equation"
+
+    candidate = "quadratic action" if kind == "perturbation" else "candidate equation"
+    if "residue_zero" not in checks:
+        rc = computed.raw.returncode
+        tail = _stderr_tail(computed.raw.stderr)
+        base = (
+            "unverified: the generated script produced no residue check; it did "
+            f"not run to completion (kernel exit {rc})"
+        )
+        return f"{base}: {tail}" if tail else base
+    if checks.get("residue_zero") != "True":
+        return (
+            "unverified: the kernel computed a nonzero residue, so the model's "
+            f"{candidate} does not match its own derivation"
+        )
+    if kind == "perturbation" and checks.get("linearized_eom_match") not in (None, "True"):
+        return (
+            "unverified: the residue vanished but the independent linearized-EOM "
+            "cross-check did not match"
+        )
+    return "unverified: kernel did not confirm the result"
+
+
 def _verdict(kind: str, checks: dict[str, str]) -> bool:
     """The kernel sets the verdict, not the model. For an EOM, the residue
     against the independent candidate must vanish. For a quadratic-action
@@ -121,18 +164,7 @@ def derive_field(
     )
     checks = computed.value.get("checks", {})
     verified = _verdict(kind, checks)
-    if kind == "perturbation":
-        detail = (
-            "kernel confirmed the quadratic action reproduces the linearized equation"
-            if verified
-            else "kernel did not confirm the expansion; surfaced as unverified"
-        )
-    else:
-        detail = (
-            "kernel confirmed the variation matches the candidate equation"
-            if verified
-            else "kernel did not confirm the result; surfaced as unverified"
-        )
+    detail = _result_detail(kind, verified, checks, computed)
 
     prefix = "perturb" if kind == "perturbation" else "vary"
     result_id = "{}-{}-{}".format(

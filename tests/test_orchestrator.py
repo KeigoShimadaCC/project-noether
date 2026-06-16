@@ -109,3 +109,28 @@ class TestResolutionPropagation:
         plan = session.plan()
         vary_steps = [s for s in plan.steps if s.payload.get("with_respect_to")]
         assert vary_steps and vary_steps[0].payload["with_respect_to"] == ["phi"]
+
+
+class TestKineticScalarOverride:
+    """If the human says X is an independent field, the convention default
+    (kinetic shorthand) is overridden and X becomes dynamical again."""
+
+    @staticmethod
+    def _session() -> Session:
+        from noether.orchestrator.ingest import ingest_action
+
+        npr = ingest_action(r"d^4x \sqrt{-g}", r"G_2(\phi,X) + G_4(\phi,X) R").npr
+        session = Session(session_id="kx")
+        session.ingest(npr)
+        return session
+
+    def test_default_keeps_x_as_shorthand(self):
+        session = self._session()
+        assert session.npr.object_named("X").kind == "shorthand"
+
+    def test_independent_field_override_reclassifies_x(self):
+        session = self._session()
+        session.resolve("amb-kinetic-X", "independent-field")
+        x = session.npr.object_named("X")
+        assert x.kind == "scalar-field" and x.role == "dynamical"
+        assert x.definition_tex is None

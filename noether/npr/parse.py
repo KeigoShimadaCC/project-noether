@@ -211,6 +211,12 @@ class _Parser:
         return True
 
     @staticmethod
+    def _is_name_suffix(group: list[Token]) -> bool:
+        """A '_'-subscript group that can be part of a compound function name,
+        e.g. the '2' in the Horndeski coupling G_2(\\phi, X)."""
+        return bool(group) and all(t.kind in ("num", "name") for t in group)
+
+    @staticmethod
     def _group_indices(group: list[Token], variance: str) -> list[Index]:
         out: list[Index] = []
         for tok in group:
@@ -356,7 +362,19 @@ class _Parser:
             self._next()
             group = self._read_group_tokens()
             if not self._group_is_indexlike(group):
-                # e.g. '^2' is a power, not an index group: rewind for parse_factor.
+                # A '_'-subscript that is not an index can name a coupling
+                # function: G_2(\phi, X) is one function with a compound name,
+                # recognised only when an argument list follows. Anything else
+                # (e.g. a '^2' power) is rewound for the factor parser.
+                if (
+                    tok.value == "_"
+                    and not indices
+                    and self._is_name_suffix(group)
+                    and self._at_punct("(")
+                ):
+                    suffix = "".join(t.value for t in group)
+                    args = self._parse_arg_list()
+                    return Func(name=f"{name}_{suffix}", args=args)
                 self.pos = save
                 break
             indices.extend(self._group_indices(group, variance))

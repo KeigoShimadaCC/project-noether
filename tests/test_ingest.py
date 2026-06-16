@@ -95,6 +95,46 @@ class TestAmbiguityShape:
         assert ids == {"amb-conventions", "amb-vary-wrt"}
 
 
+class TestKineticScalarShorthand:
+    """A bare X is the convention-named kinetic shorthand of the scalar, not an
+    independent field to vary (AGENTS.md section 5). The reading is still put to
+    the human as amb-kinetic-X rather than silently assumed."""
+
+    HORNDESKI = (
+        r"d^4x \sqrt{-g}",
+        r"G_2(\phi,X) + G_3(\phi,X)\Box\phi + G_4(\phi,X) R "
+        r"- \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi)",
+    )
+
+    def test_x_is_a_shorthand_not_a_dynamical_field(self):
+        npr = ingest_action(*self.HORNDESKI).npr
+        x = npr.object_named("X")
+        assert x.kind == "shorthand" and x.role == "shorthand"
+        assert x.definition_tex and "nabla" in x.definition_tex
+
+    def test_x_is_not_offered_as_a_vary_candidate(self):
+        npr = ingest_action(*self.HORNDESKI).npr
+        assert "X" not in npr.task.with_respect_to
+        assert npr.task.with_respect_to == ["g", "phi"]
+
+    def test_kinetic_question_raised_and_no_curvature_question_for_x(self):
+        ids = {a.id for a in ingest_action(*self.HORNDESKI).npr.ambiguities}
+        assert "amb-kinetic-X" in ids
+        assert "amb-composite-X" not in ids
+
+    def test_subscripted_couplings_are_functions(self):
+        kinds = {o.name: o.kind for o in ingest_action(*self.HORNDESKI).npr.objects}
+        assert kinds["G_2"] == "function"
+        assert kinds["G_3"] == "function"
+        assert kinds["G_4"] == "function"
+
+    def test_x_without_a_scalar_stays_independent(self):
+        # No dynamical scalar to anchor the kinetic reading: do not reclassify.
+        npr = ingest_action(r"d^4x \sqrt{-g}", r"G(X) R").npr
+        assert npr.object_named("X").kind == "scalar-field"
+        assert "amb-kinetic-X" not in {a.id for a in npr.ambiguities}
+
+
 class TestResolutionUnblocks:
     """Answering every question makes the draft plannable: the gate is the
     ledger, not a hard-coded refusal."""

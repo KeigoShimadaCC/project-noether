@@ -403,6 +403,36 @@ perturbative expansion (xPert), Young projection.
    `verified` is set from that suite. Any well-posed action carrying a metric is
    accepted; one with no metric is refused.
 
+### 6.1 Representation boundaries (Horndeski as the worked stress case)
+
+Running a Horndeski action through the pipeline exposed where ingest stops
+guessing and where the verified path runs out of scaffold. Two fixes landed in
+ingest and the parser, and one honesty fix in `derive_field`:
+
+- The parser reads subscripted coupling names, so the standard `G_2(\phi,X)`
+  through `G_5(\phi,X)` parse as functions with compound names rather than
+  failing on the `_`. A subscripted name with no argument list is still
+  refused, because nothing then says it is a function.
+- Ingest treats a bare `X` as the convention-named kinetic shorthand
+  `X = -1/2 nabla_mu phi nabla^mu phi` (section 5 of AGENTS.md) when the action
+  carries exactly one dynamical scalar and `X` only ever appears as a plain
+  scalar. So `X` is no longer offered as an independent field to vary. The
+  reading is still put to the human as `amb-kinetic-X`; answering
+  "independent-field" reclassifies `X` back to a dynamical scalar. With no
+  scalar to anchor it, `X` is left alone rather than guessed.
+- An unverified run now says which way it failed: a script that never reached
+  the kernel's residue check (a script or kernel error, with the stderr tail)
+  reads differently from one that ran and found a nonzero residue.
+
+What still does not verify: the `vary` and `perturb` scaffolds do not expand
+`X` back into `phi` derivatives inside the kernel, so an EOM or quadratic action
+for a genuinely `X`-dependent coupling comes back unverified rather than
+trusted. There is no audited Horndeski template yet, so a full Horndeski EOM
+written by the model will not clear the residue check. The ADM split still
+verifies for any metric action, but it is the universal foliation geometry, not
+a Horndeski-specific Hamiltonian. Closing these is scaffold work, tracked as the
+next eval (a verified Galileon member).
+
 ## 7. Provenance bundles
 
 Every result is a directory (and a DB row pointing at it):

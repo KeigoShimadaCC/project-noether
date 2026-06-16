@@ -150,8 +150,10 @@ kernel canonicalizes the difference and prints whether the residue is zero. That
 residue check is a V3-style equality verified by computation, so `derive_field`
 labels a result verified only when the kernel reports `residue_zero=True`. A
 script that cannot make the residue vanish yields an unverified result, shown as
-such and never as truth. The model writes a script; the kernel decides whether
-the answer holds. This covers the `vary` task for the metric, scalar, and
+such and never as truth, and the detail says which way it failed: a script that
+never reached the residue check (a script or kernel error, reported with the
+stderr tail) reads differently from one that ran and found a nonzero residue.
+The model writes a script; the kernel decides whether the answer holds. This covers the `vary` task for the metric, scalar, and
 gauge-field classes. The `perturb` task now runs through the same model-written
 path for scalar fields and the metric: `derive_perturbation` (reachable as
 `kind="perturbation"` on the server, MCP, and web clients) hands the model the

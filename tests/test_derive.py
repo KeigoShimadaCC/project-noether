@@ -10,6 +10,7 @@ import pytest
 
 from evals.eval1s_adm import build_npr as build_adm_npr
 from evals.eval3_scalar_tensor import build_npr
+from noether.kernels.base import ComputedResult, KernelRawOutput, KernelScript
 from noether.kernels.cadabra import CadabraAdapter, templates
 from noether.kernels.cadabra.generate import (
     build_generation_prompt,
@@ -21,6 +22,7 @@ from noether.llm.base import StubLLMAdapter
 from noether.npr import NOETHER_DEFAULT_V1, NPR, Action, Geometry, ObjectDecl, Task
 from noether.npr.ast import tensor
 from noether.orchestrator.derive import (
+    _result_detail,
     derive_adm,
     derive_eom,
     derive_field,
@@ -64,6 +66,48 @@ class TestPromptGeneration:
         assert generated.source.startswith("ex := A;")
         assert generated.llm_name == "stub"
         assert generated.variation_key == "vary-metric"
+
+
+def _computed(checks: dict[str, str], *, stderr: str = "", returncode: int = 0) -> ComputedResult:
+    return ComputedResult(
+        kernel_name="cadabra",
+        kernel_version="test",
+        script=KernelScript(kernel_name="cadabra", language="cadabra", source="ex := A;"),
+        raw=KernelRawOutput(stdout="", stderr=stderr, returncode=returncode),
+        value={"checks": checks},
+    )
+
+
+class TestUnverifiedReason:
+    """An unverified run must say *why*: a script that never reached the
+    kernel's residue check is a different failure from one that ran and found a
+    nonzero residue. Collapsing them hides which happened."""
+
+    def test_no_check_emitted_reports_script_failure_and_stderr(self):
+        computed = _computed({}, stderr="RuntimeError: boom in canonicalise", returncode=1)
+        detail = _result_detail("eom", False, {}, computed)
+        assert "no residue check" in detail
+        assert "kernel exit 1" in detail
+        assert "boom in canonicalise" in detail
+
+    def test_nonzero_residue_reports_mismatch(self):
+        computed = _computed({"residue_zero": "False"})
+        detail = _result_detail("eom", False, {"residue_zero": "False"}, computed)
+        assert "nonzero residue" in detail
+        assert "candidate equation" in detail
+
+    def test_perturbation_nonzero_residue_names_quadratic_action(self):
+        checks = {"residue_zero": "False"}
+        detail = _result_detail("perturbation", False, checks, _computed(checks))
+        assert "quadratic action" in detail
+
+    def test_perturbation_linearized_mismatch_distinguished(self):
+        checks = {"residue_zero": "True", "linearized_eom_match": "False"}
+        detail = _result_detail("perturbation", False, checks, _computed(checks))
+        assert "linearized-EOM" in detail
+
+    def test_verified_message_unchanged(self):
+        assert "matches the candidate" in _result_detail("eom", True, {}, _computed({}))
 
 
 class TestNoGuessingGate:

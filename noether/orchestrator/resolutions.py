@@ -25,3 +25,12 @@ def propagate_resolution(npr: NPR, ambiguity: Ambiguity) -> None:
         fields = [t for t in tokens if t in declared]
         if fields and npr.task.type == "vary":
             npr.task.with_respect_to = fields
+    if ambiguity.id == "amb-kinetic-X" and ambiguity.resolution == "independent-field":
+        # The human overrode the convention default: X is not the kinetic
+        # shorthand of the scalar but a field in its own right.
+        for obj in npr.objects:
+            if obj.name == "X":
+                obj.kind = "scalar-field"
+                obj.role = "dynamical"
+                obj.definition_tex = None
+                break
