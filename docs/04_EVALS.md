@@ -1,8 +1,10 @@
 # 04 — Evaluation suite: five action-to-result pairs
 
 **Status:** stable; all five evals plus the stretch tasks 1s (ADM of GR),
-3s (spectrum around Minkowski), 3p (scalar quadratic action in Cadabra), and
-3g (graviton quadratic action in Cadabra) implemented and kernel-verified.
+3s (spectrum around Minkowski), 3p (scalar quadratic action in Cadabra),
+3g (graviton quadratic action in Cadabra), and 6 (cubic Galileon scalar EOM,
+the first verified Horndeski member past scalar-tensor) implemented and
+kernel-verified.
 **Implementation (2026-06-12):** all five evals are executable (`evals/`, run
 via `noether eval1` .. `noether eval5`) and kernel-checked against cadabra2
 2.5.15: the eval 1 and 3 variation residues are zero against the targets
@@ -499,6 +501,58 @@ field equations; regression against the published Lovelock literature form.
 
 ---
 
+## Eval 6 — Cubic Galileon scalar sector (Horndeski G3)
+
+**Capabilities tested:** a coupling function multiplying `□φ`; variation that
+splits `δ(K□φ)`; a second derivative peeled off the test field by a two-pass
+integration by parts; the coupling chain rule when `□` lands on `K`.
+
+**Status: implemented (eval 6; `evals/eval6_cubic_galileon.py`, template
+`eom_cubic_galileon_scalar`).** This is the Horndeski G3 term `K(φ)□φ` added to a
+canonical scalar, scoped to the scalar field equation. It is the first verified
+member past the scalar-tensor sector of eval 3, and the action that motivated
+the fidelity pass on `X` and subscripted couplings (see `docs/02_TECH_SPEC.md`
+section 6.1).
+
+### Input
+
+```latex
+S = \int d^4x \, \sqrt{-g}\, \left( -\tfrac12 \nabla_\mu\phi \nabla^\mu\phi
+    - V(\phi) + K(\phi)\,\Box\phi \right)
+```
+
+User intent: `K(φ)` and `V(φ)` are arbitrary functions of `φ`, vary with respect
+to `φ`. Ask: the scalar equation of motion.
+
+### Result (noether-default-v1)
+
+```
+(1 + 2K'(φ))\,□φ + K''(φ)\,∇_μφ∇^μφ - V'(φ) = 0
+```
+
+### Derivation sketch
+
+The canonical sector gives `□φ - V'`. The cubic term carries the new structure.
+Varying `K(φ)□φ` splits by the product rule into `K'(φ)δφ □φ + K □(δφ)`. The
+second piece has two covariant derivatives on `δφ`; integrating by parts twice
+moves both onto `K`, leaving `(□K)δφ`. The chain rule expands the d'Alembertian
+of the coupling, `□K = ∇_μ(K'∇^μφ) = K''∇_μφ∇^μφ + K'□φ`. Summing the two
+pieces, the cubic term contributes `2K'□φ + K''(∇φ)²`, the braiding that adds to
+the canonical `□φ - V'`.
+
+### Verification
+
+The audited Cadabra scaffold derives the variation, peels the second derivative
+with a two-pass `integrate_by_parts` (seeded first on `∇_β(δφ)` to strip the
+outer derivative, then on `δφ`), substitutes the coupling chain rule
+`∇_μK → K'∇_μφ` and `∇_μK' → K''∇_μφ`, and checks the residue against the
+independently stated target above. `residue_zero` is the kernel's verdict.
+`evals/test_eval6.py` runs both the frozen template and the model-written path
+(model stubbed to the audited script) end to end. The metric sector of the
+cubic theory has no audited scaffold yet, so this eval is scoped to `φ`.
+
+---
+
 ## Summary matrix
 
 | Eval | Theory class | Distinctive demand | Horizon gate |
@@ -512,6 +566,7 @@ field equations; regression against the published Lovelock literature form.
 | 3s | spectrum around Minkowski | perturbation, gauge, kinetic diagonalization | H2 |
 | 3p | scalar quadratic action | symbolic quadratic expansion on a general background | H2 |
 | 3g | graviton quadratic action | spin-2 expansion, linearized vacuum Einstein equation | H2 |
+| 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule | H3 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and
 an executable spec under `evals/` (machine-checkable: input transcript, expected

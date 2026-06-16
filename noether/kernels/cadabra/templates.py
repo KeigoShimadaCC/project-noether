@@ -5,9 +5,10 @@ pinned kernel version (docs/02_TECH_SPEC.md section 5). The LLM never writes
 kernel scripts character by character in production; it parameterizes these.
 
 Status: all registered templates FROZEN (evals 1-5 golden-tested against
-cadabra2 2.5.15 on 2026-06-12; pert_scalar_quadratic added 2026-06-13 and
-pert_metric_quadratic added 2026-06-15, same kernel; see
-tests/test_cadabra_adapter.py and evals/test_eval3g.py).
+cadabra2 2.5.15 on 2026-06-12; pert_scalar_quadratic added 2026-06-13,
+pert_metric_quadratic added 2026-06-15, and eom_cubic_galileon_scalar (eval 6)
+added 2026-06-16, same kernel; see tests/test_cadabra_adapter.py,
+evals/test_eval3g.py, and evals/test_eval6.py).
 """
 
 _TEMPLATES: dict[str, str] = {}
@@ -925,5 +926,90 @@ cross := @(ex) - @(target_ricci);
 distribute(cross);
 finalize(cross);
 print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
+""",
+)
+
+# ---------------------------------------------------------------------------
+# Eval 6: cubic Galileon scalar sector (the Horndeski G3 term), vary phi.
+#   S = \int d^4x \sqrt{-g} ( -1/2 (nabla phi)^2 - V(phi) + K(phi) box phi )
+# The new mechanics over eval 3's scalar template are the box-phi coupling:
+#   - vary() splits K box phi into (delta K) box phi + K box(delta phi);
+#   - the second piece carries two derivatives on dphi, peeled by a two-pass
+#     integrate_by_parts (first seeded on \nabla_{\beta}{dphi} to strip the
+#     outer derivative, then on dphi), exactly the idiom the metric
+#     perturbation scaffold uses;
+#   - the coupling chain rule \nabla_{\mu}{K} -> Kp \nabla_{\mu}{phi} and
+#     \nabla_{\mu}{Kp} -> Kpp \nabla_{\mu}{phi} reintroduces phi-derivatives
+#     when the box lands on K.
+# Residue target (noether-default-v1):
+#   delta S / delta phi = sg ( (1 + 2 K') box phi + K'' (nabla phi)^2 - V' ).
+# So the cubic term contributes the braiding 2 K' box phi + K'' (nabla phi)^2.
+# ---------------------------------------------------------------------------
+
+register(
+    "eom_cubic_galileon_scalar",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\nabla{#}::Derivative.
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+sg::LaTeXForm("\sqrt{-g}").
+{K, Kp, Kpp, V, Vp, \phi, dphi}::Depends(\nabla{#}).
+
+ex := \int{ - 1/2 sg g^{\alpha\beta} \nabla_{\alpha}{\phi} \nabla_{\beta}{\phi} - sg V + sg K g^{\alpha\beta} \nabla_{\alpha}{\nabla_{\beta}{\phi}} }{x};
+vary(ex, $\phi -> dphi, V -> Vp dphi, K -> Kp dphi$);
+distribute(ex);
+product_rule(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+canonicalise(ex);
+
+# First pass: strip the outer derivative off the cubic term's box(dphi).
+integrate_by_parts(ex, $\nabla_{\beta}{dphi}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+substitute(ex, $\nabla_{\mu}{K} -> Kp \nabla_{\mu}{\phi}$);
+canonicalise(ex);
+
+# Second pass: strip the remaining derivative off dphi (kinetic and cubic).
+integrate_by_parts(ex, $dphi$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+substitute(ex, $\nabla_{\mu}{Kp} -> Kpp \nabla_{\mu}{\phi}$);
+substitute(ex, $\nabla_{\mu}{K} -> Kp \nabla_{\mu}{\phi}$);
+substitute(ex, $\int{A??}{x} -> A??$);
+eliminate_kronecker(ex);
+sort_product(ex);
+canonicalise(ex);
+rename_dummies(ex);
+print("NOETHER_RESULT: " + str(ex))
+
+# target: sg ( box phi + 2 Kp box phi + Kpp (nabla phi)^2 - Vp ) dphi
+target := sg g^{\alpha\beta} \nabla_{\alpha}{\nabla_{\beta}{\phi}} dphi + 2 sg Kp g^{\alpha\beta} \nabla_{\alpha}{\nabla_{\beta}{\phi}} dphi + sg Kpp g^{\alpha\beta} \nabla_{\alpha}{\phi} \nabla_{\beta}{\phi} dphi - sg Vp dphi;
+distribute(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+
+residue := @(ex) - @(target);
+distribute(residue);
+eliminate_kronecker(residue);
+sort_product(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: residue=" + str(residue))
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
 """,
 )

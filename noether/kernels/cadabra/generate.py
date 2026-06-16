@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 from noether.kernels.cadabra import templates
 from noether.llm.base import LLMAdapter
+from noether.npr.ast import Deriv, Expr, Func, Pow, Prod, Sum, Sym
 from noether.npr.schema import NPR
 
 # One golden template per derivation capability, used as the worked example in
@@ -30,10 +31,48 @@ from noether.npr.schema import NPR
 _EXAMPLE_TEMPLATE: dict[str, str] = {
     "vary-metric": "eval3_scalar_tensor_metric",
     "vary-scalar": "eval3_scalar_tensor_scalar",
+    "vary-scalar-cubic": "eom_cubic_galileon_scalar",
     "vary-gauge": "eval4_maxwell",
     "perturb-scalar": "pert_scalar_quadratic",
     "perturb-metric": "pert_metric_quadratic",
 }
+
+
+def _is_box_of(expr: Expr, name: str) -> bool:
+    """True for a second covariant derivative of the scalar `name`, i.e. the
+    box-phi structure nabla(nabla(phi)) the parser builds for \\Box\\phi."""
+    return (
+        isinstance(expr, Deriv)
+        and expr.op == "covariant"
+        and isinstance(expr.expr, Deriv)
+        and expr.expr.op == "covariant"
+        and isinstance(expr.expr.expr, Sym)
+        and expr.expr.expr.name == name
+    )
+
+
+def _has_box_coupling(expr: Expr, name: str) -> bool:
+    """True if a coupling function multiplies box(`name`) in some product, the
+    Horndeski G3 (cubic Galileon) structure that needs the two-pass IBP and
+    coupling chain rule of the eom_cubic_galileon_scalar scaffold."""
+    if isinstance(expr, Prod):
+        has_func = any(isinstance(f, Func) for f in expr.factors)
+        has_box = any(_is_box_of(f, name) for f in expr.factors)
+        if has_func and has_box:
+            return True
+    children: tuple[Expr, ...] = ()
+    if isinstance(expr, Sum):
+        children = tuple(expr.terms)
+    elif isinstance(expr, Prod):
+        children = tuple(expr.factors)
+    elif isinstance(expr, Pow):
+        children = (expr.base,)
+    elif isinstance(expr, Deriv):
+        children = (expr.expr,)
+    elif isinstance(expr, Func):
+        children = tuple(expr.args)
+    return any(_has_box_coupling(c, name) for c in children)
+
 
 CADABRA_CONTRACT = r"""You are a Cadabra2 scripting backend for Noether, a symbolic-physics tool.
 Your ONLY output is a complete Cadabra2 script. No prose, no markdown fences.
@@ -141,6 +180,8 @@ def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
     if obj.kind == "metric":
         return "vary-metric"
     if obj.kind == "scalar-field":
+        if _has_box_coupling(npr.action.lagrangian, wrt):
+            return "vary-scalar-cubic"
         return "vary-scalar"
     if obj.kind == "tensor-field":
         return "vary-gauge"

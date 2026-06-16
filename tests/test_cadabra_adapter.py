@@ -53,3 +53,20 @@ class TestGoldenEval1:
         assert result.value["checks"].get("residue_zero") == "True", (
             f"derivation residue nonzero:\n{result.raw.stdout}"
         )
+
+
+@requires_cadabra
+@pytest.mark.kernel_cadabra
+class TestGoldenCubicGalileon:
+    def test_cubic_galileon_scalar_residue_zero(self):
+        adapter = CadabraAdapter()
+        task = KernelTask(
+            capability=Capability.VARY,
+            description="cubic Galileon scalar variation",
+            payload={"template": "eom_cubic_galileon_scalar"},
+        )
+        result = adapter.run(task)
+        assert result.raw.returncode == 0, result.raw.stderr
+        assert result.value["checks"].get("residue_zero") == "True", (
+            f"derivation residue nonzero:\n{result.raw.stdout}"
+        )

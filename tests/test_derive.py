@@ -54,6 +54,16 @@ class TestPromptGeneration:
         assert templates.get("eval3_scalar_tensor_metric") in metric_prompt
         assert templates.get("eval3_scalar_tensor_scalar") in scalar_prompt
 
+    def test_box_coupling_routes_scalar_to_cubic_galileon_example(self):
+        from evals.eval6_cubic_galileon import build_npr as build_galileon_npr
+
+        npr = build_galileon_npr(resolved=True)
+        _, scalar_prompt = build_generation_prompt(npr, "phi")
+        # the K(phi) box phi term routes to the audited cubic scaffold, and not
+        # the plain scalar-tensor example, which has no double-IBP idiom
+        assert templates.get("eom_cubic_galileon_scalar") in scalar_prompt
+        assert templates.get("eval3_scalar_tensor_scalar") not in scalar_prompt
+
     def test_strip_fences_removes_markdown(self):
         fenced = "```cadabra\nex := A;\n```"
         assert strip_fences(fenced) == "ex := A;"

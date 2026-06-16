@@ -109,8 +109,9 @@ noether/             Python package
                      `noether elicit`, `noether serve`, `noether mcp`,
                      `noether eval{1..5}`, `noether eval1s` (ADM of GR),
                      `noether eval3s` (Minkowski spectrum)
-evals/               Executable evals 1-5, 1s, 3s, 3p, 3g + a general-path eval
-                     (test_eval_general) + registry + pytest gates
+evals/               Executable evals 1-5, 1s, 3s, 3p, 3g, 6 (cubic Galileon)
+                     + a general-path eval (test_eval_general) + registry +
+                     pytest gates
 tests/               Unit and adapter tests (cadabra golden test included)
 frontend/            Web client (Next.js + KaTeX) over the HTTP session API;
                      /api/* proxied to `noether serve`, no client-side physics
@@ -120,7 +121,11 @@ pyproject.toml       Package, deps, ruff, pytest config
 The general derivation path (model writes a Cadabra script, kernel verifies it
 through an in-script residue check) now serves arbitrary well-posed actions for
 the `vary` task across the metric, scalar, and gauge-field classes; see
-`docs/02_TECH_SPEC.md` section 6, item 7. The `perturb` task runs through the
+`docs/02_TECH_SPEC.md` section 6, item 7. A scalar action with a `box`-coupling
+(the Horndeski G3 term `K(phi) box phi`) routes to the audited
+`eom_cubic_galileon_scalar` scaffold (eval 6), the first verified member past
+scalar-tensor; see `docs/02_TECH_SPEC.md` section 6.1 for the representation
+boundaries this exposed. The `perturb` task runs through the
 same path for scalar fields and the metric: `derive_perturbation`, reachable as
 `kind="perturbation"` on the server, MCP, and web clients, drives the frozen
 `pert_scalar_quadratic` scaffold (eval 3p) for scalars and

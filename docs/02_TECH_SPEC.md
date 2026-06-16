@@ -424,14 +424,22 @@ ingest and the parser, and one honesty fix in `derive_field`:
   the kernel's residue check (a script or kernel error, with the stderr tail)
   reads differently from one that ran and found a nonzero residue.
 
+The first Horndeski member past scalar-tensor now verifies: the cubic Galileon
+scalar sector `S = \int d^4x \sqrt{-g}(-1/2 (nabla phi)^2 - V + K(phi) box phi)`,
+template `eom_cubic_galileon_scalar` (eval 6). The new mechanics over eval 3 are
+the `box phi` coupling: variation splits `K box phi`, a two-pass
+`integrate_by_parts` peels the second derivative off the test field, and the
+coupling chain rule `nabla K -> K' nabla phi` reintroduces `phi`-derivatives when
+`box` lands on `K`. `generate.py` routes a scalar action with a `box`-coupling to
+this scaffold instead of the plain scalar example.
+
 What still does not verify: the `vary` and `perturb` scaffolds do not expand
 `X` back into `phi` derivatives inside the kernel, so an EOM or quadratic action
-for a genuinely `X`-dependent coupling comes back unverified rather than
-trusted. There is no audited Horndeski template yet, so a full Horndeski EOM
-written by the model will not clear the residue check. The ADM split still
-verifies for any metric action, but it is the universal foliation geometry, not
-a Horndeski-specific Hamiltonian. Closing these is scaffold work, tracked as the
-next eval (a verified Galileon member).
+for a genuinely `X`-dependent coupling (`K(phi, X)`) comes back unverified rather
+than trusted. Higher Horndeski sectors (G4, G5) and the metric EOM of the cubic
+theory have no audited template yet, so a model-written script for them will not
+clear the residue check. The ADM split still verifies for any metric action, but
+it is the universal foliation geometry, not a Horndeski-specific Hamiltonian.
 
 ## 7. Provenance bundles
 
