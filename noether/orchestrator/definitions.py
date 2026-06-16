@@ -27,6 +27,7 @@ derivatives vanish. Symbols already declared are never re-proposed.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import combinations
 
 from noether.npr.schema import NPR, ObjectDecl
 
@@ -114,4 +115,29 @@ def propose_definitions(npr: NPR) -> list[DefinitionProposal]:
                     )
                 )
                 existing.add(second)
+        # Mixed second derivatives, e.g. K_{X phi} for a coupling K(phi, X).
+        # These appear in equations of motion of X-dependent couplings (the
+        # Horndeski G2 term K(phi, X)), where varying brings down one
+        # derivative in each argument.
+        for arg_a, arg_b in combinations(obj.args, 2):
+            mixed = f"{obj.name}_{arg_a}{arg_b}"
+            if mixed in existing:
+                continue
+            a_tex, b_tex = _sym(arg_a), _sym(arg_b)
+            proposals.append(
+                DefinitionProposal(
+                    id=f"def-{obj.name}-{arg_a}{arg_b}",
+                    symbol=mixed,
+                    symbol_tex=f"{f_tex}_{{{a_tex} {b_tex}}}",
+                    meaning_tex=(
+                        f"\\frac{{\\partial^2 {f_tex}}}{{\\partial {a_tex} \\partial {b_tex}}}"
+                    ),
+                    rationale=(
+                        f"notation for the mixed second derivative of {f_tex} in "
+                        f"{a_tex} and {b_tex}, which appears in the equation of motion "
+                        "of an X-dependent coupling"
+                    ),
+                )
+            )
+            existing.add(mixed)
     return proposals

@@ -77,10 +77,12 @@ docs/                Design and research documents (00 through 04)
 noether/             Python package
   npr/               Problem representation: conventions, AST, schema, LaTeX,
                      validation, and the LaTeX action parser (parse.py)
-  kernels/           Adapters: base contract, cadabra/ (subprocess; runs both
-                     frozen golden templates and inline LLM-generated scripts,
-                     generate.py parameterizes an audited scaffold for arbitrary
-                     actions), sympy_kernel/; versions.py pins kernel versions
+  kernels/           Adapters: base contract, cadabra/ (subprocess; runs frozen
+                     golden templates, inline LLM-generated scripts via
+                     generate.py, and blocks.py, which decomposes an additive
+                     scalar action into building blocks and assembles one script
+                     the kernel residue-checks, no per-theory template),
+                     sympy_kernel/; versions.py pins kernel versions
   llm/               LLM adapters behind one interface: ambient-auth CLI
                      subprocess (auto-detects codex/claude/gemini/droid; no API
                      key) plus an in-process stub for tests
@@ -109,7 +111,8 @@ noether/             Python package
                      `noether elicit`, `noether serve`, `noether mcp`,
                      `noether eval{1..5}`, `noether eval1s` (ADM of GR),
                      `noether eval3s` (Minkowski spectrum)
-evals/               Executable evals 1-5, 1s, 3s, 3p, 3g, 6 (cubic Galileon)
+evals/               Executable evals 1-5, 1s, 3s, 3p, 3g, 6 (cubic Galileon),
+                     7 (k-essence / general scalar Horndeski by composition)
                      + a general-path eval (test_eval_general) + registry +
                      pytest gates
 tests/               Unit and adapter tests (cadabra golden test included)
@@ -125,7 +128,15 @@ the `vary` task across the metric, scalar, and gauge-field classes; see
 (the Horndeski G3 term `K(phi) box phi`) routes to the audited
 `eom_cubic_galileon_scalar` scaffold (eval 6), the first verified member past
 scalar-tensor; see `docs/02_TECH_SPEC.md` section 6.1 for the representation
-boundaries this exposed. The `perturb` task runs through the
+boundaries this exposed. The scalar `vary` task also has a compositional path
+that needs no model: when an additive scalar Lagrangian decomposes fully into
+registered building blocks (canonical kinetic, potential, cubic Galileon,
+k-essence `K(phi, X)`; `noether/kernels/cadabra/blocks.py`), `derive_field`
+assembles one script for the real action plus an independent candidate from the
+same blocks, and the kernel residue-checks it. That is the non-tailored route to
+the general scalar Horndeski sector (eval 7); it expands `X` to its primitive in
+the kernel and collapses it back for display, and refuses (falls back to the
+model path) on any term that matches no block. The `perturb` task runs through the
 same path for scalar fields and the metric: `derive_perturbation`, reachable as
 `kind="perturbation"` on the server, MCP, and web clients, drives the frozen
 `pert_scalar_quadratic` scaffold (eval 3p) for scalars and

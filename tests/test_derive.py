@@ -22,6 +22,7 @@ from noether.llm.base import StubLLMAdapter
 from noether.npr import NOETHER_DEFAULT_V1, NPR, Action, Geometry, ObjectDecl, Task
 from noether.npr.ast import tensor
 from noether.orchestrator.derive import (
+    _compositional_decomposition,
     _result_detail,
     derive_adm,
     derive_eom,
@@ -63,6 +64,31 @@ class TestPromptGeneration:
         # the plain scalar-tensor example, which has no double-IBP idiom
         assert templates.get("eom_cubic_galileon_scalar") in scalar_prompt
         assert templates.get("eval3_scalar_tensor_scalar") not in scalar_prompt
+
+
+class TestCompositionalRouting:
+    def test_general_scalar_action_routes_compositional(self):
+        from evals.eval7_kessence import build_npr as build_kessence_npr
+
+        dec = _compositional_decomposition(build_kessence_npr(resolved=True), "phi", "eom")
+        assert dec is not None and dec.full
+
+    def test_metric_field_is_not_compositional(self):
+        from evals.eval7_kessence import build_npr as build_kessence_npr
+
+        assert _compositional_decomposition(build_kessence_npr(resolved=True), "g", "eom") is None
+
+    def test_perturbation_is_not_compositional(self):
+        from evals.eval7_kessence import build_npr as build_kessence_npr
+
+        npr = build_kessence_npr(resolved=True)
+        assert _compositional_decomposition(npr, "phi", "perturbation") is None
+
+    def test_curvature_action_decomposes_partially(self):
+        # scalar-tensor F(phi)R does not fully decompose, so the model path runs
+        npr = build_npr(resolved=True)
+        dec = _compositional_decomposition(npr, "phi", "eom")
+        assert dec is not None and not dec.full
 
     def test_strip_fences_removes_markdown(self):
         fenced = "```cadabra\nex := A;\n```"

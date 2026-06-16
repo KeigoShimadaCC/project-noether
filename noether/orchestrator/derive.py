@@ -24,6 +24,13 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from noether.kernels.base import Capability, ComputedResult, KernelTask
+from noether.kernels.cadabra.blocks import (
+    Decomposition,
+    assemble_scalar_eom_script,
+    block_summary,
+    compose_display_tex,
+    decompose_scalar,
+)
 from noether.kernels.cadabra.generate import generate_script
 from noether.llm.base import LLMAdapter
 from noether.npr.schema import NPR
@@ -116,6 +123,40 @@ def _result_detail(
     return "unverified: kernel did not confirm the result"
 
 
+def _compositional_detail(
+    verified: bool, dec: Decomposition, checks: dict[str, str], computed: ComputedResult
+) -> str:
+    """Explain a compositional verdict, naming the blocks that composed."""
+    blocks = ", ".join(block_summary(dec.matches))
+    if verified:
+        return (
+            "kernel verified the assembled action against the candidate built "
+            f"from its blocks ({blocks})"
+        )
+    if "residue_zero" not in checks:
+        rc = computed.raw.returncode
+        tail = _stderr_tail(computed.raw.stderr)
+        base = (
+            f"unverified: the assembled script ({blocks}) produced no residue "
+            f"check; it did not run to completion (kernel exit {rc})"
+        )
+        return f"{base}: {tail}" if tail else base
+    return f"unverified: the kernel computed a nonzero residue for the assembled action ({blocks})"
+
+
+def _compositional_decomposition(npr: NPR, wrt: str, kind: str) -> Decomposition | None:
+    """Decompose the scalar Lagrangian into building blocks, when the
+    compositional path applies: an EOM for a dynamical scalar field rendered
+    as phi. Returns None when the path does not apply; a partial Decomposition
+    (``full`` False) when some term matches no registered block."""
+    if kind != "eom" or wrt != "phi":
+        return None
+    obj = next((o for o in npr.objects if o.name == wrt), None)
+    if obj is None or obj.kind != "scalar-field":
+        return None
+    return decompose_scalar(npr.action.lagrangian, wrt)
+
+
 def _verdict(kind: str, checks: dict[str, str]) -> bool:
     """The kernel sets the verdict, not the model. For an EOM, the residue
     against the independent candidate must vanish. For a quadratic-action
@@ -154,23 +195,49 @@ def derive_field(
     capability = Capability.PERTURB if kind == "perturbation" else Capability.VARY
     label = "quadratic-action expansion" if kind == "perturbation" else "general variation"
 
-    generated = generate_script(npr, wrt, llm, kind=kind)
-    computed = cadabra.run(
-        KernelTask(
-            capability=capability,
-            description=f"{label} wrt {wrt}",
-            payload={"script": generated.source},
+    # Compositional path: when the scalar Lagrangian fully decomposes into
+    # registered building blocks, assemble one Cadabra script for the user's
+    # actual action and let the kernel residue-check it. No model is involved,
+    # and the result renders in collapsed shorthand. Otherwise fall back to the
+    # model-written script path. A partial decomposition is left to the model
+    # rather than guessing at the unmatched term.
+    dec = _compositional_decomposition(npr, wrt, kind)
+    if dec is not None and dec.full:
+        script = assemble_scalar_eom_script(dec.matches, wrt)
+        computed = cadabra.run(
+            KernelTask(
+                capability=capability,
+                description=f"compositional variation wrt {wrt}",
+                payload={"script": script},
+            )
         )
-    )
-    checks = computed.value.get("checks", {})
-    verified = _verdict(kind, checks)
-    detail = _result_detail(kind, verified, checks, computed)
+        checks = computed.value.get("checks", {})
+        verified = checks.get("residue_zero") == "True"
+        detail = _compositional_detail(verified, dec, checks, computed)
+        result_tex = compose_display_tex(dec.matches, wrt) if verified else computed.expression_tex
+        source = script
+        llm_name, llm_version = "compositional", "blocks-v1"
+    else:
+        generated = generate_script(npr, wrt, llm, kind=kind)
+        computed = cadabra.run(
+            KernelTask(
+                capability=capability,
+                description=f"{label} wrt {wrt}",
+                payload={"script": generated.source},
+            )
+        )
+        checks = computed.value.get("checks", {})
+        verified = _verdict(kind, checks)
+        detail = _result_detail(kind, verified, checks, computed)
+        result_tex = computed.expression_tex
+        source = generated.source
+        llm_name, llm_version = generated.llm_name, generated.llm_version
 
     prefix = "perturb" if kind == "perturbation" else "vary"
     result_id = "{}-{}-{}".format(
         prefix,
         wrt.strip("\\").replace("\\", "").replace("{", "").replace("}", "") or "field",
-        hashlib.sha1(generated.source.encode()).hexdigest()[:8],
+        hashlib.sha1(source.encode()).hexdigest()[:8],
     )
 
     derivation = FieldDerivation(
@@ -178,33 +245,41 @@ def derive_field(
         kind=kind,
         capability=capability,
         result_id=result_id,
-        result_tex=computed.expression_tex,
+        result_tex=result_tex,
         verified=verified,
         checks=checks,
         kernel_name=computed.kernel_name,
         kernel_version=computed.kernel_version,
-        llm_name=generated.llm_name,
-        llm_version=generated.llm_version,
-        script=generated.source,
+        llm_name=llm_name,
+        llm_version=llm_version,
+        script=source,
         detail=detail,
     )
 
     if results_root is not None:
         derivation.bundle_path = str(results_root / session_id / result_id)
         ladder = _ladder_from_kernel(computed, verified, detail)
+        if llm_name == "compositional":
+            blocks = ", ".join(block_summary(dec.matches)) if dec is not None else ""
+            narrative = (
+                f"{label} wrt {wrt}. Assembled compositionally from building "
+                f"blocks ({blocks}) and residue-checked by the kernel; "
+                f"verified={verified}."
+            )
+        else:
+            narrative = (
+                f"{label} wrt {wrt}. Script generated by {llm_name} "
+                f"{llm_version}; verified={verified} (kernel residue check)."
+            )
         bundle = ResultBundle(
             session_id=session_id,
             result_id=result_id,
-            result_tex=computed.expression_tex or "",
+            result_tex=result_tex or "",
             npr_snapshot=npr,
             plan=[],
             computed=[computed],
             ladder=ladder,
-            narrative=(
-                f"{label} wrt {wrt}. Script generated by "
-                f"{generated.llm_name} {generated.llm_version}; "
-                f"verified={verified} (kernel residue check)."
-            ),
+            narrative=narrative,
             derivations=[derivation.model_dump(mode="json")],
         )
         write_bundle(results_root, bundle)

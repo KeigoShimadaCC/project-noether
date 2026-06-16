@@ -69,6 +69,17 @@ class TestProposeDefinitions:
         npr = _npr(r"R - 2\Lambda")
         assert propose_definitions(npr) == []
 
+    def test_mixed_second_derivative_for_x_dependent_coupling(self):
+        # K(phi, X) gets the mixed shorthand K_{phi X} on top of the per-argument
+        # first and diagonal-second derivatives; this is what an X-dependent
+        # (Horndeski G2) equation of motion needs.
+        npr = _npr(r"K(\phi, X) - V(\phi)")
+        by_symbol = {p.symbol: p for p in propose_definitions(npr)}
+        assert {"K_phi", "K_X", "K_phiphi", "K_XX", "K_phiX"} <= set(by_symbol)
+        mixed = by_symbol["K_phiX"]
+        assert mixed.symbol_tex == r"K_{\phi X}"
+        assert mixed.meaning_tex == r"\frac{\partial^2 K}{\partial \phi \partial X}"
+
 
 class TestSessionAddDefinition:
     def test_adds_shorthand_as_new_version(self):

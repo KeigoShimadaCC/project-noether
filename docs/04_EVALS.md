@@ -2,9 +2,10 @@
 
 **Status:** stable; all five evals plus the stretch tasks 1s (ADM of GR),
 3s (spectrum around Minkowski), 3p (scalar quadratic action in Cadabra),
-3g (graviton quadratic action in Cadabra), and 6 (cubic Galileon scalar EOM,
-the first verified Horndeski member past scalar-tensor) implemented and
-kernel-verified.
+3g (graviton quadratic action in Cadabra), 6 (cubic Galileon scalar EOM,
+the first verified Horndeski member past scalar-tensor), and 7 (k-essence and
+the general scalar Horndeski sector by block decomposition, no per-theory
+template) implemented and kernel-verified.
 **Implementation (2026-06-12):** all five evals are executable (`evals/`, run
 via `noether eval1` .. `noether eval5`) and kernel-checked against cadabra2
 2.5.15: the eval 1 and 3 variation residues are zero against the targets
@@ -553,6 +554,73 @@ cubic theory has no audited scaffold yet, so this eval is scoped to `φ`.
 
 ---
 
+## Eval 7 — k-essence and the general scalar Horndeski sector (composition)
+
+**Capabilities tested:** an `X`-dependent coupling `K(φ,X)` (Horndeski G2);
+expanding the shorthand `X` to its primitive inside the kernel and collapsing it
+back for display; decomposing an additive Lagrangian into building blocks and
+deriving the equation of motion without a per-theory template; refusing a term
+that matches no block.
+
+**Status: implemented (eval 7; `evals/eval7_kessence.py`,
+`noether/kernels/cadabra/blocks.py`).** This is the first capability that does
+not lean on a hand-written scaffold for the specific theory. The scalar
+Lagrangian is decomposed into registered blocks (canonical kinetic, potential,
+cubic Galileon, k-essence), one Cadabra script is assembled for the action the
+user actually entered, and the kernel's residue check verifies it. k-essence
+`K(φ,X)` is the block the fidelity pass left unverified, because `X` was never
+expanded into `φ`-derivatives; the block now does that expansion in the kernel.
+
+### Input
+
+```latex
+S = \int d^4x \, \sqrt{-g}\, \left( K(\phi, X) - V(\phi) + G(\phi)\,\Box\phi \right)
+```
+
+with `X = -½∇_μφ∇^μφ`. User intent: `K(φ,X)`, `V(φ)`, `G(φ)` are arbitrary
+functions, vary with respect to `φ`. Ask: the scalar equation of motion.
+
+### Result (noether-default-v1)
+
+```
+K_φ + K_X□φ + K_{Xφ}(∇φ)² - K_{XX}∇^μφ∇^νφ∇_μ∇_νφ
+    - V_φ + 2G_φ□φ + G_{φφ}(∇φ)² = 0
+```
+
+The shorthands `K_X`, `K_{Xφ}`, `K_{XX}` are exactly the readability definitions
+the system proposes for an `X`-dependent coupling (`orchestrator/definitions.py`,
+which now also offers the mixed second derivative `K_{Xφ}`).
+
+### Derivation sketch
+
+Variation is linear, so the equation of motion of the sum is the sum of the
+blocks' contributions:
+
+- canonical kinetic `-½(∇φ)²` gives `□φ` (here folded into `K_X` at `K = X`),
+- potential `-V(φ)` gives `-V_φ`,
+- cubic `G(φ)□φ` gives `2G_φ□φ + G_{φφ}(∇φ)²` (eval 6),
+- k-essence `K(φ,X)` gives `∇_μ(K_X∇^μφ) + K_φ`, which expands through
+  `∇_μX = -∇_μ∇_νφ∇^νφ` to `K_φ + K_X□φ + K_{Xφ}(∇φ)² - K_{XX}∇^μφ∇^νφ∇_μ∇_νφ`.
+
+### Verification
+
+The decomposition (`decompose_scalar`) matches each additive term to a block and
+reads off its coupling. The assembler (`assemble_scalar_eom_script`) emits one
+Cadabra script that carries the real integrand (the exact couplings and
+coefficients the parser found) and an independent candidate built from the same
+blocks, then peels derivatives with the two-pass `integrate_by_parts`, expands
+`X` and the coupling chain rules in the kernel, and checks the residue. This is
+not a trusted sum of pre-blessed formulas: the kernel verifies the assembled
+action, so a wrong block contribution would leave a nonzero residue. A term that
+matches no block (a nonminimal `F(φ)R`, say) leaves the decomposition partial,
+and the caller falls back to the model-written path or refuses, rather than
+guessing. `evals/test_eval7.py` checks the full composition, the k-essence block
+alone, and the refusal. Curvature-coupled blocks (G4, G5, `F(φ)R`) are not
+registered yet, so the metric sector and the higher Horndeski terms stay out of
+this path for now.
+
+---
+
 ## Summary matrix
 
 | Eval | Theory class | Distinctive demand | Horizon gate |
@@ -567,6 +635,7 @@ cubic theory has no audited scaffold yet, so this eval is scoped to `φ`.
 | 3p | scalar quadratic action | symbolic quadratic expansion on a general background | H2 |
 | 3g | graviton quadratic action | spin-2 expansion, linearized vacuum Einstein equation | H2 |
 | 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule | H3 |
+| 7 | k-essence / general scalar Horndeski | X-dependent coupling, block decomposition, no per-theory template | H3 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and
 an executable spec under `evals/` (machine-checkable: input transcript, expected

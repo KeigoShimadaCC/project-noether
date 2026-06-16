@@ -373,7 +373,15 @@ perturbative expansion (xPert), Young projection.
    `vary` task (equations of motion) for the metric, scalar, and gauge-field
    classes today. The general path is gated by `evals/test_eval_general.py`,
    which checks it reproduces eval 3's two kernel-verified equations of motion
-   end to end. The `perturb` task now runs through the same model-written path:
+   end to end. For the scalar `vary` task there is also a compositional path
+   that needs no model: when an additive scalar Lagrangian decomposes fully into
+   registered building blocks (canonical kinetic, potential, cubic Galileon,
+   k-essence `K(phi, X)`; `noether.kernels.cadabra.blocks`), `derive_field`
+   assembles one Cadabra script for the actual action and an independent
+   candidate from the same blocks, and the kernel residue-checks it. This is the
+   non-tailored route to the general scalar Horndeski sector (eval 7): any sum of
+   registered blocks verifies without a new template, and an unrecognized term
+   leaves the decomposition partial so the model-written path runs instead. The `perturb` task now runs through the same model-written path:
    `derive_perturbation` (and `kind="perturbation"` on the server, MCP, and web
    clients) hands the model one of two scaffolds depending on the field kind:
    `pert_scalar_quadratic` (eval 3p) expands a scalar action to quadratic order,
@@ -433,13 +441,30 @@ coupling chain rule `nabla K -> K' nabla phi` reintroduces `phi`-derivatives whe
 `box` lands on `K`. `generate.py` routes a scalar action with a `box`-coupling to
 this scaffold instead of the plain scalar example.
 
-What still does not verify: the `vary` and `perturb` scaffolds do not expand
-`X` back into `phi` derivatives inside the kernel, so an EOM or quadratic action
-for a genuinely `X`-dependent coupling (`K(phi, X)`) comes back unverified rather
-than trusted. Higher Horndeski sectors (G4, G5) and the metric EOM of the cubic
-theory have no audited template yet, so a model-written script for them will not
-clear the residue check. The ADM split still verifies for any metric action, but
-it is the universal foliation geometry, not a Horndeski-specific Hamiltonian.
+The general scalar sector then moved off per-theory scaffolds entirely
+(`noether/kernels/cadabra/blocks.py`, eval 7). An additive scalar Lagrangian is
+decomposed into building blocks (canonical kinetic, potential, cubic Galileon,
+k-essence `K(phi, X)`), and one Cadabra script is assembled for the action the
+user entered: the real integrand plus an independent candidate built from the
+same blocks. The kernel's residue check then verifies that assembled action, so
+trust still comes from the kernel, not from summing pre-blessed formulas. This
+is the non-tailored path: any sum of registered blocks, with arbitrary coupling
+names, verifies without a new template; adding a block extends coverage. It also
+closes the `X` gap, because the k-essence block expands `X = -1/2 (nabla phi)^2`
+to its primitive in the kernel through `nabla_mu X = -nabla_mu nabla_nu phi
+nabla^nu phi`, then collapses `X` and `box` back to shorthand for display (the
+operational-definition path). When a term matches no block, the decomposition is
+left partial and `derive_field` falls back to the model-written script path
+rather than guessing.
+
+What still does not verify: the registered blocks are the scalar sector only, so
+curvature-coupled terms (the nonminimal `F(phi) R`, the Horndeski G4 and G5
+densities) and the metric equation of motion of any of these have no block and
+no audited template yet; a model-written script for them will not clear the
+residue check. The `perturb` scaffolds likewise do not expand `X`, so a
+quadratic action for an `X`-dependent coupling is still unverified. The ADM split
+verifies for any metric action, but it is the universal foliation geometry, not
+a Horndeski-specific Hamiltonian.
 
 ## 7. Provenance bundles
 
