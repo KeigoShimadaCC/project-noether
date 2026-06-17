@@ -986,6 +986,188 @@ def curl_vs_exterior_affine(field: str, ex: str = "ex") -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Hypermomentum decomposition (independent-connection path).
+#
+# The hypermomentum Delta^lambda_{mu nu} = -(2/sqrt(-g)) delta S_m / delta
+# Gamma^lambda_{mu nu} is the source that appears in the connection equation
+# when matter couples to the independent connection.  It decomposes under
+# GL(n) into three irreducible pieces:
+#
+#   Delta^lambda_{mu nu} = tau^lambda_{mu nu}    (spin)
+#                         + (1/n) delta^lambda_mu Delta_nu  (dilation)
+#                         + sigma^lambda_{mu nu}  (shear)
+#
+# where:
+#   Spin (antisymmetric in first pair):
+#     tau^lambda_{mu nu} = (1/2)(Delta^lambda_{mu nu}
+#                              - g^{lambda rho} g_{mu sig} Delta^{sig}_{rho nu})
+#
+#   Dilation (trace):
+#     Delta_nu = Delta^lambda_{lambda nu}
+#
+#   Shear (traceless, symmetric in first pair):
+#     sigma^lambda_{mu nu} = (1/2)(Delta^lambda_{mu nu}
+#                              + g^{lambda rho} g_{mu sig} Delta^{sig}_{rho nu})
+#                            - (1/n) delta^lambda_mu Delta_nu
+#
+# Key properties:
+#   - tau^lambda_{lambda nu} = 0 (spin is traceless)
+#   - sigma^lambda_{lambda nu} = 0 (shear is traceless)
+#   - tau is antisymmetric in (lambda, mu): swapping via the metric gives a sign flip
+#   - sigma is symmetric in (lambda, mu): swapping via the metric leaves it unchanged
+#   - Reconstruction: tau + dilation + sigma = Delta (algebraic identity)
+#
+# The antisymmetry of tau and symmetry of sigma cannot be directly verified
+# in Cadabra due to the Kronecker-delta limitation (free-index mismatch after
+# metric-contraction index rearrangement).  Those properties are verified by
+# the SymPy cross-check.
+#
+# Convention: noether-default-v1 + metric-affine-v1, n=4.
+# ---------------------------------------------------------------------------
+
+HYPERMOMENTUM_DECL = (
+    r"Delta^{\lambda}_{\mu\nu}::Depends(\partial{#})."
+    "\n"
+    r"Delta_{\nu}::Depends(\partial{#})."
+)
+
+
+def hypermomentum_spin(ex: str = "ex") -> str:
+    r"""Substitute the spin (antisymmetric) part of the hypermomentum:
+
+    ``tau^lambda_{mu nu} -> (1/2)(Delta^lambda_{mu nu}
+        - g^{lambda rho} g_{mu sig} Delta^{sig}_{rho nu})``
+
+    The spin part is antisymmetric in the first pair (lambda, mu) and
+    traceless (tau^lambda_{lambda nu} = 0).
+
+    Requires ``Delta^{\\lambda}_{\\mu\\nu}`` declared (see
+    :data:`HYPERMOMENTUM_DECL`).
+
+    Convention: metric-affine-v1."""
+    return (
+        f"substitute({ex}, $"
+        f"tau^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"(1/2)(Delta^{{\\lambda}}_{{\\mu\\nu}} "
+        f"- g^{{\\lambda\\rho}} g_{{\\mu\\sigma}} Delta^{{\\sigma}}_{{\\rho\\nu}})$);"
+    )
+
+
+def hypermomentum_dilation(ex: str = "ex") -> str:
+    r"""Substitute the dilation (trace) part of the hypermomentum:
+
+    ``Delta_nu -> Delta^{lambda}_{lambda nu}``
+
+    The dilation is the trace of the hypermomentum over the first two
+    indices.  It carries the full trace (both spin and shear are
+    traceless).
+
+    Requires ``Delta^{\\lambda}_{\\mu\\nu}`` declared.
+
+    Convention: metric-affine-v1."""
+    return (
+        f"substitute({ex}, $"
+        f"Delta_{{\\nu}} -> "
+        f"Delta^{{\\lambda}}_{{\\lambda\\nu}}$);"
+    )
+
+
+def hypermomentum_shear(ex: str = "ex") -> str:
+    r"""Substitute the shear (traceless symmetric) part of the
+    hypermomentum:
+
+    ``sigma^lambda_{mu nu} -> (1/2)(Delta^lambda_{mu nu}
+        + g^{lambda rho} g_{mu sig} Delta^{sig}_{rho nu})
+        - (1/n) delta^lambda_mu Delta^{kappa}_{kappa nu}``
+
+    The shear part is symmetric in the first pair (lambda, mu) and
+    traceless (sigma^lambda_{lambda nu} = 0).
+
+    In the Cadabra substitution, n is replaced by the literal 4 (dim=4).
+    Requires ``Delta^{\\lambda}_{\\mu\\nu}`` declared.
+
+    Convention: metric-affine-v1, n=4."""
+    return (
+        f"substitute({ex}, $"
+        f"sigma^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"(1/2)(Delta^{{\\lambda}}_{{\\mu\\nu}} "
+        f"+ g^{{\\lambda\\rho}} g_{{\\mu\\sigma}} Delta^{{\\sigma}}_{{\\rho\\nu}}) "
+        f"- (1/4) g^{{\\lambda}}_{{\\mu}} Delta^{{\\kappa}}_{{\\kappa\\nu}}$);"
+    )
+
+
+def hypermomentum_reconstruct(ex: str = "ex") -> str:
+    r"""Substitute the reconstruction of the hypermomentum from its three
+    irreducible pieces:
+
+    ``Delta^lambda_{mu nu} -> tau^lambda_{mu nu}
+        + (1/n) delta^lambda_mu Delta_nu + sigma^lambda_{mu nu}``
+
+    This is the algebraic identity that reconstructs the full
+    hypermomentum from spin + dilation + shear.  Used for residue
+    checking: applying this and subtracting the original Delta should
+    yield zero.
+
+    In the Cadabra substitution, n is replaced by the literal 4 (dim=4).
+
+    Convention: metric-affine-v1, n=4."""
+    return (
+        f"substitute({ex}, $"
+        f"Delta^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"tau^{{\\lambda}}_{{\\mu\\nu}} "
+        f"+ (1/4) g^{{\\lambda}}_{{\\mu}} Delta_{{\\nu}} "
+        f"+ sigma^{{\\lambda}}_{{\\mu\\nu}}$);"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Einstein-Cartan connection equation (metric-compatible, torsionful).
+#
+# In Einstein-Cartan gravity, the connection is independent but metric-
+# compatible (Q=0), so Gamma = LC(g) + K(T).  The connection variation
+# of the Palatini EH action is algebraic in K (hence in T): there are
+# no derivatives of K in the equation.  This means torsion is
+# algebraically determined by any spin source (hypermomentum) rather
+# than propagating as an independent degree of freedom.
+#
+# The key Cadabra verification:
+#   1. Derive the Palatini connection equation (same as eval2)
+#   2. Substitute G = LC + K and verify no partial-K terms appear
+#      (algebraic_in_K check)
+#   3. Verify G = LC + projective mode satisfies the pure-gravity equation
+#      (solution_zero check, same as eval2)
+#
+# With a matter source Delta^lambda_{mu nu} (hypermomentum), the full
+# connection equation becomes:
+#   (EH part, algebraic in K) + sqrt(-g) Delta^lambda_{mu nu} = 0
+# which gives T = f(Delta) algebraically.
+#
+# Convention: noether-default-v1 + metric-affine-v1.
+# ---------------------------------------------------------------------------
+
+
+def einstein_cartan_decomposition(conn: str = "G", ex: str = "ex") -> str:
+    r"""Substitute the Einstein-Cartan decomposition of the connection
+    (metric-compatible, Q=0):
+
+    ``conn^lambda_{mu nu} -> LC^lambda_{mu nu} + K^lambda_{mu nu}``
+
+    Unlike the full metric-affine decomposition (which includes the
+    disformation L), the Einstein-Cartan case has Q=0 so L=0 and
+    Gamma = LC + K only.  After applying this substitution, use
+    :func:`expand_lc` and :func:`define_contortion` to expand the
+    two parts in terms of the metric and torsion.
+
+    Convention: metric-affine-v1 (Q=0)."""
+    return (
+        f"substitute({ex}, $"
+        f"{conn}^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"LC^{{\\lambda}}_{{\\mu\\nu}} "
+        f"+ K^{{\\lambda}}_{{\\mu\\nu}}$);"
+    )
+
+
 def contracted_bianchi_affine(ex: str = "ex") -> str:
     r"""Apply the modified contracted second Bianchi identity for a
     general affine connection carrying torsion.

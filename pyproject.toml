@@ -52,6 +52,9 @@ select = ["E", "F", "I", "UP", "B"]
 "noether/kernels/cadabra/horndeski_g4g5.py" = ["E501"]
 # test_horndeski_g4g5.py embeds verbatim Cadabra declaration strings.
 "tests/test_horndeski_g4g5.py" = ["E501"]
+# test_einstein_cartan.py and test_hypermomentum.py embed Cadabra scripts.
+"tests/test_einstein_cartan.py" = ["E501"]
+"tests/test_hypermomentum.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "evals"]
