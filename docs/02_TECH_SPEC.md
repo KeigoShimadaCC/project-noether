@@ -683,6 +683,19 @@ connection carrying torsion:
   `hessian_to_symmetric` (which routes through a symmetric stand-in and
   silently drops the antisymmetric part) is invalid under torsion.
 
+The dual gate is explicitly enforced and demonstrated in
+`tests/test_dual_gate.py` (VAL-GEOM-014, VAL-GEOM-016).  The dual-gate
+negative control uses the scalar Hessian: the LC `hessian_to_symmetric`
+primitive gives `residue_zero=True` for the antisymmetric Hessian (because
+`H_{mu nu}` is declared symmetric), but the SymPy oracle shows the actual
+antisymmetric Hessian is nonzero under torsion.  The dual-gate verdict
+(`verified = cadabra_residue_zero AND sympy_cross_check_agrees`) correctly
+returns NOT verified.  The convention sign falsifier shows that flipping a
+single sign in the `metric-affine-v1` convention block (contortion leading
+sign 1/2 to -1/2, disformation leading sign 1/2 to -1/2, or Hessian torsion
+sign - to +) changes the residue from 0 to nonzero or flips the SymPy
+cross-check, proving no convention is silently baked in.
+
 The SymPy cross-check uses a new `covariant_derivative_of_connection`
 function in `geometry.py` that computes the covariant derivative of a
 tensor using a general (possibly asymmetric) connection, plus
