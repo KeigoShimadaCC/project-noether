@@ -332,8 +332,11 @@ perturbative expansion (xPert), Young projection.
 
 1. **LaTeX → NPR parsing.** LLM proposes the parse (it is genuinely good at messy
    physicist LaTeX); a deterministic validator enforces well-formedness; failures
-   and underdetermined choices become `ambiguities` entries for ELICIT. The LLM
-   is a parser-assistant, not an authority.
+   and underdetermined choices become `ambiguities` entries for ELICIT. On the
+   metric-affine path that validator stays structural: it checks index balance,
+   but it does not commute the metric through `\nabla` unless metric
+   compatibility was confirmed explicitly. The LLM is a parser-assistant, not an
+   authority.
 2. **Plan construction.** Task → DAG of kernel steps. Example for `vary` w.r.t.
    metric: expand composite shorthands → distribute variation → IBP to strip
    derivatives off `δg` → collect surface terms → canonicalize → identity-reduce →

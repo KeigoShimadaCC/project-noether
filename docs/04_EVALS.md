@@ -236,7 +236,9 @@ connection is uniquely determined.
 
 ### Verification checks
 
-- V0/V1 on both equations; metric equation symmetric.
+- V0/V1 on both equations; metric equation symmetric. V0 stays structural on
+  the metric-affine path, so a balanced expression mixing `R_{\mu\nu}(\Gamma)`,
+  `T`, and `Q` passes, while genuinely malformed index use still fails.
 - V2: projective Noether identity: the trace of the connection equation that
   corresponds to the projective direction must vanish identically (kernel
   computation). Generalized Bianchi identity for diffeomorphisms relates the

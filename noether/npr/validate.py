@@ -35,14 +35,20 @@ def _contract(counts: Counter) -> Counter:
     return result
 
 
-def free_indices(expr: Expr) -> Counter:
-    """Multiset of free (name, variance) pairs; raises on malformed index use."""
+def free_indices(expr: Expr, *, metric_compatible: bool | None = None) -> Counter:
+    """Multiset of free (name, variance) pairs; raises on malformed index use.
+
+    This is intentionally a structural check. Unless ``metric_compatible`` is
+    explicitly set, validation never applies any rule that would commute the
+    metric through a covariant derivative or otherwise treat index
+    raising/lowering across ``nabla`` as free.
+    """
     match expr:
         case Num() | Sym():
             return Counter()
         case Func(args=args):
             for a in args:
-                fa = free_indices(a)
+                fa = free_indices(a, metric_compatible=metric_compatible)
                 if fa:
                     raise ValidationError(
                         f"function argument carries free indices {sorted(fa)}; "
@@ -56,12 +62,12 @@ def free_indices(expr: Expr) -> Counter:
             return _contract(counts)
         case Deriv(index=index, expr=inner):
             counts = Counter()
-            for (name, v), n in free_indices(inner).items():
+            for (name, v), n in free_indices(inner, metric_compatible=metric_compatible).items():
                 counts[(name, v)] += n
             counts[(index.name, index.variance)] += 1
             return _contract(counts)
         case Pow(base=base, exp=_):
-            fb = free_indices(base)
+            fb = free_indices(base, metric_compatible=metric_compatible)
             if fb:
                 raise ValidationError(
                     f"power of an expression with free indices {sorted(fb)} is ambiguous; "
@@ -71,15 +77,15 @@ def free_indices(expr: Expr) -> Counter:
         case Prod(factors=factors):
             counts = Counter()
             for f in factors:
-                for key, n in free_indices(f).items():
+                for key, n in free_indices(f, metric_compatible=metric_compatible).items():
                     counts[key] += n
             return _contract(counts)
         case Sum(terms=terms):
             if not terms:
                 return Counter()
-            first = free_indices(terms[0])
+            first = free_indices(terms[0], metric_compatible=metric_compatible)
             for t in terms[1:]:
-                ft = free_indices(t)
+                ft = free_indices(t, metric_compatible=metric_compatible)
                 if ft != first:
                     raise ValidationError(
                         f"sum terms have mismatched free indices: {sorted(first)} vs {sorted(ft)}"
@@ -88,9 +94,14 @@ def free_indices(expr: Expr) -> Counter:
     raise ValidationError(f"unknown node: {expr!r}")
 
 
-def validate_expression(expr: Expr, expected_free: list[Index] | None = None) -> None:
+def validate_expression(
+    expr: Expr,
+    expected_free: list[Index] | None = None,
+    *,
+    metric_compatible: bool | None = None,
+) -> None:
     """Raise ValidationError if the expression is structurally ill-formed."""
-    free = free_indices(expr)
+    free = free_indices(expr, metric_compatible=metric_compatible)
     if expected_free is not None:
         expected = Counter((ix.name, ix.variance) for ix in expected_free)
         if free != expected:

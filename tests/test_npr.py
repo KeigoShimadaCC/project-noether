@@ -73,6 +73,25 @@ class TestValidation:
         with pytest.raises(ValidationError):
             validate_expression(expr, [down("mu")])
 
+    def test_balanced_metric_affine_expression_validates_without_metric_compatibility(self):
+        expr = prod(
+            tensor("R", down("mu"), down("nu"), connection="Gamma"),
+            tensor("T", up("mu"), down("rho"), down("sigma")),
+            tensor("Q", up("nu"), up("rho"), up("sigma")),
+        )
+
+        validate_expression(expr, metric_compatible=False)
+
+    def test_index_unbalance_still_raises_without_metric_compatibility(self):
+        expr = prod(
+            tensor("R", down("mu"), down("nu"), connection="Gamma"),
+            tensor("T", up("mu"), down("rho"), down("sigma")),
+            tensor("Q", up("nu"), up("rho"), up("rho")),
+        )
+
+        with pytest.raises(ValidationError):
+            validate_expression(expr, metric_compatible=False)
+
 
 class TestLatex:
     def test_known_rendering(self):

@@ -233,7 +233,9 @@ every computation.
    tech spec. If it expands scope, flag it instead of quietly building it.
 2. If the task adds capability, write or extend the eval first.
 3. Implement behind the NPR boundary: orchestrator logic stays kernel-agnostic,
-   kernel specifics stay in adapters.
+   kernel specifics stay in adapters. V0 validation stays structural, so do not
+   treat raising or lowering across `\nabla` as free unless the active
+   connection is explicitly metric compatible.
 4. Run the relevant evals and tests. A physics-bearing change with no kernel-backed
    test does not merge.
 5. Update docs touched by the change.

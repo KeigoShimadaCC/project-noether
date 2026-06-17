@@ -115,8 +115,10 @@ PRESENT from labeling the result verified; Noether says plainly which checks ran
 which passed, and which were not applicable.
 
 - **V0 — well-formedness.** Index balance, symmetry consistency, dimensional
-  homogeneity of every term, round-trip parse of the output LaTeX. Cheap,
-  always on.
+  homogeneity of every term, round-trip parse of the output LaTeX. In the
+  metric-affine path this stays structural: Noether does not treat
+  raising/lowering across `\nabla` as free unless metric compatibility has been
+  confirmed explicitly. Cheap, always on.
 - **V1 — structural invariants.** Class-specific necessary conditions: a metric
   EOM must be symmetric; a U(1) gauge field EOM must be gauge covariant; an
   antisymmetrized symmetric pair must vanish. Computed, not asserted.
