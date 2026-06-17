@@ -29,7 +29,7 @@ from noether.orchestrator.derive import (
     derive_field,
     derive_perturbation,
 )
-from noether.orchestrator.planner import AmbiguityBlocked
+from noether.orchestrator.planner import AmbiguityBlocked, build_plan
 
 requires_cadabra = pytest.mark.skipif(
     not CadabraAdapter().available(), reason="cadabra2 not installed"
@@ -525,3 +525,152 @@ class TestVerifiedAdm:
             derive_adm(
                 build_adm_npr(resolved=False), {"sympy": SympyKernelAdapter()}, session_id="s"
             )
+
+
+# ---------------------------------------------------------------------------
+# VAL-EOM-018: Palatini elicitation gate blocks the connection EOM until
+# the connection ambiguity is resolved
+# ---------------------------------------------------------------------------
+
+
+class TestPalatiniElicitationGate:
+    """VAL-EOM-018: an unresolved Palatini NPR cannot derive the connection
+    EOM (build_plan raises AmbiguityBlocked); resolving to independent
+    enables the INDEPENDENT_CONNECTION plan step."""
+
+    @pytest.fixture()
+    def palatini_npr_unresolved(self):
+        from evals.eval2_palatini import build_npr as build_palatini_npr
+
+        return build_palatini_npr(resolved=False)
+
+    @pytest.fixture()
+    def palatini_npr_resolved(self):
+        from evals.eval2_palatini import build_npr as build_palatini_npr
+
+        return build_palatini_npr(resolved=True)
+
+    def test_unresolved_palatini_blocks_build_plan(self, palatini_npr_unresolved):
+        """build_plan raises AmbiguityBlocked on an unresolved Palatini NPR."""
+        with pytest.raises(AmbiguityBlocked):
+            build_plan(palatini_npr_unresolved)
+
+    def test_unresolved_palatini_blocks_derive_field(self, palatini_npr_unresolved):
+        """derive_field raises AmbiguityBlocked on an unresolved Palatini
+        NPR (the no-guessing gate)."""
+        with pytest.raises(AmbiguityBlocked):
+            derive_field(
+                palatini_npr_unresolved,
+                "Gamma",
+                StubLLMAdapter(),
+                {"cadabra": CadabraAdapter()},
+                session_id="s",
+            )
+
+    def test_unresolved_palatini_blocks_derive_eom(self, palatini_npr_unresolved):
+        """derive_eom raises AmbiguityBlocked on an unresolved Palatini
+        NPR."""
+        with pytest.raises(AmbiguityBlocked):
+            derive_eom(
+                palatini_npr_unresolved,
+                StubLLMAdapter(),
+                {"cadabra": CadabraAdapter()},
+                session_id="s",
+            )
+
+    def test_resolved_independent_plan_includes_connection_step(self, palatini_npr_resolved):
+        """Resolving to independent enables the INDEPENDENT_CONNECTION plan
+        step."""
+        plan = build_plan(palatini_npr_resolved)
+        capabilities = [s.capability for s in plan.steps]
+        assert Capability.INDEPENDENT_CONNECTION in capabilities, (
+            f"plan must include INDEPENDENT_CONNECTION; got {[c.value for c in capabilities]}"
+        )
+
+    def test_resolved_independent_connection_step_description(self, palatini_npr_resolved):
+        """The INDEPENDENT_CONNECTION step description must reflect the
+        torsion and non-metricity flags."""
+        plan = build_plan(palatini_npr_resolved)
+        conn_step = next(
+            s for s in plan.steps if s.capability is Capability.INDEPENDENT_CONNECTION
+        )
+        desc = conn_step.description.lower()
+        assert "torsion" in desc or "nonmetricity" in desc, (
+            f"step description must mention torsion/nonmetricity; got: {conn_step.description}"
+        )
+
+    def test_resolved_levi_civita_no_connection_step(self):
+        """A well-posed NPR with connection=levi-civita must NOT have an
+        INDEPENDENT_CONNECTION step."""
+        npr = build_npr(resolved=True)
+        # build_npr from eval3 creates a Levi-Civita NPR
+        plan = build_plan(npr)
+        capabilities = [s.capability for s in plan.steps]
+        assert Capability.INDEPENDENT_CONNECTION not in capabilities
+
+
+# ---------------------------------------------------------------------------
+# VAL-EOM-017: Gated EOM results carry a visible, non-empty reason
+# ---------------------------------------------------------------------------
+
+
+class TestGatedEomDetail:
+    """VAL-EOM-017: any unverified/gated EOM result returns verified==False
+    with a non-empty detail identifying the blocker."""
+
+    def test_nonzero_residue_gated_with_detail(self):
+        """A derivation with nonzero residue must be verified==False with a
+        non-empty detail naming the mismatch."""
+        npr = build_npr(resolved=True)
+        broken = (
+            'print("NOETHER_RESULT: x");\n'
+            'print("NOETHER_CHECK: residue_zero=False");\n'
+        )
+        result = derive_field(
+            npr, "g", StubLLMAdapter(reply=broken), {"cadabra": CadabraAdapter()},
+            session_id="s",
+        )
+        assert result.verified is False
+        assert result.detail, "gated result must have non-empty detail"
+        assert "unverified" in result.detail.lower() or "nonzero" in result.detail.lower()
+        assert "residue" in result.detail.lower() or "mismatch" in result.detail.lower()
+
+    def test_no_residue_check_gated_with_detail(self):
+        """A derivation that never reaches the residue check must be
+        verified==False with a non-empty detail about the script failure."""
+        npr = build_npr(resolved=True)
+        result = derive_field(
+            npr, "g", StubLLMAdapter(reply="ex := 1;\n"), {"cadabra": CadabraAdapter()},
+            session_id="s",
+        )
+        assert result.verified is False
+        assert result.detail, "gated result must have non-empty detail"
+        assert "no residue check" in result.detail or "did not run" in result.detail
+
+    def test_verified_result_has_detail_too(self):
+        """A verified result also has a detail (the success message), which
+        is distinguishable from a gated one."""
+        npr = build_npr(resolved=True)
+        stub = StubLLMAdapter(reply=templates.get("eval3_scalar_tensor_metric"))
+        result = derive_field(
+            npr, "g", stub, {"cadabra": CadabraAdapter()}, session_id="s",
+        )
+        assert result.verified is True
+        # verified results also carry a detail (the success message)
+        assert result.detail
+
+    def test_perturbation_nonzero_residue_gated_with_detail(self):
+        """A perturbation with nonzero residue must be verified==False
+        with detail naming the quadratic action mismatch."""
+        npr = build_npr(resolved=True)
+        broken = (
+            'print("NOETHER_RESULT: x");\n'
+            'print("NOETHER_CHECK: residue_zero=False");\n'
+        )
+        result = derive_field(
+            npr, "phi", StubLLMAdapter(reply=broken), {"cadabra": CadabraAdapter()},
+            kind="perturbation", session_id="s",
+        )
+        assert result.verified is False
+        assert result.detail
+        assert "quadratic action" in result.detail

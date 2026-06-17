@@ -394,11 +394,31 @@ def ingest_action(
             continue
         objects.append(_classify(symbols[name]))
 
+    # When the action carries an explicit connection (e.g. R_{mu nu}(Gamma)),
+    # add the connection as a declared object so it can appear in
+    # with_respect_to and the derive path can route to the connection-variation
+    # worked example.  The name matches the parser's _parse_connection_annotation
+    # and Geometry.connection_name, both of which default to "Gamma".
+    if geometry_cues.has_connection:
+        if not any(o.name == "Gamma" for o in objects):
+            objects.append(
+                ObjectDecl(name="Gamma", kind="connection", role="dynamical", rank=3)
+            )
+
     kinetic_scalar = _recognize_kinetic_scalar(objects, symbols)
 
     vary_candidates = sorted(
-        obj.name for obj in objects if obj.kind in ("metric", "scalar-field", "tensor-field")
+        obj.name
+        for obj in objects
+        if obj.kind in ("metric", "scalar-field", "tensor-field", "connection")
     )
+
+    # When both a metric and a connection are present, offer a compound
+    # "g and Gamma" option so Palatini-style users can vary both fields
+    # without needing the MCP/HTTP with_respect_to override.
+    vary_wrt_options = list(vary_candidates)
+    if "g" in vary_candidates and "Gamma" in vary_candidates:
+        vary_wrt_options.insert(0, "g and Gamma")
 
     ambiguities: list[Ambiguity] = [
         Ambiguity(
@@ -415,7 +435,7 @@ def ingest_action(
             question="Vary the action with respect to which field(s)? Candidates: "
             + ", ".join(vary_candidates),
             kind="undecidable",
-            options=vary_candidates,
+            options=vary_wrt_options,
         ),
     ]
 

@@ -191,7 +191,12 @@ plumbing deterministic in tests. The LLM gets tools, not freedom:
   ingest now asks on-menu questions for connection type, torsion,
   non-metricity, and metric compatibility, with no answer pre-selected, while a
   curvature-free scalar action such as k-essence keeps the default
-  Levi-Civita draft and raises none of those geometry questions. The LLM
+  Levi-Civita draft and raises none of those geometry questions. When the
+  action carries an explicit connection (e.g. `R_{mu nu}(Gamma)`), ingest adds
+  a `Gamma` connection object (kind=`connection`, role=`dynamical`) to the
+  objects list so the derive path can vary it; the `amb-vary-wrt` options
+  include connection-kind objects, and a compound `g and Gamma` option is
+  prepended when both a metric and a connection are present. The LLM
   narrates and may propose answers, but cannot make ingest guess. Validated
   against the five acceptance actions (`tests/test_parse.py`,
   `tests/test_ingest.py`); reachable from the CLI as `noether ingest
@@ -413,7 +418,11 @@ perturbative expansion (xPert), Young projection.
    Ricci shift R(Gamma + proj) - R(Gamma) is exactly dA (the exterior
    derivative of A_mu), so the symmetric-part metric equation is
    projective-invariant for any starting connection. The Cadabra adapter
-   advertises `INDEPENDENT_CONNECTION` in its capabilities.
+   advertises `INDEPENDENT_CONNECTION` in its capabilities. When the geometry
+   connection is independent, `derive_eom` includes connection-kind objects in
+   its default field list, so both the metric and connection equations are
+   derived by default on a Palatini session; the MCP/HTTP `with_respect_to`
+   parameter can override this to derive a subset of fields.
    The general path is gated by `evals/test_eval_general.py`,
    which checks it reproduces eval 3's two kernel-verified equations of motion
    end to end. The `vary` task also has a compositional path that needs no

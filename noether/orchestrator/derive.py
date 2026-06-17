@@ -339,8 +339,13 @@ def derive_eom(
         raise NotImplementedError(
             f"general derivation currently supports task type 'vary', not {npr.task.type!r}"
         )
+    # When the connection is independent, include connection objects in the
+    # default field list so derive_eom covers the connection equation too.
+    default_kinds: set[str] = {"metric", "scalar-field", "tensor-field"}
+    if npr.geometry.connection.type == "independent":
+        default_kinds.add("connection")
     fields = npr.task.with_respect_to or [
-        o.name for o in npr.objects if o.kind in ("metric", "scalar-field", "tensor-field")
+        o.name for o in npr.objects if o.kind in default_kinds
     ]
     return [
         derive_field(npr, wrt, llm, adapters, session_id=session_id, results_root=results_root)

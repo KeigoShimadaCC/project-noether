@@ -248,3 +248,227 @@ class TestServerWiring:
             "noether_derive",
             "noether_results",
         }
+
+
+# ---------------------------------------------------------------------------
+# VAL-EOM-008: MCP noether_derive reaches the connection variation and
+# refuses when ambiguous
+# ---------------------------------------------------------------------------
+
+PALATINI_LAGRANGIAN = r"g^{\mu\nu} R_{\mu\nu}(\Gamma)"
+
+
+def _resolve_all_geometry(body, tools, *, connection="independent", torsion="torsion-allowed",
+                          nonmetricity="nonmetricity-allowed",
+                          metric_compat="not-metric-compatible",
+                          conventions="noether-default-v1",
+                          vary_wrt="g and Gamma",
+                          ricci_contraction="first-third"):
+    """Resolve all ambiguities for a Palatini-style session, returning the
+    updated session payload.
+
+    After resolving the connection to 'independent', a new
+    amb-ricci-contraction ambiguity is opened, so this helper does a
+    two-pass resolution."""
+    sid = body["session_id"]
+    resolutions = {}
+    for q in body["questions"]:
+        if q["id"] == "amb-connection":
+            resolutions[q["id"]] = connection
+        elif q["id"] == "amb-torsion":
+            resolutions[q["id"]] = torsion
+        elif q["id"] == "amb-nonmetricity":
+            resolutions[q["id"]] = nonmetricity
+        elif q["id"] == "amb-metric-compatibility":
+            resolutions[q["id"]] = metric_compat
+        elif q["id"] == "amb-conventions":
+            resolutions[q["id"]] = conventions
+        elif q["id"] == "amb-vary-wrt":
+            # Use the compound option when available, else the first option
+            if vary_wrt in q["options"]:
+                resolutions[q["id"]] = vary_wrt
+            else:
+                resolutions[q["id"]] = q["options"][0]
+    result = tools.resolve(sid, resolutions)
+
+    # Second pass: resolve any ambiguities opened by the first pass
+    # (e.g. amb-ricci-contraction when connection=independent).
+    remaining = {}
+    for q in result.get("questions", []):
+        if q.get("resolution") is None:
+            if q["id"] == "amb-ricci-contraction":
+                remaining[q["id"]] = ricci_contraction
+            else:
+                remaining[q["id"]] = q["options"][0]
+    if remaining:
+        result = tools.resolve(sid, remaining)
+    return result
+
+
+class TestPalatiniMcpReachability:
+    """VAL-EOM-008: MCP noether_derive reaches the connection EOM on a
+    resolved Palatini session and returns a refusal (blocked dict) when
+    the connection ambiguity is still open."""
+
+    def test_ingest_palatini_adds_gamma_object(self, tools):
+        """Ingesting a Palatini action must add Gamma as a declared
+        connection object so it can appear in with_respect_to."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        object_names = {o["name"] for o in body["objects"]}
+        assert "Gamma" in object_names, (
+            f"Gamma must be a declared object after ingesting a Palatini "
+            f"action; got {object_names}"
+        )
+        gamma_obj = next(o for o in body["objects"] if o["name"] == "Gamma")
+        assert gamma_obj["kind"] == "connection"
+
+    def test_ingest_palatini_raises_connection_question(self, tools):
+        """Ingesting a Palatini action must raise the connection-type
+        ambiguity with 'independent' as an option."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        conn_q = next(
+            (q for q in body["questions"] if q["id"] == "amb-connection"), None
+        )
+        assert conn_q is not None, "amb-connection question must be raised"
+        assert "independent" in conn_q["options"]
+
+    def test_ingest_palatini_vary_wrt_includes_compound_option(self, tools):
+        """When both g and Gamma are present, amb-vary-wrt must offer a
+        compound 'g and Gamma' option."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        vary_q = next(
+            (q for q in body["questions"] if q["id"] == "amb-vary-wrt"), None
+        )
+        assert vary_q is not None
+        assert "g and Gamma" in vary_q["options"], (
+            f"'g and Gamma' must be an option; got {vary_q['options']}"
+        )
+
+    def test_plan_blocked_while_connection_ambiguity_open(self, tools):
+        """VAL-EOM-018: while the connection question is unresolved,
+        noether_plan must return blocked=true with the questions, not a
+        guess."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        plan = tools.plan(body["session_id"])
+        assert plan["blocked"] is True
+        assert plan["questions"]
+        question_ids = {q for q in plan["questions"]}
+        assert "amb-connection" in question_ids or any(
+            "connection" in q for q in plan["questions"]
+        )
+
+    def test_derive_blocked_while_connection_ambiguity_open(self, tools):
+        """VAL-EOM-008: on a session with the connection ambiguity open,
+        noether_derive must return a refusal (blocked dict), not a guess."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        result = tools.derive(body["session_id"], ["g", "Gamma"])
+        assert result.get("blocked") is True, (
+            f"derive must return blocked=true while ambiguities are open; "
+            f"got {result}"
+        )
+        assert result.get("questions"), "blocked derive must include questions"
+        # No derivations produced
+        assert "derivations" not in result or not result.get("derivations")
+
+    def test_resolve_independent_enables_independent_connection_step(self, tools):
+        """VAL-EOM-018: resolving the connection to 'independent' enables
+        the INDEPENDENT_CONNECTION plan step."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        resolved = _resolve_all_geometry(body, tools)
+        assert resolved["well_posed"] is True
+        plan = tools.plan(body["session_id"])
+        assert plan["blocked"] is False
+        capabilities = [s["capability"] for s in plan["steps"]]
+        assert "independent-connection" in capabilities, (
+            f"plan must include independent-connection step; "
+            f"got capabilities {capabilities}"
+        )
+
+    def test_resolve_levi_civita_no_independent_connection_step(self, tools):
+        """Resolving to levi-civita must not include the
+        INDEPENDENT_CONNECTION step."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        resolved = _resolve_all_geometry(body, tools, connection="levi-civita")
+        assert resolved["well_posed"] is True
+        plan = tools.plan(body["session_id"])
+        capabilities = [s["capability"] for s in plan["steps"]]
+        assert "independent-connection" not in capabilities
+
+    @requires_cadabra
+    def test_derive_resolved_palatini_returns_both_eoms(self, tmp_path):
+        """VAL-EOM-008: on a resolved Palatini session, noether_derive with
+        with_respect_to=['g','Gamma'] returns derivations for both g and
+        Gamma."""
+        tools = NoetherTools(
+            SessionStore(tmp_path / "sessions"),
+            llm=StubLLMAdapter(reply=templates.get("eval2_palatini_metric")),
+            results_root=tmp_path / "results",
+        )
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        _resolve_all_geometry(body, tools)
+        sid = body["session_id"]
+        result = tools.derive(sid, ["g", "Gamma"])
+        assert "derivations" in result, f"expected derivations; got {result}"
+        wrt_set = {d["wrt"] for d in result["derivations"]}
+        assert "g" in wrt_set, f"must include wrt='g'; got {wrt_set}"
+        assert "Gamma" in wrt_set, f"must include wrt='Gamma'; got {wrt_set}"
+
+    @requires_cadabra
+    def test_derive_gamma_uses_independent_connection_capability(self, tmp_path):
+        """The Gamma derivation must carry the INDEPENDENT_CONNECTION
+        capability, not the generic VARY."""
+        tools = NoetherTools(
+            SessionStore(tmp_path / "sessions"),
+            llm=StubLLMAdapter(reply=templates.get("eval2_palatini_connection")),
+            results_root=tmp_path / "results",
+        )
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        _resolve_all_geometry(body, tools)
+        sid = body["session_id"]
+        result = tools.derive(sid, ["Gamma"])
+        gamma = next(d for d in result["derivations"] if d["wrt"] == "Gamma")
+        assert gamma["capability"] == "independent-connection"
+
+    @requires_cadabra
+    def test_derive_unverified_eom_has_nonempty_detail(self, tmp_path):
+        """VAL-EOM-017: an unverified EOM derivation must have
+        verified==False and a non-empty detail naming the blocker."""
+        tools = NoetherTools(
+            SessionStore(tmp_path / "sessions"),
+            llm=StubLLMAdapter(reply=(
+                'print("NOETHER_RESULT: x");\n'
+                'print("NOETHER_CHECK: residue_zero=False");\n'
+            )),
+            results_root=tmp_path / "results",
+        )
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        _resolve_all_geometry(body, tools)
+        sid = body["session_id"]
+        result = tools.derive(sid, ["g"])
+        d = result["derivations"][0]
+        assert d["verified"] is False, f"expected verified=False; got {d['verified']}"
+        assert d["detail"], "unverified derivation must have non-empty detail"
+        assert "unverified" in d["detail"].lower() or "nonzero" in d["detail"].lower(), (
+            f"detail must name the blocker; got: {d['detail']}"
+        )
+
+    @requires_cadabra
+    def test_derive_script_failure_has_nonempty_detail(self, tmp_path):
+        """VAL-EOM-017: a derivation whose script never reaches the residue
+        check must have verified==False with a detail about the failure."""
+        # A script that produces no NOETHER_CHECK at all
+        tools = NoetherTools(
+            SessionStore(tmp_path / "sessions"),
+            llm=StubLLMAdapter(reply="ex := 1;\n"),
+            results_root=tmp_path / "results",
+        )
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        _resolve_all_geometry(body, tools)
+        sid = body["session_id"]
+        result = tools.derive(sid, ["g"])
+        d = result["derivations"][0]
+        assert d["verified"] is False
+        assert d["detail"], "gated derivation must have non-empty detail"
+        assert "no residue check" in d["detail"] or "did not run" in d["detail"], (
+            f"detail must name the blocker; got: {d['detail']}"
+        )

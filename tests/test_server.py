@@ -455,3 +455,168 @@ class TestResultHistory:
         after = client.get(f"/sessions/{sid}/results").json()
         assert before["stale_result_ids"] == []
         assert after["stale_result_ids"] == [after["results"][0]["result_id"]]
+
+
+# ---------------------------------------------------------------------------
+# VAL-EOM-008/017/018: Palatini session reachability, gate, and gated detail
+# over HTTP
+# ---------------------------------------------------------------------------
+
+PALATINI_LAGRANGIAN = r"g^{\mu\nu} R_{\mu\nu}(\Gamma)"
+
+
+def _resolve_all_palatini(client, body, *, connection="independent"):
+    """Resolve all ambiguities for a Palatini session in two passes
+    (geometry first, then any newly-opened ambiguities)."""
+    sid = body["session_id"]
+    resolutions = {}
+    for q in body["questions"]:
+        if q["id"] == "amb-connection":
+            resolutions[q["id"]] = connection
+        elif q["id"] == "amb-torsion":
+            resolutions[q["id"]] = (
+                "torsion-allowed" if connection == "independent"
+                else "torsion-free"
+            )
+        elif q["id"] == "amb-nonmetricity":
+            resolutions[q["id"]] = (
+                "nonmetricity-allowed" if connection == "independent"
+                else "nonmetricity-free"
+            )
+        elif q["id"] == "amb-metric-compatibility":
+            resolutions[q["id"]] = (
+                "not-metric-compatible" if connection == "independent"
+                else "metric-compatible"
+            )
+        elif q["id"] == "amb-conventions":
+            resolutions[q["id"]] = "noether-default-v1"
+        elif q["id"] == "amb-vary-wrt":
+            if "g and Gamma" in q["options"]:
+                resolutions[q["id"]] = "g and Gamma"
+            else:
+                resolutions[q["id"]] = q["options"][0]
+    result = client.post(
+        f"/sessions/{sid}/resolve", json={"resolutions": resolutions}
+    ).json()
+
+    # Second pass for any newly-opened ambiguities
+    remaining = {}
+    for q in result.get("questions", []):
+        if q.get("resolution") is None:
+            if q["id"] == "amb-ricci-contraction":
+                remaining[q["id"]] = "first-third"
+            else:
+                remaining[q["id"]] = q["options"][0]
+    if remaining:
+        result = client.post(
+            f"/sessions/{sid}/resolve", json={"resolutions": remaining}
+        ).json()
+    return result
+
+
+class TestPalatiniHttpReachability:
+    """VAL-EOM-008/018: HTTP Palatini session reachability and elicitation
+    gate."""
+
+    def test_palatini_ingest_adds_gamma_and_connection_question(self, client):
+        body = _create(client, PALATINI_LAGRANGIAN)
+        object_names = {o["name"] for o in body["objects"]}
+        assert "Gamma" in object_names
+        gamma = next(o for o in body["objects"] if o["name"] == "Gamma")
+        assert gamma["kind"] == "connection"
+        q_ids = {q["id"] for q in body["questions"]}
+        assert "amb-connection" in q_ids
+        conn_q = next(q for q in body["questions"] if q["id"] == "amb-connection")
+        assert "independent" in conn_q["options"]
+
+    def test_palatini_plan_blocked_while_connection_open(self, client):
+        """VAL-EOM-018: while the connection question is open, GET /plan
+        returns 409."""
+        body = _create(client, PALATINI_LAGRANGIAN)
+        response = client.get(f"/sessions/{body['session_id']}/plan")
+        assert response.status_code == 409
+
+    def test_palatini_derive_blocked_while_connection_open(self, client):
+        """VAL-EOM-008: while the connection question is open, POST /derive
+        returns 409 (not a guess)."""
+        body = _create(client, PALATINI_LAGRANGIAN)
+        response = client.post(
+            f"/sessions/{body['session_id']}/derive",
+            json={"with_respect_to": ["g", "Gamma"]},
+        )
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail.get("blocked") is True
+        assert detail.get("questions")
+
+    def test_palatini_resolve_independent_enables_connection_step(self, client):
+        """VAL-EOM-018: resolving connection=independent enables the
+        independent-connection plan step."""
+        body = _create(client, PALATINI_LAGRANGIAN)
+        _resolve_all_palatini(client, body, connection="independent")
+        plan = client.get(f"/sessions/{body['session_id']}/plan")
+        assert plan.status_code == 200
+        capabilities = [s["capability"] for s in plan.json()["steps"]]
+        assert "independent-connection" in capabilities
+
+    def test_palatini_resolve_levi_civita_no_connection_step(self, client):
+        """Resolving to levi-civita must not produce an
+        independent-connection step."""
+        body = _create(client, PALATINI_LAGRANGIAN)
+        _resolve_all_palatini(client, body, connection="levi-civita")
+        plan = client.get(f"/sessions/{body['session_id']}/plan")
+        assert plan.status_code == 200
+        capabilities = [s["capability"] for s in plan.json()["steps"]]
+        assert "independent-connection" not in capabilities
+
+    @requires_cadabra
+    def test_palatini_derive_resolved_returns_both_eoms(self, store, tmp_path):
+        """VAL-EOM-008: on a resolved Palatini session, POST /derive with
+        with_respect_to=['g','Gamma'] returns both EOMs."""
+        client = TestClient(
+            create_app(
+                store=store,
+                llm=StubLLMAdapter(reply=templates.get("eval2_palatini_metric")),
+                results_root=tmp_path,
+            )
+        )
+        body = _create(client, PALATINI_LAGRANGIAN)
+        _resolve_all_palatini(client, body)
+        sid = body["session_id"]
+        response = client.post(
+            f"/sessions/{sid}/derive",
+            json={"with_respect_to": ["g", "Gamma"]},
+        )
+        assert response.status_code == 200
+        derivations = response.json()["derivations"]
+        wrt_set = {d["wrt"] for d in derivations}
+        assert "g" in wrt_set
+        assert "Gamma" in wrt_set
+
+    @requires_cadabra
+    def test_palatini_gated_eom_has_nonempty_detail(self, store, tmp_path):
+        """VAL-EOM-017: a gated EOM derivation has verified==false and a
+        non-empty detail."""
+        client = TestClient(
+            create_app(
+                store=store,
+                llm=StubLLMAdapter(
+                    reply=(
+                        'print("NOETHER_RESULT: x");\n'
+                        'print("NOETHER_CHECK: residue_zero=False");\n'
+                    )
+                ),
+                results_root=tmp_path,
+            )
+        )
+        body = _create(client, PALATINI_LAGRANGIAN)
+        _resolve_all_palatini(client, body)
+        sid = body["session_id"]
+        response = client.post(
+            f"/sessions/{sid}/derive",
+            json={"with_respect_to": ["g"]},
+        )
+        assert response.status_code == 200
+        d = response.json()["derivations"][0]
+        assert d["verified"] is False
+        assert d["detail"], "gated derivation must have non-empty detail"

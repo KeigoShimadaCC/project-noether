@@ -94,7 +94,9 @@ noether/             Python package
                      derivations.json per result; read_results reloads a
                      session's recorded derivations for history)
   orchestrator/      Session state machine, planner with ambiguity gate,
-                     ingest (LaTeX action -> draft NPR + open ambiguity ledger),
+                     ingest (LaTeX action -> draft NPR + open ambiguity ledger;
+                     adds a Gamma connection object when the action carries an
+                     explicit connection, so the derive path can vary it),
                      elicit (model proposes resolutions; only human-confirmed
                      answers mutate the NPR, including geometry.connection and
                      the Ricci-contraction question that opens for an
@@ -103,7 +105,9 @@ noether/             Python package
                      NPRs, K(T), L(Q), and the f(Q) scalar Q; human adopts),
                      derive (general EOM / perturbation path: model writes a
                      Cadabra script, kernel's residue check decides verified vs
-                     unverified; plus derive_adm, a SymPy-verified ADM split),
+                     unverified; derive_eom includes connection fields in its
+                     default list when geometry.connection.type is independent;
+                     plus derive_adm, a SymPy-verified ADM split),
                      store (JSON session persistence; derive records each
                      result id into the session so history reloads)
   server/            HTTP session API (FastAPI, optional [server] extra):
@@ -111,7 +115,10 @@ noether/             Python package
                      endpoint, all under the no-guessing contract
   mcp/               MCP stdio server (optional [mcp] extra): same session
                      surface as tools (incl. noether_derive and
-                     noether_results); refusals are tool results, not guesses
+                     noether_results); refusals are tool results, not guesses;
+                     noether_derive with with_respect_to=['g','Gamma'] returns
+                     both EOMs on a resolved Palatini session and a blocked
+                     dict when the connection ambiguity is still open
   cli/               `noether chat` / `resume` / `sessions` (conversational
                      loop, chat.py; numbered geometry answers go through the
                      same menu-validation path as HTTP resolve before the

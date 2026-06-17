@@ -173,8 +173,14 @@ script that cannot make the residue vanish yields an unverified result, shown as
 such and never as truth, and the detail says which way it failed: a script that
 never reached the residue check (a script or kernel error, reported with the
 stderr tail) reads differently from one that ran and found a nonzero residue.
-The model writes a script; the kernel decides whether the answer holds. This covers the `vary` task for the metric, scalar, and
-gauge-field classes. The `perturb` task now runs through the same model-written
+The model writes a script; the kernel decides whether the answer holds. This covers the `vary` task for the metric, scalar, connection,
+and gauge-field classes. On a Palatini (independent-connection) session the
+MCP/HTTP `noether_derive` with `with_respect_to=['g','Gamma']` returns both EOMs
+(metric and connection); on a session with the connection ambiguity still open
+it returns a blocked dict with the open questions, never a guess. The planner
+raises `AmbiguityBlocked` (HTTP 409) until every ambiguity is resolved, and
+resolving the connection to `independent` enables the `INDEPENDENT_CONNECTION`
+plan step. The `perturb` task now runs through the same model-written
 path for scalar fields and the metric: `derive_perturbation` (reachable as
 `kind="perturbation"` on the server, MCP, and web clients) hands the model the
 `pert_scalar_quadratic` scaffold for scalars (eval 3p) or `pert_metric_quadratic`
