@@ -126,9 +126,10 @@ class TestCurvaturePrimitives:
             r" - 2 G4X g^{\mu\rho} g^{\nu\sigma}"
             r" \nabla_{\mu}{\nabla_{\nu}{\nabla_{\rho}{\nabla_{\sigma}{phi}}}};"
             "\n" + cv.commute_fourth_cross("phi", "ex") + "\n"
-            "distribute(ex); product_rule(ex); distribute(ex);\n"
-            r"substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);"
-            "\n"
+            # No product_rule: the leftover nabla_mu(R nabla phi) is already
+            # second order in phi, so it need not be expanded. product_rule on
+            # this 4-derivative term crashes cadabra 2.5.14 (the CI deb) with a
+            # heap error, while the box^2 cancellation here does not need it.
             "distribute(ex); canonicalise(ex); rename_dummies(ex); meld(ex);\n"
             "chk := @(ex);\n"
             r"substitute(chk, $\nabla_{\mu}{\nabla_{\nu}{\nabla_{\rho}{phi}}} -> 0$);"
