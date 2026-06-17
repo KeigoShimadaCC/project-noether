@@ -506,16 +506,27 @@ stress with coupling `-G'` (since `G box phi = -G' (nabla phi)^2` up to a
 boundary term). So the cubic Galileon coupled to Einstein gravity yields both
 equations of motion compositionally.
 
-What still does not verify: the higher Horndeski densities (an `X`-dependent
-`G4(phi, X) R`, and G5) have no block and no audited template. Their covariant
-equations of motion carry curvature derivatives and the no-Ostrogradski
-counterterms, so they are held out until they residue-check cleanly rather than
-added as a partial path; a term like `G(phi, X) R` matches no block and falls
-back to the model path or is refused. The `perturb` path does expand `X`: the
-k-essence scaffold (eval 3k) carries the quadratic action and sound speed of a
-general `K(phi, X)`, on a covariantly-constant-gradient background. The ADM
-split verifies for any metric action, but it is the universal foliation
-geometry, not a Horndeski-specific Hamiltonian.
+What still does not verify: the higher Horndeski densities, the `X`-dependent
+quartic `G4(phi, X) R + G4_X[(box phi)^2 - (nabla_a nabla_b phi)^2]` and the
+quintic G5. These are held out, not shipped partially. The reason is concrete.
+Setting up the quartic scalar variation is straightforward (the term-by-term
+expansion runs in Cadabra), but reducing it to a verified second-order equation
+needs machinery the codebase does not have yet: the curvature commutator
+`[nabla_a, nabla_b] nabla_c phi = -R^d{}_{cab} nabla_d phi`, the contracted
+Bianchi identity, and the Riemann/Ricci contractions through which the apparent
+third derivatives cancel (the no-Ostrogradski structure that the `G4_X`
+counterterm exists to enforce). The existing curvature path only carries the
+linearized Ricci variation (`delta R_{ab}` in terms of `delta Gamma`), enough
+for `F(phi) R` but not for a curvature term whose coefficient depends on `X`.
+And the gate is both equations of motion or neither: a quartic term ships only
+when its scalar and metric equations both residue-check, so until the Riemann
+reduction is built and audited, `G4(phi, X) R` and G5 fall back to the model
+path or are refused rather than added as a partial result. By contrast the
+`perturb` path does expand `X`: the k-essence scaffold (eval 3k) carries the
+quadratic action and sound speed of a general `K(phi, X)`, on a
+covariantly-constant-gradient background. The ADM split verifies for any metric
+action, but it is the universal foliation geometry, not a Horndeski-specific
+Hamiltonian.
 
 ## 7. Provenance bundles
 
