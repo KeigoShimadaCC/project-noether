@@ -44,6 +44,8 @@ select = ["E", "F", "I", "UP", "B"]
 "noether/kernels/cadabra/templates.py" = ["E501"]
 # blocks.py assembles Cadabra-script fragments (same verbatim-artifact reason).
 "noether/kernels/cadabra/blocks.py" = ["E501"]
+# test_curvature.py embeds verbatim Cadabra declaration strings.
+"tests/test_curvature.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "evals"]

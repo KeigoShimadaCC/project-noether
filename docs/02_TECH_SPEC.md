@@ -511,17 +511,34 @@ quartic `G4(phi, X) R + G4_X[(box phi)^2 - (nabla_a nabla_b phi)^2]` and the
 quintic G5. These are held out, not shipped partially. The reason is concrete.
 Setting up the quartic scalar variation is straightforward (the term-by-term
 expansion runs in Cadabra), but reducing it to a verified second-order equation
-needs machinery the codebase does not have yet: the curvature commutator
-`[nabla_a, nabla_b] nabla_c phi = -R^d{}_{cab} nabla_d phi`, the contracted
-Bianchi identity, and the Riemann/Ricci contractions through which the apparent
-third derivatives cancel (the no-Ostrogradski structure that the `G4_X`
-counterterm exists to enforce). The existing curvature path only carries the
-linearized Ricci variation (`delta R_{ab}` in terms of `delta Gamma`), enough
-for `F(phi) R` but not for a curvature term whose coefficient depends on `X`.
-And the gate is both equations of motion or neither: a quartic term ships only
-when its scalar and metric equations both residue-check, so until the Riemann
-reduction is built and audited, `G4(phi, X) R` and G5 fall back to the model
-path or are refused rather than added as a partial result. By contrast the
+needs curvature machinery a generic `\nabla{#}::Derivative` does not supply: the
+commutator `[nabla_a, nabla_b] nabla_c phi = -R^d{}_{cab} nabla_d phi`, the
+metric-contracted Riemann-to-Ricci-to-scalar folds, the symmetry of the scalar
+Hessian, and the contracted Bianchi identity. These are the identities through
+which the apparent third derivatives are meant to cancel (the no-Ostrogradski
+structure the `G4_X` counterterm exists to enforce).
+
+The primitives now exist as a reusable layer, `noether/kernels/cadabra/curvature.py`,
+each one pinned by a residue-checking test in `tests/test_curvature.py`: the
+commutator (a difference form and a single-term form), the Ricci and scalar
+folds, the Hessian symmetrization through a symmetric stand-in, and the
+contracted Bianchi identity (carried as a citable standard result, not
+re-derived). That is the layer the higher-Horndeski work builds on.
+
+What is still open is the orchestration. Applying the primitives blindly to the
+full quartic scalar variation does not converge: the one-way commutator reorders
+third derivatives without driving them to a canonical order, and the fourth
+derivatives from the counterterm's own variation survive. So the scalar equation
+does not yet reduce to second order, and a careful diagnostic matters here, an
+inner-Hessian substitution that looks like it proves second order silently zeroes
+every higher-derivative term too, a false positive worth flagging. Closing the
+G4 equations needs a principled reduction-to-canonical-ordering pass on top of
+the verified primitives, then the harder metric equation (the full `delta R` with
+an `X`-dependent coefficient), then G5. The gate is both equations of motion or
+neither: a quartic term ships only when its scalar and metric equations both
+residue-check, so until that orchestration is built and audited, `G4(phi, X) R`
+and G5 fall back to the model path or are refused rather than added as a partial
+result. By contrast the
 `perturb` path does expand `X`: the k-essence scaffold (eval 3k) carries the
 quadratic action and sound speed of a general `K(phi, X)`, on a
 covariantly-constant-gradient background. The ADM split verifies for any metric
