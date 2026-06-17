@@ -739,6 +739,21 @@ covariantly-constant-gradient background. The ADM split verifies for any metric
 action, but it is the universal foliation geometry, not a Horndeski-specific
 Hamiltonian.
 
+The best-effort G4(phi,X)R / G5 closure attempt now exists as a dedicated module,
+`noether/kernels/cadabra/horndeski_g4g5.py`, exercised by
+`tests/test_horndeski_g4g5.py` (VAL-GEOM-015). The module constructs Cadabra
+scripts for both the scalar and metric EOM variations, applies the available M2
+primitives, and checks whether the result is second order. The scalar EOM is
+second order (no third derivatives of phi survive the IBP); the metric EOM
+carries third derivatives in wrapped `nabla_mu(G4_X nabla_nu nabla_rho phi
+nabla^rho phi)` terms that, upon expansion via `product_rule`, produce
+`G4_X nabla_mu nabla_nu nabla_rho phi nabla^rho phi`. Without the
+normal-ordering pass (SortCovDs), these cannot be systematically driven through
+the commutator, Ricci folds, and Bianchi, so the closure is gated
+(`verified=False` with a non-empty `detail` naming the blocker). The result
+satisfies the XOR condition: it is either fully verified (residue 0 and SymPy
+agrees) or gated with a named blocker; never verified with a gate unmet.
+
 ## 7. Provenance bundles
 
 Every result is a directory (and a DB row pointing at it):
