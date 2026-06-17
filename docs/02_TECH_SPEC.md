@@ -380,8 +380,9 @@ perturbative expansion (xPert), Young projection.
    it (`noether.kernels.cadabra.blocks`). The scalar EOM blocks are canonical
    kinetic, potential, cubic Galileon, k-essence `K(phi, X)`, and the nonminimal
    `F(phi) R` term (eval 7 and 8); the metric EOM blocks are Einstein-Hilbert,
-   nonminimal `F(phi) R`, kinetic, and potential (eval 8). So the full nonminimal
-   scalar-tensor theory yields both equations of motion compositionally. This is
+   nonminimal `F(phi) R`, kinetic, potential, and cubic Galileon `G(phi) box phi`
+   (eval 8 and 6). So the full nonminimal scalar-tensor theory and the cubic
+   Galileon yield both equations of motion compositionally. This is
    the non-tailored route to the general scalar Horndeski sector: any sum of
    registered blocks verifies without a new template, and an unrecognized term
    (an `X`-dependent `G4(phi, X) R`, say) leaves the decomposition partial so the
@@ -473,6 +474,18 @@ template, and a vacuum action (`R` alone) verifies as the Einstein tensor. Each
 metric block was confirmed against the kernel before wiring (Einstein-Hilbert
 alone returns `G_{mu nu}`; `F(phi) R` + kinetic + potential reproduces eval 3's
 residue).
+
+The cubic Galileon `G(phi) box phi` then joined the metric blocks (eval 6). Its
+metric variation needs one step the others do not: the second covariant
+derivative of the field varies as `delta(nabla_a nabla_b phi) = -dGamma^l_{ab}
+nabla_l phi`. The assembler carries `nabla_a nabla_b phi` as a symmetric stand-in
+`Hess_{ab}` so `vary` can take that variation, restores it afterward, and runs
+the same two-pass IBP with the coupling chain rule `nabla G -> G' nabla phi`. The
+`G nabla nabla phi` pieces cancel and the residue checks against the cubic stress
+`-G' nabla_mu phi nabla_nu phi + 1/2 G' g_{mu nu}(nabla phi)^2`, the kinetic
+stress with coupling `-G'` (since `G box phi = -G' (nabla phi)^2` up to a
+boundary term). So the cubic Galileon coupled to Einstein gravity yields both
+equations of motion compositionally.
 
 What still does not verify: the higher Horndeski densities (an `X`-dependent
 `G4(phi, X) R`, and G5) have no block and no audited template. Their covariant

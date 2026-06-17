@@ -551,8 +551,24 @@ outer derivative, then on `δφ`), substitutes the coupling chain rule
 `∇_μK → K'∇_μφ` and `∇_μK' → K''∇_μφ`, and checks the residue against the
 independently stated target above. `residue_zero` is the kernel's verdict.
 `evals/test_eval6.py` runs both the frozen template and the model-written path
-(model stubbed to the audited script) end to end. The metric sector of the
-cubic theory has no audited scaffold yet, so this eval is scoped to `φ`.
+(model stubbed to the audited script) end to end.
+
+The metric sector now composes too. Varying `√-g G(φ)□φ` with respect to the
+metric needs one new step beyond the eval-3 machinery: the second covariant
+derivative of the field varies as `δ(∇_α∇_βφ) = -δΓ^λ_{αβ}∇_λφ`, handled in the
+assembler through a symmetric stand-in `Hess_{αβ}` whose variation rule supplies
+the `δΓ` term. After the two integration-by-parts passes and the coupling chain
+rule `∇G → G_φ∇φ`, the `G∇∇φ` pieces cancel and the residue is checked against
+the cubic stress tensor
+
+```
+E^{(3)}_{μν} = -G_φ ∇_μφ∇_νφ + ½ G_φ g_{μν}(∇φ)²,
+```
+
+the kinetic stress with coupling `-G_φ`, as expected from `G□φ ≡ -G_φ(∇φ)²` up
+to a boundary term. `test_eval6.py` verifies the cubic Galileon coupled to
+Einstein gravity (`R - ½(∇φ)² - V + G(φ)□φ`) this way, so the cubic block now
+yields both equations of motion with no per-theory template.
 
 ---
 
@@ -702,7 +718,7 @@ covariant equations of motion verify; they are held rather than added partially.
 | 3s | spectrum around Minkowski | perturbation, gauge, kinetic diagonalization | H2 |
 | 3p | scalar quadratic action | symbolic quadratic expansion on a general background | H2 |
 | 3g | graviton quadratic action | spin-2 expansion, linearized vacuum Einstein equation | H2 |
-| 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule | H3 |
+| 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule, both EOMs by composition | H3 |
 | 7 | k-essence / general scalar Horndeski | X-dependent coupling, block decomposition, no per-theory template | H3 |
 | 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |
 

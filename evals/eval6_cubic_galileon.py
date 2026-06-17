@@ -3,17 +3,24 @@
 Input action: S = \\int d^4x \\sqrt{-g} ( -1/2 (nabla phi)^2 - V(phi) + K(phi) box phi )
 
 This is the Horndeski G3 term K(phi) box phi added to a canonical scalar. The
-eval is scoped to the scalar field equation, the sector whose new mechanics
-(a coupling times box phi, peeled by a two-pass integration by parts plus the
-coupling chain rule) the audited template `eom_cubic_galileon_scalar` exercises.
+build_npr action below is scoped to the scalar field equation, the sector whose
+new mechanics (a coupling times box phi, peeled by a two-pass integration by
+parts plus the coupling chain rule) the audited template
+`eom_cubic_galileon_scalar` exercises.
 
 Expected scalar EOM (noether-default-v1):
   (1 + 2 K'(phi)) box phi + K''(phi) (nabla phi)^2 - V'(phi) = 0.
 
 The K(phi) box phi term contributes the braiding 2 K' box phi + K'' (nabla phi)^2:
 integrating K box(delta phi) by parts twice lands box on K, and box K =
-K'' (nabla phi)^2 + K' box phi through the chain rule. The pytest entry points
-live in evals/test_eval6.py.
+K'' (nabla phi)^2 + K' box phi through the chain rule.
+
+The metric sector composes as well (test_eval6.py): varying nabla nabla phi
+directly (a symmetric stand-in Hess_{ab} whose variation supplies -dGamma nabla
+phi) gives the cubic stress tensor -G_phi nabla_mu phi nabla_nu phi + 1/2 G_phi
+g_{mu nu} (nabla phi)^2, the kinetic stress with coupling -G_phi. So the cubic
+Galileon now yields both equations of motion with no per-theory template. The
+pytest entry points live in evals/test_eval6.py.
 """
 
 from noether.npr import NOETHER_DEFAULT_V1, NPR, Action, Ambiguity, Geometry, ObjectDecl, Task

@@ -32,11 +32,11 @@ A nonminimal F(phi) R term adds F_phi R to the scalar EOM.
 
 The metric equation of motion (delta S / delta g = 0) composes the same way,
 through the second half of this module: an additive Lagrangian decomposes into
-Einstein-Hilbert (R), nonminimal F(phi) R, kinetic, and potential blocks, and
-the eval-3 metric-variation machinery (vary into dGamma, two IBP passes, lower
-h to one explicit-g convention) is assembled once and residue-checked. So the
-full nonminimal scalar-tensor theory yields both equations of motion with no
-per-theory template.
+Einstein-Hilbert (R), nonminimal F(phi) R, kinetic, potential, and cubic
+Galileon G(phi) box phi blocks, and the eval-3 metric-variation machinery (vary
+into dGamma, two IBP passes, lower h to one explicit-g convention) is assembled
+once and residue-checked. So the full nonminimal scalar-tensor theory and the
+cubic Galileon yield both equations of motion with no per-theory template.
 
 A term matching no block leaves the decomposition incomplete and the caller
 refuses rather than guessing (rule 4). The higher Horndeski densities (an
@@ -558,6 +558,10 @@ def block_summary(matches: list[BlockMatch]) -> list[str]:
 #   kinetic c (nabla phi)^2 : c (nabla_mu phi nabla_nu phi
 #                                  - 1/2 g_{mu nu} (nabla phi)^2)
 #   potential c V        : -c/2 g_{mu nu} V
+#   cubic c G(phi) box phi : c (-G_phi nabla_mu phi nabla_nu phi
+#                                  + 1/2 G_phi g_{mu nu} (nabla phi)^2),
+#                            the kinetic stress with coupling -G_phi, obtained
+#                            by varying nabla nabla phi directly (Hess block)
 # ===========================================================================
 
 
@@ -581,6 +585,12 @@ def _match_metric_term(term: Expr, fieldname: str) -> BlockMatch | None:
         # out until it verifies, so it stays unmatched and the caller falls back.
         if len(funcs) == 1 and len(curvs) == 1 and _func_args(funcs[0]) == {fieldname}:
             return BlockMatch(NONMINIMAL, coeff, funcs[0].name)
+        # cubic Galileon G(phi) box phi: its metric stress is the kinetic stress
+        # with coupling -G_phi (since G box phi = -G_phi (nabla phi)^2 up to a
+        # boundary term), derived here directly by varying nabla nabla phi.
+        boxes = [f for f in rest if _is_box(f, fieldname)]
+        if len(funcs) == 1 and len(boxes) == 1 and _func_args(funcs[0]) == {fieldname}:
+            return BlockMatch(CUBIC, coeff, funcs[0].name)
 
     return None
 
@@ -608,6 +618,10 @@ def _metric_integrand_monomial(match: BlockMatch) -> tuple[Fraction, str]:
         return (c, r"sg g^{\alpha\beta} \nabla_{\alpha}{\phi} \nabla_{\beta}{\phi}")
     if match.block == POTENTIAL:
         return (c, f"sg {match.coupling}")
+    if match.block == CUBIC:
+        # Hess_{ab} stands in for nabla_a nabla_b phi so vary() can take its
+        # metric variation (Hess -> -dGamma nabla phi); restored after vary.
+        return (c, f"sg {match.coupling} g^{{\\alpha\\beta}} Hess_{{\\alpha\\beta}}")
     raise ValueError(match.block)
 
 
@@ -643,33 +657,62 @@ def _metric_target_monomials(match: BlockMatch) -> list[tuple[Fraction, str]]:
         ]
     if match.block == POTENTIAL:
         return [(c / 2, f"sg g^{{\\mu\\nu}} h_{{\\mu\\nu}} {match.coupling}")]
+    if match.block == CUBIC:
+        gp = coupling_symbols(match)["d1"]
+        return [
+            (
+                c,
+                f"sg {gp} h_{{\\mu\\nu}} g^{{\\mu\\alpha}} g^{{\\nu\\beta}} "
+                r"\nabla_{\alpha}{\phi} \nabla_{\beta}{\phi}",
+            ),
+            (
+                -c / 2,
+                f"sg {gp} g^{{\\mu\\nu}} h_{{\\mu\\nu}} g^{{\\alpha\\beta}} "
+                r"\nabla_{\alpha}{\phi} \nabla_{\beta}{\phi}",
+            ),
+        ]
     raise ValueError(match.block)
 
 
 def _metric_declarations(matches: list[BlockMatch]) -> str:
     depends = {"h{#}", "R_{\\mu\\nu}", "dGamma^{\\lambda}_{\\mu\\nu}"}
+    has_cubic = False
     for m in matches:
-        if m.block in (NONMINIMAL, KINETIC):
+        if m.block in (NONMINIMAL, KINETIC, CUBIC):
             depends.add("\\phi")
         if m.coupling is not None:
             depends.add(m.coupling)
+        if m.block == CUBIC:
+            has_cubic = True
+            for s in coupling_symbols(m).values():
+                depends.add(s)
     ordered = ", ".join(sorted(depends, key=lambda s: (s.startswith("\\"), s)))
+    hess_decl = "Hess_{\\mu\\nu}::Symmetric.\n" if has_cubic else ""
     head = (
         f"{_DECL_HEAD}\n"
         "h_{\\mu\\nu}::Symmetric.\n"
         "h^{\\mu\\nu}::Symmetric.\n"
         "R_{\\mu\\nu}::Symmetric.\n"
+        f"{hess_decl}"
         f"{{{ordered}}}::Depends(\\nabla{{#}})."
     )
     return head
 
 
-_METRIC_VARY = (
-    r"vary(ex, $g^{\alpha\beta} -> -h^{\alpha\beta}, "
-    r"sg -> 1/2 sg g^{\mu\nu} h_{\mu\nu}, "
-    r"R_{\alpha\beta} -> \nabla_{\lambda}{dGamma^{\lambda}_{\beta\alpha}} "
-    r"- \nabla_{\beta}{dGamma^{\lambda}_{\lambda\alpha}}$);"
-)
+def _metric_vary(has_cubic: bool) -> str:
+    rules = [
+        r"g^{\alpha\beta} -> -h^{\alpha\beta}",
+        r"sg -> 1/2 sg g^{\mu\nu} h_{\mu\nu}",
+        r"R_{\alpha\beta} -> \nabla_{\lambda}{dGamma^{\lambda}_{\beta\alpha}} "
+        r"- \nabla_{\beta}{dGamma^{\lambda}_{\lambda\alpha}}",
+    ]
+    if has_cubic:
+        rules.append(
+            r"Hess_{\alpha\beta} -> - dGamma^{\lambda}_{\alpha\beta} \nabla_{\lambda}{\phi}"
+        )
+    return "vary(ex, $" + ", ".join(rules) + "$);"
+
+
 _METRIC_DGAMMA = (
     r"substitute(ex, $dGamma^{\lambda}_{\nu\sigma} -> 1/2 g^{\lambda\rho} "
     r"( \nabla_{\nu}{h_{\rho\sigma}} + \nabla_{\sigma}{h_{\rho\nu}} "
@@ -684,12 +727,37 @@ def assemble_metric_eom_script(matches: list[BlockMatch]) -> str:
     decl = _metric_declarations(matches)
     integrand = _render_cadabra([_metric_integrand_monomial(m) for m in matches])
     target = _render_cadabra([mono for m in matches for mono in _metric_target_monomials(m)])
+    cubic = [m for m in matches if m.block == CUBIC]
+    has_cubic = bool(cubic)
+
+    def _cubic_chain(second: bool) -> list[str]:
+        # After each IBP pass the derivative lands on the coupling; G(phi) is a
+        # function of phi only, so nabla G = G' nabla phi (and nabla G' = G'').
+        subs: list[str] = []
+        for m in cubic:
+            sym = coupling_symbols(m)
+            if second:
+                subs.append(
+                    f"substitute(ex, $\\nabla_{{\\mu}}{{{sym['d1']}}} "
+                    f"-> {sym['d2']} \\nabla_{{\\mu}}{{\\phi}}$);"
+                )
+            subs.append(
+                f"substitute(ex, $\\nabla_{{\\mu}}{{{m.coupling}}} "
+                f"-> {sym['d1']} \\nabla_{{\\mu}}{{\\phi}}$);"
+            )
+        return subs
 
     lines: list[str] = [
         decl,
         "",
         f"ex := \\int{{ {integrand} }}{{x}};",
-        _METRIC_VARY,
+        _metric_vary(has_cubic),
+    ]
+    if has_cubic:
+        lines.append(
+            r"substitute(ex, $Hess_{\alpha\beta} -> \nabla_{\alpha}{\nabla_{\beta}{\phi}}$);"
+        )
+    lines += [
         _METRIC_DGAMMA,
         "distribute(ex);",
         "product_rule(ex);",
@@ -700,11 +768,13 @@ def assemble_metric_eom_script(matches: list[BlockMatch]) -> str:
         "distribute(ex);",
         _METRIC_SUBS,
         r"substitute(ex, $\nabla_{\mu}{sg} -> 0$);",
+        *_cubic_chain(second=False),
         r"integrate_by_parts(ex, $h_{\rho\sigma}$);",
         "product_rule(ex);",
         "distribute(ex);",
         _METRIC_SUBS,
         r"substitute(ex, $\nabla_{\mu}{sg} -> 0$);",
+        *_cubic_chain(second=True),
         r"substitute(ex, $\int{A??}{x} -> A??$);",
         r"substitute(ex, $h^{\alpha\beta} -> g^{\alpha\gamma} g^{\beta\chi} h_{\gamma\chi}$);",
         "distribute(ex);",
@@ -755,6 +825,12 @@ def _metric_display_monomials(match: BlockMatch) -> list[tuple[Fraction, str]]:
         ]
     if match.block == POTENTIAL:
         return [(-c / 2, f"g_{{\\mu\\nu}} {match.coupling}")]
+    if match.block == CUBIC:
+        n = match.coupling
+        return [
+            (-c, f"{n}_{{\\phi}}\\nabla_{{\\mu}}\\phi\\,\\nabla_{{\\nu}}\\phi"),
+            (c / 2, f"{n}_{{\\phi}} g_{{\\mu\\nu}}(\\nabla\\phi)^2"),
+        ]
     raise ValueError(match.block)
 
 

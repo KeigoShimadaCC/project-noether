@@ -23,6 +23,9 @@ from noether.kernels.cadabra.blocks import (
 from noether.npr.parse import parse_lagrangian
 
 SCALAR_TENSOR = r"F(\phi) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi)"
+SCALAR_TENSOR_CUBIC = (
+    r"F(\phi) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi) + G(\phi)\Box\phi"
+)
 G4_DENSITY = r"G(\phi, X) R - V(\phi)"
 
 GENERAL = r"K(\phi, X) - V(\phi) + G(\phi)\Box\phi"
@@ -141,6 +144,22 @@ class TestMetricDecomposition:
         dec = decompose_metric(parse_lagrangian(G4_DENSITY), "phi")
         assert not dec.full
 
+    def test_cubic_galileon_metric_block(self):
+        # G(phi) box phi composes in the metric sector too (its stress is the
+        # kinetic stress with coupling -G_phi).
+        dec = decompose_metric(parse_lagrangian(SCALAR_TENSOR_CUBIC), "phi")
+        assert dec.full
+        by_block = {m.block: m for m in dec.matches}
+        assert set(by_block) == {NONMINIMAL, KINETIC, POTENTIAL, CUBIC}
+        assert by_block[CUBIC].coupling == "G"
+
+    def test_cubic_metric_display_is_kinetic_stress_of_minus_g_phi(self):
+        dec = decompose_metric(parse_lagrangian(r"G(\phi)\Box\phi"), "phi")
+        tex = compose_metric_display_tex(dec.matches)
+        assert "G_{\\phi}\\nabla_{\\mu}\\phi" in tex
+        assert "G_{\\phi} g_{\\mu\\nu}(\\nabla\\phi)^2" in tex
+        assert tex.endswith("= 0")
+
     def test_metric_display_is_modified_einstein(self):
         dec = decompose_metric(parse_lagrangian(SCALAR_TENSOR), "phi")
         tex = compose_metric_display_tex(dec.matches)
@@ -162,3 +181,15 @@ class TestMetricAssembler:
         assert "dGamma" in src
         assert "NOETHER_CHECK: residue_zero=" in src
         assert "sg F g^{\\alpha\\beta} R_{\\alpha\\beta}" in src
+
+    def test_cubic_metric_script_has_hess_rule_and_chain(self):
+        dec = decompose_metric(parse_lagrangian(r"G(\phi)\Box\phi"), "phi")
+        src = assemble_metric_eom_script(dec.matches)
+        # the second derivative of phi is varied through the Hess stand-in
+        assert "Hess_{\\mu\\nu}::Symmetric" in src
+        assert "Hess_{\\alpha\\beta} -> - dGamma" in src
+        assert "Hess_{\\alpha\\beta} -> \\nabla_{\\alpha}{\\nabla_{\\beta}{\\phi}}" in src
+        # coupling chain rule between IBP passes
+        assert "Gp \\nabla_{\\mu}{\\phi}" in src
+        assert "Gpp \\nabla_{\\mu}{\\phi}" in src
+        assert "NOETHER_CHECK: residue_zero=" in src

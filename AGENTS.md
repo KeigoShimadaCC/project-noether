@@ -138,8 +138,9 @@ one script for the real action plus an independent candidate from the same
 blocks, and the kernel residue-checks it. The scalar EOM blocks are canonical
 kinetic, potential, cubic Galileon, k-essence `K(phi, X)`, and nonminimal
 `F(phi) R` (eval 7 and 8); the metric EOM blocks are Einstein-Hilbert,
-nonminimal `F(phi) R`, kinetic, and potential (eval 8), so the full nonminimal
-scalar-tensor theory yields both equations of motion this way. It expands `X` to
+nonminimal `F(phi) R`, kinetic, potential, and cubic Galileon `G(phi) box phi`
+(eval 8 and 6), so the full nonminimal scalar-tensor theory and the cubic
+Galileon yield both equations of motion this way. It expands `X` to
 its primitive in the kernel and collapses it back for display, and refuses
 (falls back to the model path) on any term that matches no block, including the
 held-out higher Horndeski densities (`G4(phi, X) R`, G5). The `perturb` task runs through the

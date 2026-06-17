@@ -20,6 +20,11 @@ from evals.eval6_cubic_galileon import (
 )
 from noether.kernels.base import Capability, KernelTask
 from noether.kernels.cadabra import CadabraAdapter, templates
+from noether.kernels.cadabra.blocks import (
+    CUBIC,
+    assemble_metric_eom_script,
+    decompose_metric,
+)
 from noether.kernels.cadabra.generate import _variation_key
 from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import StubLLMAdapter
@@ -94,3 +99,21 @@ class TestKernelDerivation:
         assert d.result_tex
         assert d.kernel_name == "cadabra"
         assert d.bundle_path
+
+    def test_cubic_galileon_metric_eom_verifies(self):
+        # Cubic Galileon coupled to Einstein gravity: the metric EOM composes
+        # and the kernel residue is zero. The cubic stress is the kinetic stress
+        # of -G_phi, obtained by varying nabla nabla phi directly (Hess block).
+        lag = parse_lagrangian(
+            r"R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi) + G(\phi)\Box\phi"
+        )
+        dec = decompose_metric(lag, "phi")
+        assert dec.full and any(m.block == CUBIC for m in dec.matches)
+        result = CadabraAdapter().run(
+            KernelTask(
+                capability=Capability.VARY,
+                description="cubic Galileon metric variation",
+                payload={"script": assemble_metric_eom_script(dec.matches)},
+            )
+        )
+        assert result.value["checks"].get("residue_zero") == "True", result.raw.stdout
