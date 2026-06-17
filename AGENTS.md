@@ -95,7 +95,9 @@ noether/             Python package
   orchestrator/      Session state machine, planner with ambiguity gate,
                      ingest (LaTeX action -> draft NPR + open ambiguity ledger),
                      elicit (model proposes resolutions; only human-confirmed
-                     answers mutate the NPR), definitions (propose readability
+                     answers mutate the NPR, including geometry.connection and
+                     the Ricci-contraction question that opens for an
+                     independent connection), definitions (propose readability
                      shorthands like F_phi for dF/dphi; human adopts),
                      derive (general EOM / perturbation path: model writes a
                      Cadabra script, kernel's residue check decides verified vs

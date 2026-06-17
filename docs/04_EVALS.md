@@ -182,7 +182,10 @@ from the Riemann tensor of `Γ`:
 2. `R_{μν}(Γ)` depends on `Γ` only; the metric enters only through `√-g` and
    contractions. Note: `R_{μν}(Γ)` is **not** symmetric in general; only its
    symmetric part couples to `δg^{μν}`.
-3. Conventions as default; ask: equations of motion for both fields.
+3. Once the connection is confirmed independent, elicitation must surface the
+   Ricci-contraction convention as an open on-menu choice before planning can
+   continue.
+4. Conventions as default otherwise; ask: equations of motion for both fields.
 
 The distance between eval 1 and eval 2 is exactly one elicitation answer
 (`connection.type`), which is the point: the same LaTeX string is two different

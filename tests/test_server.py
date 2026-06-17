@@ -91,6 +91,9 @@ class TestResolveAndPlan:
             json={"resolutions": {question["id"]: "not-an-option"}},
         )
         assert response.status_code == 400
+        after = client.get(f"/sessions/{body['session_id']}").json()
+        unresolved = {q["id"]: q["resolution"] for q in after["questions"]}
+        assert unresolved[question["id"]] is None
 
     def test_unknown_ambiguity_rejected(self, client):
         body = _create(client)
@@ -111,6 +114,86 @@ class TestResolveAndPlan:
         plan = client.get(f"/sessions/{body['session_id']}/plan")
         assert plan.status_code == 200
         assert plan.json()["task_type"] == "vary"
+        assert all(
+            step["capability"] != "independent-connection" for step in plan.json()["steps"]
+        )
+
+    def test_independent_connection_live_path_surfaces_ricci_and_then_plans(self, client, store):
+        body = _create(client, "R")
+        sid = body["session_id"]
+
+        response = client.post(
+            f"/sessions/{sid}/resolve",
+            json={
+                "resolutions": {
+                    "amb-conventions": "noether-default-v1",
+                    "amb-vary-wrt": "g",
+                    "amb-connection": "independent",
+                    "amb-torsion": "torsion-allowed",
+                    "amb-nonmetricity": "nonmetricity-free",
+                    "amb-metric-compatibility": "metric-compatible",
+                }
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["well_posed"] is False
+
+        session = store.get(sid)
+        assert session.npr.geometry.connection.type == "independent"
+
+        ricci = next(q for q in response.json()["questions"] if q["id"] == "amb-ricci-contraction")
+        assert ricci["resolution"] is None
+        assert len(ricci["options"]) > 1
+
+        blocked = client.get(f"/sessions/{sid}/plan")
+        assert blocked.status_code == 409
+        assert any("Ricci" in question for question in blocked.json()["detail"]["questions"])
+
+        response = client.post(
+            f"/sessions/{sid}/resolve",
+            json={"resolutions": {"amb-ricci-contraction": "first-fourth"}},
+        )
+        assert response.status_code == 200
+        assert response.json()["well_posed"] is True
+
+        plan = client.get(f"/sessions/{sid}/plan")
+        assert plan.status_code == 200
+        independent = next(
+            step for step in plan.json()["steps"] if step["capability"] == "independent-connection"
+        )
+        assert "torsion=True, nonmetricity=False" in independent["description"]
+
+    def test_reresolving_to_levi_civita_resets_connection_flags(self, client, store):
+        body = _create(client, "R")
+        sid = body["session_id"]
+
+        response = client.post(
+            f"/sessions/{sid}/resolve",
+            json={
+                "resolutions": {
+                    "amb-connection": "independent",
+                    "amb-torsion": "torsion-allowed",
+                    "amb-nonmetricity": "nonmetricity-allowed",
+                    "amb-metric-compatibility": "not-metric-compatible",
+                }
+            },
+        )
+        assert response.status_code == 200
+        assert any(q["id"] == "amb-ricci-contraction" for q in response.json()["questions"])
+
+        response = client.post(
+            f"/sessions/{sid}/resolve",
+            json={"resolutions": {"amb-connection": "levi-civita"}},
+        )
+        assert response.status_code == 200
+
+        session = store.get(sid)
+        connection = session.npr.geometry.connection
+        assert connection.type == "levi-civita"
+        assert connection.torsion is False
+        assert connection.nonmetricity is False
+        assert connection.metric_compatible is True
+        assert all(q["id"] != "amb-ricci-contraction" for q in response.json()["questions"])
 
     def test_sessions_persist_across_app_instances(self, store):
         first = TestClient(create_app(store=store))

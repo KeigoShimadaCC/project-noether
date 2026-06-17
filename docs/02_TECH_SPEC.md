@@ -194,9 +194,14 @@ plumbing deterministic in tests. The LLM gets tools, not freedom:
   against the allowed options (off-menu answers are discarded, never guessed),
   and returns suggestions plus model provenance without mutating the NPR. Only
   `apply_resolutions`, given human-confirmed choices, sets resolutions and
-  unblocks planning. Reachable as `noether elicit "<lagrangian>"`; the explicit
-  `--accept-llm` flag delegates confirmation to the model. Tested against all
-  five acceptance actions (`tests/test_llm.py`, `tests/test_elicit.py`).
+  mutates the dependent NPR fields. On the metric-affine path that means
+  `geometry.connection` is updated from the confirmed menu answers, off-menu
+  answers raise rather than slipping through, and choosing an independent
+  connection opens a follow-up Ricci-contraction convention question before
+  planning can continue. Reachable as `noether elicit "<lagrangian>"`; the
+  explicit `--accept-llm` flag delegates confirmation to the model. Tested
+  against all five acceptance actions (`tests/test_llm.py`,
+  `tests/test_elicit.py`).
 - `plan(task, npr) -> computation plan` (a DAG of kernel-task nodes)
 - `run_kernel(kernel, task, npr) -> npr_expression + raw artifacts`
 - `verify(result, checks) -> verdicts`

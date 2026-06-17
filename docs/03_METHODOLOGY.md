@@ -35,9 +35,11 @@ For metric-affine geometry, the action's structure can force a narrower set of
 questions. A term with curvature or an explicit connection opens the geometry
 questionnaire. Connection type, torsion, non-metricity, and metric compatibility
 are asked as menu-bound inferable questions, because the notation constrains the
-space of sensible answers even though the physicist still has to confirm one. A
-curvature-free scalar action does not open that questionnaire and stays on the
-default Levi-Civita draft.
+space of sensible answers even though the physicist still has to confirm one.
+If the physicist confirms an independent connection, elicitation opens one more
+conventional question: which Ricci contraction to use now that `R_{μν}` need not
+be symmetric. A curvature-free scalar action does not open that questionnaire
+and stays on the default Levi-Civita draft.
 
 ### 1.2 Question discipline
 

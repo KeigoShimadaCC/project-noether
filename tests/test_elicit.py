@@ -40,6 +40,13 @@ def _first_option_answers(npr) -> dict[str, str]:
     return {amb.id: amb.options[0] for amb in npr.ambiguities}
 
 
+def _resolve_all_first_options(npr):
+    confirmed = npr
+    while confirmed.unresolved_ambiguities():
+        confirmed = apply_resolutions(confirmed, _first_option_answers(confirmed))
+    return confirmed
+
+
 class TestPromptBuilding:
     def test_prompt_mentions_every_question_and_the_action(self):
         npr = _ingest(eval3_scalar_tensor)
@@ -82,6 +89,8 @@ class TestApplyResolutions:
         proposal = propose_resolutions(npr, llm)
         confirmations = {p.ambiguity_id: p.choice for p in proposal.proposals if p.choice}
         confirmed = apply_resolutions(npr, confirmations)
+        if confirmed.unresolved_ambiguities():
+            confirmed = _resolve_all_first_options(confirmed)
         assert confirmed.is_well_posed()
         assert build_plan(confirmed).task_type == "vary"
 
