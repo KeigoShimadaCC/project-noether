@@ -521,24 +521,42 @@ structure the `G4_X` counterterm exists to enforce).
 The primitives now exist as a reusable layer, `noether/kernels/cadabra/curvature.py`,
 each one pinned by a residue-checking test in `tests/test_curvature.py`: the
 commutator (a difference form and a single-term form), the Ricci and scalar
-folds, the Hessian symmetrization through a symmetric stand-in, and the
-contracted Bianchi identity (carried as a citable standard result, not
-re-derived). That is the layer the higher-Horndeski work builds on.
+folds, the Hessian symmetrization through a symmetric stand-in, the contracted
+Bianchi identity (carried as a citable standard result, not re-derived), and the
+targeted quartic box-commutator that takes the counterterm's own dangerous
+combination `box^2 phi - nabla_a nabla_b nabla^b nabla^a phi` to a purely
+second-order curvature coupling. That last one is the proof the approach works:
+its test confirms the leading fourth-derivative term collapses to
+`nabla R . nabla phi + R . nabla nabla phi` with no derivative of order three or
+higher left.
 
-What is still open is the orchestration. Applying the primitives blindly to the
-full quartic scalar variation does not converge: the one-way commutator reorders
-third derivatives without driving them to a canonical order, and the fourth
-derivatives from the counterterm's own variation survive. So the scalar equation
-does not yet reduce to second order, and a careful diagnostic matters here, an
-inner-Hessian substitution that looks like it proves second order silently zeroes
-every higher-derivative term too, a false positive worth flagging. Closing the
-G4 equations needs a principled reduction-to-canonical-ordering pass on top of
-the verified primitives, then the harder metric equation (the full `delta R` with
-an `X`-dependent coefficient), then G5. The gate is both equations of motion or
-neither: a quartic term ships only when its scalar and metric equations both
-residue-check, so until that orchestration is built and audited, `G4(phi, X) R`
-and G5 fall back to the model path or are refused rather than added as a partial
-result. By contrast the
+What is still open is the orchestration across the whole equation. Two lessons
+came out of the attempts. First, a blind one-way commutator pass does not
+converge: applied to every term it just trades the two contraction patterns'
+identities back and forth. The reduction has to be targeted at the specific
+contraction it means to fix, leaving an already-canonical term untouched.
+Second, the variation does not hand you the canonical contraction. The leading
+term comes out as `g^{a c} g^{b d} nabla_a nabla_b nabla_c nabla_d phi`, which
+equals the box-commutator's input only after the inner Hessian is symmetrized,
+and Cadabra's canonicalise does not symmetrize a nested second derivative. So the
+missing piece is a normal-ordering pass: symmetrize inner Hessians, then drive
+every third- and fourth-derivative contraction to a canonical order with the
+matching curvature-emitting commutator, so the dangerous pieces cancel and only
+curvature survives. This is exactly what xAct's xTras `SortCovDs` does, which
+makes full G4 and G5 closure a natural first job for the planned xAct
+cross-check kernel rather than a hand-rolled reimplementation in Cadabra.
+
+A diagnostic caution worth recording: an inner-Hessian substitution that looks
+like it proves second order (`nabla nabla phi -> H`, then `H -> 0`) silently
+zeroes every higher-derivative term too, since they all contain an inner Hessian.
+That gives a false "second order" pass. The honest check substitutes the bare
+third derivative to zero and confirms the difference vanishes.
+
+Then comes the harder metric equation (the full `delta R` with an `X`-dependent
+coefficient), then G5. The gate is both equations of motion or neither: a quartic
+term ships only when its scalar and metric equations both residue-check, so until
+that normal-ordering pass is built and audited, `G4(phi, X) R` and G5 fall back
+to the model path or are refused rather than added as a partial result. By contrast the
 `perturb` path does expand `X`: the k-essence scaffold (eval 3k) carries the
 quadratic action and sound speed of a general `K(phi, X)`, on a
 covariantly-constant-gradient background. The ADM split verifies for any metric

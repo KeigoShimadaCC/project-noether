@@ -81,6 +81,32 @@ def commute_third_derivative_oneway(field: str, ex: str = "ex") -> str:
     )
 
 
+def commute_fourth_cross(field: str, ex: str = "ex") -> str:
+    r"""Targeted reduction of the cross-contracted fourth derivative that the
+    quartic Horndeski counterterm produces:
+    ``g^{a c} g^{b d} nabla_a nabla_b nabla_c nabla_d field``
+    (metric on the 1st-3rd and 2nd-4th derivatives) into the
+    ``box^2`` ordering plus its middle-pair curvature term.
+
+    This is the move that closes the quartic no-Ostrogradski combination
+    ``box^2 field - nabla_a nabla_b nabla^b nabla^a field``: it matches only the
+    cross contraction (leaving an already-canonical ``box^2`` term untouched), so
+    after canonicalise the two fourth-derivative pieces cancel and only the
+    curvature coupling ``nabla R . nabla field + R . nabla nabla field`` remains.
+    A blind single-term swap instead oscillates, trading the two contractions'
+    identities back and forth."""
+    return (
+        f"substitute({ex}, $"
+        f"g^{{\\mu\\rho}} g^{{\\nu\\sigma}} "
+        f"\\nabla_{{\\mu}}{{\\nabla_{{\\nu}}{{\\nabla_{{\\rho}}{{\\nabla_{{\\sigma}}{{{field}}}}}}}}} "
+        f"-> g^{{\\mu\\rho}} g^{{\\nu\\sigma}} "
+        f"\\nabla_{{\\mu}}{{\\nabla_{{\\rho}}{{\\nabla_{{\\nu}}{{\\nabla_{{\\sigma}}{{{field}}}}}}}}} "
+        f"- g^{{\\mu\\rho}} g^{{\\nu\\sigma}} "
+        f"\\nabla_{{\\mu}}{{ g^{{\\epsilon\\lambda}} R_{{\\lambda\\sigma\\nu\\rho}} "
+        f"\\nabla_{{\\epsilon}}{{{field}}} }}$);"
+    )
+
+
 def hessian_to_symmetric(field: str, ex: str = "ex") -> str:
     r"""Route the scalar Hessian ``nabla_mu nabla_nu field`` through the symmetric
     stand-in ``H_{mu nu}``, so its (vanishing) antisymmetric part drops under

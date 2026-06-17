@@ -17,8 +17,8 @@ from noether.kernels.base import Capability, KernelTask
 from noether.kernels.cadabra import CadabraAdapter
 from noether.kernels.cadabra import curvature as cv
 
-_BASE_DECL = r"""{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\delta}::Indices(position=fixed).
-{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\delta}::Integer(range=0..3).
+_BASE_DECL = r"""{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\delta,\epsilon,\zeta}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\delta,\epsilon,\zeta}::Integer(range=0..3).
 \nabla{#}::Derivative.
 g_{\mu\nu}::Metric.
 g^{\mu\nu}::InverseMetric.
@@ -114,6 +114,32 @@ class TestCurvaturePrimitives:
         result = _run(body)
         assert result.raw.returncode == 0, result.raw.stderr
         assert result.value["checks"].get("scalar_zero") == "True", result.raw.stdout
+
+    def test_quartic_box_combination_reduces_to_second_order(self):
+        # The quartic Horndeski no-Ostrogradski combination
+        # 2 G4X (box^2 phi - nabla_a nabla_b nabla^b nabla^a phi) must collapse
+        # to a purely second-order curvature coupling: no derivative of phi of
+        # order three or higher may survive.
+        body = (
+            r"ex := 2 G4X g^{\mu\nu} g^{\rho\sigma}"
+            r" \nabla_{\mu}{\nabla_{\nu}{\nabla_{\rho}{\nabla_{\sigma}{phi}}}}"
+            r" - 2 G4X g^{\mu\rho} g^{\nu\sigma}"
+            r" \nabla_{\mu}{\nabla_{\nu}{\nabla_{\rho}{\nabla_{\sigma}{phi}}}};"
+            "\n" + cv.commute_fourth_cross("phi", "ex") + "\n"
+            "distribute(ex); product_rule(ex); distribute(ex);\n"
+            r"substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);"
+            "\n"
+            "distribute(ex); canonicalise(ex); rename_dummies(ex); meld(ex);\n"
+            "chk := @(ex);\n"
+            r"substitute(chk, $\nabla_{\mu}{\nabla_{\nu}{\nabla_{\rho}{phi}}} -> 0$);"
+            "\n"
+            "diff := @(ex) - @(chk);\n"
+            "canonicalise(diff); rename_dummies(diff); meld(diff);\n"
+            'print("NOETHER_CHECK: second_order=" + str(str(diff) == "0"))'
+        )
+        result = _run(body)
+        assert result.raw.returncode == 0, result.raw.stderr
+        assert result.value["checks"].get("second_order") == "True", result.raw.stdout
 
     def test_scalar_hessian_symmetrizes(self):
         body = (
