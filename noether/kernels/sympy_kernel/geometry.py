@@ -332,9 +332,7 @@ def torsion_axial_vector(gamma, geom: ComponentGeometry) -> Array:
     for lam in range(n):
         for mu in range(n):
             for nu in range(n):
-                T_down[lam, mu, nu] = _clean(
-                    sum(geom.g[lam, k] * T[k, mu, nu] for k in range(n))
-                )
+                T_down[lam, mu, nu] = _clean(sum(geom.g[lam, k] * T[k, mu, nu] for k in range(n)))
     T_down = Array(T_down)
     A_up = sp.MutableDenseNDimArray.zeros(n)
     for rho in range(n):
@@ -362,8 +360,7 @@ def torsion_trace_part(gamma) -> Array:
         for mu in range(n):
             for nu in range(n):
                 val = sp.Rational(1, 3) * (
-                    (1 if lam == mu else 0) * T_vec[nu]
-                    - (1 if lam == nu else 0) * T_vec[mu]
+                    (1 if lam == mu else 0) * T_vec[nu] - (1 if lam == nu else 0) * T_vec[mu]
                 )
                 out[lam, mu, nu] = _clean(val)
     return Array(out)
@@ -387,8 +384,7 @@ def torsion_axial_part(gamma, geom: ComponentGeometry) -> Array:
                     # epsilon^lam_{mu nu rho} = g^{lam kappa} epsilon_{kappa mu nu rho}
                     eps_up_first = _clean(
                         sum(
-                            geom.g_inv[lam, k]
-                            * _levi_civita_value(k, mu, nu, rho, n)
+                            geom.g_inv[lam, k] * _levi_civita_value(k, mu, nu, rho, n)
                             for k in range(n)
                         )
                     )
@@ -418,9 +414,7 @@ def torsion_traceless_tensor(gamma, geom: ComponentGeometry) -> Array:
     return Array(out)
 
 
-def nonmetricity_of_connection(
-    coords: list[sp.Symbol], gamma, g
-) -> Array:
+def nonmetricity_of_connection(coords: list[sp.Symbol], gamma, g) -> Array:
     """Q_{lambda mu nu} = nabla_lambda g_{mu nu} of a general connection.
 
     Convention: noether-default-v1 (architecture.md section 7).
@@ -451,9 +445,7 @@ def nonmetricity_of_connection(
     return Array(out)
 
 
-def nonmetricity_weyl_trace(
-    coords: list[sp.Symbol], gamma, g, g_inv
-) -> Array:
+def nonmetricity_weyl_trace(coords: list[sp.Symbol], gamma, g, g_inv) -> Array:
     """omega_lambda = Q_{lambda mu nu} g^{mu nu} (the Weyl / first trace).
 
     Returns a 1-form (all indices down).  The Weyl trace is the contraction
@@ -463,15 +455,11 @@ def nonmetricity_weyl_trace(
     n = Q.shape[0]
     out = sp.MutableDenseNDimArray.zeros(n)
     for lam in range(n):
-        out[lam] = _clean(
-            sum(Q[lam, mu, nu] * g_inv[mu, nu] for mu in range(n) for nu in range(n))
-        )
+        out[lam] = _clean(sum(Q[lam, mu, nu] * g_inv[mu, nu] for mu in range(n) for nu in range(n)))
     return Array(out)
 
 
-def nonmetricity_second_trace(
-    coords: list[sp.Symbol], gamma, g, g_inv
-) -> Array:
+def nonmetricity_second_trace(coords: list[sp.Symbol], gamma, g, g_inv) -> Array:
     """qtilde_mu = Q_{lambda mu nu} g^{lambda nu} (the second trace).
 
     Returns a 1-form (all indices down).  The second trace contracts the
@@ -487,9 +475,7 @@ def nonmetricity_second_trace(
     return Array(out)
 
 
-def nonmetricity_weyl_part(
-    coords: list[sp.Symbol], gamma, g, g_inv
-) -> Array:
+def nonmetricity_weyl_part(coords: list[sp.Symbol], gamma, g, g_inv) -> Array:
     """The Weyl-vector trace irreducible part of non-metricity:
 
     Q^(W)_{lambda mu nu} = (1/((n+2)(n-1)))
@@ -520,9 +506,7 @@ def nonmetricity_weyl_part(
     return Array(out)
 
 
-def nonmetricity_second_trace_part(
-    coords: list[sp.Symbol], gamma, g, g_inv
-) -> Array:
+def nonmetricity_second_trace_part(coords: list[sp.Symbol], gamma, g, g_inv) -> Array:
     """The second-trace irreducible part of non-metricity:
 
     Q^(2T)_{lambda mu nu} = (1/((n+2)(n-1)))
@@ -552,9 +536,7 @@ def nonmetricity_second_trace_part(
     return Array(out)
 
 
-def nonmetricity_traceless_tensor(
-    coords: list[sp.Symbol], gamma, g, g_inv
-) -> Array:
+def nonmetricity_traceless_tensor(coords: list[sp.Symbol], gamma, g, g_inv) -> Array:
     """The traceless-tensor irreducible part of non-metricity:
 
     Q^(TL)_{lambda mu nu} = Q_{lambda mu nu}
@@ -573,9 +555,7 @@ def nonmetricity_traceless_tensor(
     for lam in range(n):
         for mu in range(n):
             for nu in range(n):
-                out[lam, mu, nu] = _clean(
-                    Q[lam, mu, nu] - qw[lam, mu, nu] - q2t[lam, mu, nu]
-                )
+                out[lam, mu, nu] = _clean(Q[lam, mu, nu] - qw[lam, mu, nu] - q2t[lam, mu, nu])
     return Array(out)
 
 
@@ -614,9 +594,7 @@ def covariant_derivative_of_connection(
     return Array(out)
 
 
-def riemann_down_of_connection(
-    coords: list[sp.Symbol], gamma, g
-) -> Array:
+def riemann_down_of_connection(coords: list[sp.Symbol], gamma, g) -> Array:
     """R_{rho sigma mu nu} (all indices down) of a general connection.
 
     Computed as g_{rho alpha} R^alpha_{sigma mu nu}(Gamma).
@@ -743,9 +721,7 @@ def random_diagonal_metric(seed: int, dim: int = 4) -> ComponentGeometry:
     return ComponentGeometry(coords, g)
 
 
-def christoffel_of_metric(
-    coords: list[sp.Symbol], g, g_inv
-) -> Array:
+def christoffel_of_metric(coords: list[sp.Symbol], g, g_inv) -> Array:
     """Levi-Civita (Christoffel) connection of a metric.
 
     Gamma^a_{bc} = (1/2) g^{ad} (d_b g_{dc} + d_c g_{db} - d_d g_{bc})
@@ -800,22 +776,20 @@ def contortion_of_torsion(gamma, g, g_inv) -> Array:
                 # g^{lam sig} g_{mu tau} T^tau_{sig nu}
                 term2 = sum(
                     g_inv[lam, sig] * g[mu, tau] * T[tau, sig, nu]
-                    for sig in range(n) for tau in range(n)
+                    for sig in range(n)
+                    for tau in range(n)
                 )
                 # g^{lam sig} g_{nu tau} T^tau_{sig mu}
                 term3 = sum(
                     g_inv[lam, sig] * g[nu, tau] * T[tau, sig, mu]
-                    for sig in range(n) for tau in range(n)
+                    for sig in range(n)
+                    for tau in range(n)
                 )
-                out[lam, mu, nu] = _clean(
-                    sp.Rational(1, 2) * (term1 + term2 + term3)
-                )
+                out[lam, mu, nu] = _clean(sp.Rational(1, 2) * (term1 + term2 + term3))
     return Array(out)
 
 
-def disformation_of_nonmetricity(
-    coords: list[sp.Symbol], gamma, g, g_inv
-) -> Array:
+def disformation_of_nonmetricity(coords: list[sp.Symbol], gamma, g, g_inv) -> Array:
     """Disformation tensor L^lambda_{mu nu} from the non-metricity.
 
     L^lambda_{mu nu} = (1/2) g^{lambda rho}(-Q_{mu nu rho}
@@ -844,11 +818,7 @@ def disformation_of_nonmetricity(
         for mu in range(n):
             for nu in range(n):
                 val = sum(
-                    g_inv[lam, rho] * (
-                        -Q[mu, nu, rho]
-                        - Q[nu, rho, mu]
-                        + Q[rho, mu, nu]
-                    )
+                    g_inv[lam, rho] * (-Q[mu, nu, rho] - Q[nu, rho, mu] + Q[rho, mu, nu])
                     for rho in range(n)
                 )
                 out[lam, mu, nu] = _clean(sp.Rational(1, 2) * val)
@@ -882,3 +852,196 @@ def random_affine_connection(
                     q = _random_poly(rng, coords)
                     out[a, c, b] = q
     return Array(out)
+
+
+# ---------------------------------------------------------------------------
+# Modified Bianchi identity oracles (SymPy cross-check layer).
+#
+# These functions compute the residual (LHS - RHS) of the modified Bianchi
+# identities for a general affine connection, returning an array that should
+# be identically zero when the identity holds.  They serve as the SymPy
+# oracle for the dual-gate verification model (Cadabra residue + SymPy
+# component cross-check).
+#
+# Convention: noether-default-v1 + metric-affine-v1.
+# ---------------------------------------------------------------------------
+
+
+def first_bianchi_residual(coords: list[sp.Symbol], gamma: Array, g: Array, g_inv: Array) -> Array:
+    """Residual of the modified first Bianchi identity for a general
+    connection carrying torsion.
+
+    R^rho_{sigma mu nu} + R^rho_{mu nu sigma} + R^rho_{nu sigma mu}
+      - (nabla_sigma T^rho_{mu nu} + nabla_mu T^rho_{nu sigma}
+         + nabla_nu T^rho_{sigma mu}
+         + T^rho_{alpha sigma} T^alpha_{mu nu}
+         + T^rho_{alpha mu} T^alpha_{nu sigma}
+         + T^rho_{alpha nu} T^alpha_{sigma mu})
+
+    Returns a (n, n, n, n) array.  When the identity holds every
+    component is zero.  On a Levi-Civita connection (T=0) the RHS
+    vanishes and the residual is just the cyclic sum of the Riemann
+    tensor, which is zero for any metric-compatible torsion-free
+    connection.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+    n = len(coords)
+    R_up = riemann_of_connection(coords, gamma)
+    T = torsion_of_connection(gamma)
+    # riemann_of_connection already returns R^rho_{sigma mu nu} (raised)
+    # torsion_of_connection already returns T^rho_{mu nu} (raised)
+
+    # nabla_sigma T^rho_{mu nu} (covariant derivative of (1,2) tensor)
+    nabla_T = covariant_derivative_of_connection(coords, gamma, T, variances=["up", "down", "down"])
+    # T^rho_{alpha sigma} T^alpha_{mu nu}
+    TT = sp.MutableDenseNDimArray.zeros(n, n, n, n)
+    for rho in range(n):
+        for sig in range(n):
+            for mu in range(n):
+                for nu in range(n):
+                    TT[rho, sig, mu, nu] = _clean(
+                        sum(T[rho, alpha, sig] * T[alpha, mu, nu] for alpha in range(n))
+                    )
+    residual = sp.MutableDenseNDimArray.zeros(n, n, n, n)
+    for rho in range(n):
+        for sig in range(n):
+            for mu in range(n):
+                for nu in range(n):
+                    lhs = R_up[rho, sig, mu, nu] + R_up[rho, mu, nu, sig] + R_up[rho, nu, sig, mu]
+                    rhs = (
+                        nabla_T[sig, rho, mu, nu]
+                        + nabla_T[mu, rho, nu, sig]
+                        + nabla_T[nu, rho, sig, mu]
+                        + TT[rho, sig, mu, nu]
+                        + TT[rho, mu, nu, sig]
+                        + TT[rho, nu, sig, mu]
+                    )
+                    residual[rho, sig, mu, nu] = _clean(lhs - rhs)
+    return Array(residual)
+
+
+def contracted_second_bianchi_residual(
+    coords: list[sp.Symbol], gamma: Array, g: Array, g_inv: Array
+) -> Array:
+    """Residual of the modified contracted second Bianchi identity for a
+    general connection carrying torsion.
+
+    nabla_rho R^rho_{sigma mu nu}
+      - nabla_mu R_{sigma nu}
+      + nabla_nu R_{sigma mu}
+      + (R^rho_{sigma alpha mu} T^alpha_{nu rho}
+         + R^rho_{sigma alpha nu} T^alpha_{rho mu})
+      - R_{sigma alpha} T^alpha_{mu nu}
+
+    Returns a (n, n, n) array indexed [sigma, mu, nu].  When the identity
+    holds every component is zero.  On a Levi-Civita connection (T=0) the
+    correction terms vanish and the residual is just the LC contracted
+    second Bianchi identity.
+
+    The sign structure of the correction terms reflects the contraction:
+    R^rho_{sigma alpha rho} = -R_{sigma alpha} (antisymmetry of the last
+    pair of the Riemann tensor), so the double negation yields
+    +R_{sigma alpha} T^alpha_{mu nu} in the identity.  Moving the RHS to
+    the LHS gives +R^rho...T terms and -R_{sigma alpha} T^alpha.
+
+    **Caveat:** This simplified form is valid on metric-compatible (Q=0)
+    backgrounds where nabla commutes with index contraction.  For Q != 0,
+    use the uncontracted second Bianchi and contract numerically.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+    n = len(coords)
+    R_up = riemann_of_connection(coords, gamma)
+    Ric = ricci_of_connection(coords, gamma)
+    T = torsion_of_connection(gamma)
+
+    # nabla_rho R^rho_{sigma mu nu} (divergence on first index)
+    nabla_R = covariant_derivative_of_connection(
+        coords, gamma, R_up, variances=["up", "down", "down", "down"]
+    )
+    div_R = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for sig in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                div_R[sig, mu, nu] = _clean(sum(nabla_R[rho, rho, sig, mu, nu] for rho in range(n)))
+
+    nabla_Ric = covariant_derivative_of_connection(coords, gamma, Ric, variances=["down", "down"])
+
+    # Correction terms (moving RHS to LHS, so signs flip):
+    # Identity: LHS = -(corr1 + corr2) + corr3
+    # So residual = LHS - (-(corr1+corr2) + corr3) = LHS + corr1 + corr2 - corr3
+
+    # corr1: R^rho_{sigma alpha mu} T^alpha_{nu rho}
+    corr1 = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for sig in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                val = sp.Integer(0)
+                for rho in range(n):
+                    for alp in range(n):
+                        val += R_up[rho, sig, alp, mu] * T[alp, nu, rho]
+                corr1[sig, mu, nu] = _clean(val)
+
+    # corr2: R^rho_{sigma alpha nu} T^alpha_{rho mu}
+    corr2 = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for sig in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                val = sp.Integer(0)
+                for rho in range(n):
+                    for alp in range(n):
+                        val += R_up[rho, sig, alp, nu] * T[alp, rho, mu]
+                corr2[sig, mu, nu] = _clean(val)
+
+    # corr3: R_{sigma alpha} T^alpha_{mu nu} (positive in the identity)
+    corr3 = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for sig in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                val = sp.Integer(0)
+                for alp in range(n):
+                    val += Ric[sig, alp] * T[alp, mu, nu]
+                corr3[sig, mu, nu] = _clean(val)
+
+    # Residual = LHS - RHS = LHS - (-(corr1+corr2) + corr3)
+    #          = LHS + corr1 + corr2 - corr3
+    residual = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for sig in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                lhs = div_R[sig, mu, nu] - nabla_Ric[mu, sig, nu] + nabla_Ric[nu, sig, mu]
+                rhs = -(corr1[sig, mu, nu] + corr2[sig, mu, nu]) + corr3[sig, mu, nu]
+                residual[sig, mu, nu] = _clean(lhs - rhs)
+    return Array(residual)
+
+
+def lc_contracted_bianchi_residual(
+    coords: list[sp.Symbol], gamma: Array, g: Array, g_inv: Array
+) -> Array:
+    """Residual of the Levi-Civita contracted Bianchi identity
+    (divergence form) on a general connection.
+
+    g^{mu nu} nabla_mu R_{nu beta} - 1/2 nabla_beta R
+
+    Returns a (n,) array.  On a Levi-Civita connection this is zero
+    componentwise; on a connection with torsion or non-metricity it
+    is generically nonzero (the torsion trap).  This function is used
+    for the trap-guard test: reusing the LC contracted_bianchi under
+    torsion would be caught.
+
+    Convention: noether-default-v1.
+    """
+    n = len(coords)
+    Ric = ricci_of_connection(coords, gamma)
+    R_scalar = _clean(sum(g_inv[a, b] * Ric[a, b] for a in range(n) for b in range(n)))
+    nabla_Ric = covariant_derivative_of_connection(coords, gamma, Ric, variances=["down", "down"])
+    nabla_R = covariant_derivative_of_connection(coords, gamma, R_scalar, variances=[])
+    residual = sp.MutableDenseNDimArray.zeros(n)
+    for beta in range(n):
+        div_Ric = sp.Integer(0)
+        for mu in range(n):
+            for nu in range(n):
+                div_Ric += g_inv[mu, nu] * nabla_Ric[mu, nu, beta]
+        residual[beta] = _clean(div_Ric - sp.Rational(1, 2) * nabla_R[beta])
+    return Array(residual)

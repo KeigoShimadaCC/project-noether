@@ -168,9 +168,7 @@ AFFINE_CURVATURE_DECL = (
 
 # Depends block for the independent connection object (default name G).
 # Append after the metric/InverseMetric/KroneckerDelta declarations.
-AFFINE_CONNECTION_DEPENDS = (
-    r"{G^{\lambda}_{\mu\nu}, g_{\mu\nu}, g^{\mu\nu}}::Depends(\partial{#})."
-)
+AFFINE_CONNECTION_DEPENDS = r"{G^{\lambda}_{\mu\nu}, g_{\mu\nu}, g^{\mu\nu}}::Depends(\partial{#})."
 
 # Same, using nabla instead of partial derivatives (for scripts that keep
 # nabla as the derivative operator throughout).
@@ -558,11 +556,7 @@ def nonmetricity_weyl_trace(conn: str = "G", ex: str = "ex") -> str:
 
     The ``conn`` parameter is unused but kept for API consistency with
     other trace functions; the substitution is purely algebraic in Q."""
-    return (
-        f"substitute({ex}, $"
-        f"Q_{{\\mu}} -> "
-        f"g^{{\\alpha\\beta}} Q_{{\\mu\\alpha\\beta}}$);"
-    )
+    return f"substitute({ex}, $Q_{{\\mu}} -> g^{{\\alpha\\beta}} Q_{{\\mu\\alpha\\beta}}$);"
 
 
 def nonmetricity_second_trace(conn: str = "G", ex: str = "ex") -> str:
@@ -575,11 +569,7 @@ def nonmetricity_second_trace(conn: str = "G", ex: str = "ex") -> str:
     for this trace to distinguish it from the Weyl trace ``Q_mu``.
 
     The ``conn`` parameter is unused but kept for API consistency."""
-    return (
-        f"substitute({ex}, $"
-        f"q_{{\\mu}} -> "
-        f"g^{{\\lambda\\nu}} Q_{{\\lambda\\mu\\nu}}$);"
-    )
+    return f"substitute({ex}, $q_{{\\mu}} -> g^{{\\lambda\\nu}} Q_{{\\lambda\\mu\\nu}}$);"
 
 
 def rewrite_nabla_metric_to_Q(ex: str = "ex") -> str:
@@ -594,11 +584,7 @@ def rewrite_nabla_metric_to_Q(ex: str = "ex") -> str:
 
     Requires ``Q_{\\lambda\\mu\\nu}`` declared (see :data:`NONMETRICITY_DECL`).
     """
-    return (
-        f"substitute({ex}, $"
-        f"\\nabla_{{\\lambda}}{{g_{{\\mu\\nu}}}} "
-        f"-> Q_{{\\lambda\\mu\\nu}}$);"
-    )
+    return f"substitute({ex}, $\\nabla_{{\\lambda}}{{g_{{\\mu\\nu}}}} -> Q_{{\\lambda\\mu\\nu}}$);"
 
 
 def rewrite_nabla_inverse_metric_to_Q(ex: str = "ex") -> str:
@@ -860,3 +846,126 @@ def disformation_to_nonmetricity(ex: str = "ex") -> str:
         f"-> Q_{{\\lambda\\mu\\nu}}$);"
     )
 
+
+# ---------------------------------------------------------------------------
+# Modified Bianchi identities (independent-connection path).
+#
+# The standard Bianchi identities are modified in the presence of torsion
+# and non-metricity.  Under the Levi-Civita connection (T=0, Q=0), these
+# reduce to the familiar identities: R^rho_{[sigma mu nu]} = 0 (first)
+# and nabla_{[lambda} R^rho_{|sigma|mu nu]} = 0 (second).
+#
+# Convention: noether-default-v1, extended per architecture.md section 7
+# and metric-affine-v1.
+#
+# First Bianchi identity (general connection):
+#   R^rho_{sigma mu nu} + R^rho_{mu nu sigma} + R^rho_{nu sigma mu}
+#     = nabla_sigma T^rho_{mu nu} + nabla_mu T^rho_{nu sigma}
+#       + nabla_nu T^rho_{sigma mu}
+#       + T^rho_{alpha sigma} T^alpha_{mu nu}
+#       + T^rho_{alpha mu} T^alpha_{nu sigma}
+#       + T^rho_{alpha nu} T^alpha_{sigma mu}
+#
+# This is equivalent to:
+#   R^rho_{[sigma mu nu]} = nabla_{[sigma} T^rho_{mu nu]}
+#                           + T^rho_{lambda [sigma} T^lambda_{mu nu]}
+#
+# Contracted second Bianchi identity (general connection):
+#   nabla_rho R^rho_{sigma mu nu}
+#     - nabla_mu R_{sigma nu}
+#     + nabla_nu R_{sigma mu}
+#     = -(R^rho_{sigma alpha mu} T^alpha_{nu rho}
+#          + R^rho_{sigma alpha nu} T^alpha_{rho mu})
+#       + R_{sigma alpha} T^alpha_{mu nu}
+#
+# Note the sign structure of the RHS: the first two terms carry the outer
+# minus sign, while the third term is positive.  This is because
+# R^rho_{sigma alpha rho} = -R_{sigma alpha} (antisymmetry of the last
+# pair of the Riemann tensor), so R^rho_{sigma alpha rho} T^alpha_{mu nu}
+# = -R_{sigma alpha} T^alpha_{mu nu}, and the outer minus gives
+# -(-R_{sigma alpha} T^alpha_{mu nu}) = +R_{sigma alpha} T^alpha_{mu nu}.
+#
+# When T=0 the RHS vanishes and the identity reduces to the LC
+# contracted Bianchi.  On a metric-compatible background (Q=0) the
+# simplification nabla_mu R^rho_{sigma nu rho} = -nabla_mu R_{sigma nu}
+# is valid; on a Q != 0 background one must use the direct (uncontracted)
+# form and contract numerically.
+#
+# The twice-contracted (divergence) form g^{mu nu} nabla_mu R_{nu beta}
+# - 1/2 nabla_beta R is NOT zero when T != 0 or Q != 0; the existing
+# contracted_bianchi substitution is Levi-Civita ONLY and must not be
+# reused on the metric-affine path (the torsion trap).
+# ---------------------------------------------------------------------------
+
+
+def first_bianchi_affine(field: str, ex: str = "ex") -> str:
+    r"""Apply the modified first Bianchi identity for a general affine
+    connection carrying torsion:
+
+    ``g^{rho alpha} R_{alpha sigma mu nu}
+        + g^{rho alpha} R_{alpha mu nu sigma}
+        + g^{rho alpha} R_{alpha nu sigma mu}
+    -> nabla_sigma T^rho_{mu nu} + nabla_mu T^rho_{nu sigma}
+        + nabla_nu T^rho_{sigma mu}
+        + T^rho_{alpha sigma} T^alpha_{mu nu}
+        + T^rho_{alpha mu} T^alpha_{nu sigma}
+        + T^rho_{alpha nu} T^alpha_{sigma mu}``
+
+    When T=0 the RHS vanishes and the cyclic sum of the Riemann tensor
+    is zero, recovering the LC first Bianchi identity.
+
+    Requires ``T^{\\lambda}_{\\mu\\nu}`` declared (see :data:`TORSION_DECL`)
+    and ``R_{\\mu\\nu\\rho\\sigma}`` RiemannTensor declaration present."""
+    return (
+        f"substitute({ex}, $"
+        f"g^{{\\rho\\alpha}} R_{{\\alpha\\sigma\\mu\\nu}} "
+        f"+ g^{{\\rho\\alpha}} R_{{\\alpha\\mu\\nu\\sigma}} "
+        f"+ g^{{\\rho\\alpha}} R_{{\\alpha\\nu\\sigma\\mu}} "
+        f"-> \\nabla_{{\\sigma}}{{T^{{\\rho}}_{{\\mu\\nu}}}} "
+        f"+ \\nabla_{{\\mu}}{{T^{{\\rho}}_{{\\nu\\sigma}}}} "
+        f"+ \\nabla_{{\\nu}}{{T^{{\\rho}}_{{\\sigma\\mu}}}} "
+        f"+ T^{{\\rho}}_{{\\alpha\\sigma}} T^{{\\alpha}}_{{\\mu\\nu}} "
+        f"+ T^{{\\rho}}_{{\\alpha\\mu}} T^{{\\alpha}}_{{\\nu\\sigma}} "
+        f"+ T^{{\\rho}}_{{\\alpha\\nu}} T^{{\\alpha}}_{{\\sigma\\mu}}$);"
+    )
+
+
+def contracted_bianchi_affine(ex: str = "ex") -> str:
+    r"""Apply the modified contracted second Bianchi identity for a
+    general affine connection carrying torsion.
+
+    ``nabla_rho R^rho_{sigma mu nu}
+        - nabla_mu R_{sigma nu}
+        + nabla_nu R_{sigma mu}
+    -> -(R^rho_{sigma alpha mu} T^alpha_{nu rho}
+         + R^rho_{sigma alpha nu} T^alpha_{rho mu})
+       + R_{sigma alpha} T^alpha_{mu nu}``
+
+    This is the once-contracted second Bianchi identity modified by
+    torsion.  When T=0 the RHS vanishes and the identity reduces to
+    the LC contracted Bianchi, from which the divergence form
+    g^{mu nu} nabla_mu R_{nu beta} = 1/2 nabla_beta R follows.
+
+    The sign structure of the RHS deserves attention: the first two
+    correction terms carry the outer minus sign, while the third
+    is positive because R^rho_{sigma alpha rho} = -R_{sigma alpha}
+    (antisymmetry of the last pair), so the double negation yields
+    +R_{sigma alpha} T^alpha_{mu nu}.
+
+    **The existing** :func:`contracted_bianchi` **(LC version) must NOT
+    be reused on the metric-affine path.**  Under torsion or non-metricity
+    the divergence g^{mu nu} nabla_mu R_{nu beta} - 1/2 nabla_beta R is
+    nonzero (the torsion trap).  This modified identity carries the
+    correction terms that make it hold.
+
+    Requires ``T^{\\lambda}_{\\mu\\nu}`` declared (see :data:`TORSION_DECL`).
+    The Riemann/Ricci tensor declarations must be present."""
+    return (
+        f"substitute({ex}, $"
+        f"\\nabla_{{\\rho}}{{R^{{\\rho}}_{{\\sigma\\mu\\nu}}}} "
+        f"- \\nabla_{{\\mu}}{{R_{{\\sigma\\nu}}}} "
+        f"+ \\nabla_{{\\nu}}{{R_{{\\sigma\\mu}}}} "
+        f"-> -(R^{{\\rho}}_{{\\sigma\\alpha\\mu}} T^{{\\alpha}}_{{\\nu\\rho}} "
+        f"+ R^{{\\rho}}_{{\\sigma\\alpha\\nu}} T^{{\\alpha}}_{{\\rho\\mu}}) "
+        f"+ R_{{\\sigma\\alpha}} T^{{\\alpha}}_{{\\mu\\nu}}$);"
+    )
