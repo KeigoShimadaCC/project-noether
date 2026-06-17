@@ -98,7 +98,8 @@ noether/             Python package
                      answers mutate the NPR, including geometry.connection and
                      the Ricci-contraction question that opens for an
                      independent connection), definitions (propose readability
-                     shorthands like F_phi for dF/dphi; human adopts),
+                     shorthands like F_phi for dF/dphi and, on metric-affine
+                     NPRs, K(T), L(Q), and the f(Q) scalar Q; human adopts),
                      derive (general EOM / perturbation path: model writes a
                      Cadabra script, kernel's residue check decides verified vs
                      unverified; plus derive_adm, a SymPy-verified ADM split),

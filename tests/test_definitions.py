@@ -9,6 +9,7 @@ reopens the ambiguity gate.
 import pytest
 
 from noether.orchestrator.definitions import propose_definitions
+from noether.orchestrator.elicit import apply_resolutions
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.session import Session
 
@@ -18,6 +19,10 @@ SCALAR_TENSOR = r"F(\phi) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi - V(\phi)"
 
 def _npr(lagrangian: str = SCALAR_TENSOR):
     return ingest_action(MEASURE, lagrangian).npr
+
+
+def _metric_affine_npr(lagrangian: str = "R"):
+    return apply_resolutions(_npr(lagrangian), {"amb-connection": "independent"})
 
 
 class TestIngestCapturesFunctionArgs:
@@ -80,6 +85,18 @@ class TestProposeDefinitions:
         assert mixed.symbol_tex == r"K_{\phi X}"
         assert mixed.meaning_tex == r"\frac{\partial^2 K}{\partial \phi \partial X}"
 
+    def test_metric_affine_npr_proposes_geometry_shorthands(self):
+        npr = _metric_affine_npr()
+
+        before = len(npr.objects)
+        by_symbol = {p.symbol: p for p in propose_definitions(npr)}
+
+        assert {"K", "L", "Q"} <= set(by_symbol)
+        assert by_symbol["K"].symbol_tex == r"K(T)"
+        assert by_symbol["L"].symbol_tex == r"L(Q)"
+        assert by_symbol["Q"].symbol_tex == r"Q"
+        assert len(npr.objects) == before
+
 
 class TestSessionAddDefinition:
     def test_adds_shorthand_as_new_version(self):
@@ -108,3 +125,18 @@ class TestSessionAddDefinition:
         open_before = len(session.npr.unresolved_ambiguities())
         session.add_definition("F_phi", r"F_{\phi} \equiv \frac{\partial F}{\partial \phi}")
         assert len(session.npr.unresolved_ambiguities()) == open_before
+
+    def test_metric_affine_shorthand_adoption_adds_new_version(self):
+        session = Session(session_id="d5")
+        session.ingest(_metric_affine_npr())
+
+        proposal = next(p for p in propose_definitions(session.npr) if p.symbol == "K")
+        before_versions = len(session.npr_versions)
+
+        session.add_definition(proposal.symbol, proposal.as_object().definition_tex or "")
+
+        assert len(session.npr_versions) == before_versions + 1
+        adopted = session.npr.object_named("K")
+        assert adopted.kind == "shorthand"
+        assert adopted.definition_tex == proposal.as_object().definition_tex
+        assert all(o.name != "K" for o in session.npr_versions[-2].objects)

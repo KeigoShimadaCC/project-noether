@@ -3,8 +3,9 @@
 When an action couples through a function of a field, F(phi), its derivatives
 appear all over the variation and the equations of motion. Writing them out as
 dF/dphi every time is correct but noisy; physicists shorthand them as F_phi,
-F_phiphi, and so on. This module PROPOSES those shorthands so the human can
-adopt cleaner notation.
+F_phiphi, and so on. Metric-affine work has the same readability pressure once
+the independent connection is decomposed into contortion and disformation. This
+module PROPOSES those shorthands so the human can adopt cleaner notation.
 
 What this is and is not:
 
@@ -53,13 +54,14 @@ class DefinitionProposal:
     symbol_tex: str
     meaning_tex: str
     rationale: str
+    rank: int = 0
 
     def as_object(self) -> ObjectDecl:
         return ObjectDecl(
             name=self.symbol,
             kind="shorthand",
             role="shorthand",
-            rank=0,
+            rank=self.rank,
             definition_tex=f"{self.symbol_tex} \\equiv {self.meaning_tex}",
         )
 
@@ -71,12 +73,63 @@ def _coupling_is_constant(npr: NPR, func_name: str) -> bool:
     return False
 
 
+def _metric_affine_proposals(existing: set[str]) -> list[DefinitionProposal]:
+    """Readability shorthands for the post-Riemannian decomposition.
+
+    M1 is allowed to name these objects but not to assert the closed forms of
+    contortion or disformation. Those signs and index placements are pinned in
+    M2, so the human-facing proposal stays at the notation level for now.
+    """
+
+    proposals: list[DefinitionProposal] = []
+    for proposal in (
+        DefinitionProposal(
+            id="def-K",
+            symbol="K",
+            symbol_tex="K(T)",
+            meaning_tex=r"\text{the contortion built from } T",
+            rationale=(
+                "notation for the contortion tensor in the post-Riemannian "
+                "decomposition of an independent connection"
+            ),
+            rank=3,
+        ),
+        DefinitionProposal(
+            id="def-L",
+            symbol="L",
+            symbol_tex="L(Q)",
+            meaning_tex=r"\text{the disformation built from } Q",
+            rationale=(
+                "notation for the disformation tensor in the post-Riemannian "
+                "decomposition of an independent connection"
+            ),
+            rank=3,
+        ),
+        DefinitionProposal(
+            id="def-Q",
+            symbol="Q",
+            symbol_tex="Q",
+            meaning_tex=r"\text{the non-metricity scalar used in } f(Q)",
+            rationale=(
+                "notation for the non-metricity scalar in the symmetric "
+                "teleparallel f(Q) family"
+            ),
+        ),
+    ):
+        if proposal.symbol not in existing:
+            proposals.append(proposal)
+            existing.add(proposal.symbol)
+    return proposals
+
+
 def propose_definitions(npr: NPR) -> list[DefinitionProposal]:
     """Propose derivative shorthands for each non-constant function coupling.
     Pure: the NPR is not modified. Symbols already declared are skipped, so
     calling this repeatedly converges (accepted proposals stop reappearing)."""
     existing = {obj.name for obj in npr.objects}
     proposals: list[DefinitionProposal] = []
+    if npr.geometry.connection.family == "metric-affine":
+        proposals.extend(_metric_affine_proposals(existing))
     for obj in npr.objects:
         if obj.kind != "function" or not obj.args:
             continue

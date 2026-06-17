@@ -97,18 +97,22 @@ NORTH_STAR §10 names four properties. Operationally:
 
 The derivatives of function couplings dominate the algebra: a coupling `F(φ)`
 contributes `∂F/∂φ` and `∂²F/∂φ²` throughout the variation and the equations of
-motion, and physicists routinely shorthand these as `F_φ`, `F_φφ`. Noether
-proposes those shorthands (`noether.orchestrator.definitions.propose_definitions`,
-exposed at `GET /sessions/{id}/definitions`, the MCP tool
-`noether_propose_definitions`, and the web client's "Suggested notation" card).
+motion, and physicists routinely shorthand these as `F_φ`, `F_φφ`. Metric-affine
+work adds the same pressure around the post-Riemannian decomposition, so the
+definitions surface also offers `K(T)`, `L(Q)`, and the `f(Q)` scalar `Q` once
+the NPR carries an independent connection. Noether proposes those shorthands
+(`noether.orchestrator.definitions.propose_definitions`, exposed at `GET
+/sessions/{id}/definitions`, the MCP tool `noether_propose_definitions`, and
+the web client's "Suggested notation" card).
 
 Two boundaries keep this honest:
 
 - These are **definitions, not results.** `F_φ` is introduced as a name for the
-  derivative `∂F/∂φ`; nothing here claims what any particular variation
+  derivative `∂F/∂φ`, and `K(T)` or `L(Q)` are introduced as names for standard
+  metric-affine objects; nothing here claims what any particular variation
   evaluates to, so AGENTS.md rule 1 is not engaged (there is no asserted result,
   only notation). Proposals are deterministic functions of the declared function
-  couplings and their arguments.
+  couplings, their arguments, and the confirmed geometry family.
 - Adoption is the **human's choice** (rule 4). Proposing never mutates the NPR;
   only an accepted proposal is applied, as a new immutable NPR version carrying a
   `shorthand` `ObjectDecl` whose `definition_tex` records the meaning. Couplings

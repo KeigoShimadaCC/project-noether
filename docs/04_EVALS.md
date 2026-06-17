@@ -187,6 +187,10 @@ from the Riemann tensor of `Γ`:
    continue.
 4. Conventions as default otherwise; ask: equations of motion for both fields.
 
+Once that geometry is confirmed, the definitions surface may also offer the
+optional readability notation `K(T)`, `L(Q)`, and the `f(Q)` scalar `Q`. These
+are human-adopted shorthands only, not derived results.
+
 The distance between eval 1 and eval 2 is exactly one elicitation answer
 (`connection.type`), which is the point: the same LaTeX string is two different
 theories, and only asking can tell them apart.

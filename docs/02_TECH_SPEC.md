@@ -145,9 +145,11 @@ proposals (off-menu suggestions already discarded; 503 when no agent CLI is
 detected); only `POST /sessions/{id}/resolve`, validated against the listed
 options, mutates the session; `GET /sessions/{id}/plan` returns 409 with the
 open questions until the problem is well posed. `GET /sessions/{id}/definitions`
-proposes readability shorthands for the derivatives of function couplings
-(notation, not results, see section 3.1) and `POST /sessions/{id}/definitions`
-adopts the accepted ones. `POST /sessions/{id}/derive` runs the general
+proposes readability shorthands for the derivatives of function couplings and,
+on a metric-affine NPR, the post-Riemannian notation `K(T)`, `L(Q)`, and the
+`f(Q)` scalar `Q` (notation, not results, see section 3.1). `POST
+/sessions/{id}/definitions` adopts the accepted ones. `POST
+/sessions/{id}/derive` runs the general
 derivation (section 6, item 7) for a well-posed session and returns each field
 equation with the kernel's `verified` verdict; it answers 409 with the open
 questions while any remain, and 503 when the Cadabra kernel or an agent CLI is
