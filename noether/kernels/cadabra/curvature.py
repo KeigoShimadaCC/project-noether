@@ -930,6 +930,62 @@ def first_bianchi_affine(field: str, ex: str = "ex") -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Exterior derivative vs covariant curl of a 1-form (independent-connection).
+#
+# For a 1-form A_mu, the exterior derivative (dA) and the covariant curl
+# (antisymmetrized covariant derivative) differ by a torsion term:
+#
+#   2 partial_{[mu} A_{nu]} = 2 nabla_{[mu} A_{nu]} + T^lambda_{mu nu} A_lambda
+#
+# Equivalently:
+#   nabla_mu A_nu - nabla_nu A_mu = (partial_mu A_nu - partial_nu A_mu)
+#                                    - T^lambda_{mu nu} A_lambda
+#
+# i.e., the covariant curl = dA - T.A.
+#
+# This is the primitive behind the gauge field-strength subtlety: on a
+# Levi-Civita background (T=0) the two coincide, but under torsion they
+# differ.  LC code that silently equates the covariant curl with dA is
+# invalid under torsion (the torsion trap).  The choice of field-strength
+# definition (F = dA vs F = 2 nabla_{[mu} A_{nu]}) is a real physical
+# question on metric-affine backgrounds.
+#
+# Convention: noether-default-v1 + metric-affine-v1.
+#   T^lambda_{mu nu} = Gamma^lambda_{mu nu} - Gamma^lambda_{nu mu}
+#
+# The torsion tensor T and the 1-form A must be declared before applying
+# these primitives.
+# ---------------------------------------------------------------------------
+
+
+def curl_vs_exterior_affine(field: str, ex: str = "ex") -> str:
+    r"""Rewrite the covariant curl of a 1-form field to the exterior
+    derivative minus the torsion term:
+
+    ``nabla_mu field_nu - nabla_nu field_mu -> partial_mu field_nu
+        - partial_nu field_mu - T^lambda_{mu nu} field_lambda``
+
+    This is the identity ``covariant curl = dA - T.A``, the metric-affine
+    generalization of the Levi-Civita result where the two coincide.
+    When torsion vanishes (T=0) this reduces to the LC identity
+    ``nabla_mu A_nu - nabla_nu A_mu = partial_mu A_nu - partial_nu A_mu``.
+
+    The ``field`` must be declared as depending on both ``\nabla{#}`` and
+    ``\partial{#}`` derivative operators.  Requires ``T^{\lambda}_{\mu\nu}``
+    declared (see :data:`TORSION_DECL`).
+
+    Convention: metric-affine-v1."""
+    return (
+        f"substitute({ex}, $"
+        f"\\nabla_{{\\mu}}{{{field}_{{\\nu}}}} "
+        f"- \\nabla_{{\\nu}}{{{field}_{{\\mu}}}} "
+        f"-> \\partial_{{\\mu}}{{{field}_{{\\nu}}}} "
+        f"- \\partial_{{\\nu}}{{{field}_{{\\mu}}}} "
+        f"- T^{{\\lambda}}_{{\\mu\\nu}} {field}_{{\\lambda}}$);"
+    )
+
+
 def contracted_bianchi_affine(ex: str = "ex") -> str:
     r"""Apply the modified contracted second Bianchi identity for a
     general affine connection carrying torsion.

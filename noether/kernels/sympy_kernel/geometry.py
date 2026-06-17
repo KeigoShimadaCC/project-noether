@@ -1016,6 +1016,62 @@ def contracted_second_bianchi_residual(
     return Array(residual)
 
 
+def exterior_derivative_of_1form(coords: list[sp.Symbol], A) -> Array:
+    """Exterior derivative of a 1-form: (dA)_{mu nu} = partial_mu A_nu - partial_nu A_mu.
+
+    Returns an antisymmetric (n, n) array.  The exterior derivative is
+    defined purely in terms of partial derivatives, independent of any
+    connection.  It is the standard field-strength definition for an
+    abelian gauge potential (Maxwell F = dA).
+
+    Convention: coordinate-independent (no connection involved).
+    """
+    n, x = len(coords), coords
+    out = sp.MutableDenseNDimArray.zeros(n, n)
+    for mu in range(n):
+        for nu in range(mu + 1, n):
+            val = _clean(sp.diff(A[nu], x[mu]) - sp.diff(A[mu], x[nu]))
+            out[mu, nu] = val
+            out[nu, mu] = _clean(-val)
+    return Array(out)
+
+
+def covariant_curl_of_1form(
+    coords: list[sp.Symbol], gamma, A, variances_A: list[str] | None = None
+) -> Array:
+    """Covariant curl of a 1-form: (nabla_mu A_nu - nabla_nu A_mu)_{mu nu}.
+
+    Returns an antisymmetric (n, n) array.  The covariant curl uses the
+    full affine connection (possibly torsionful) to compute the covariant
+    derivative of A, then antisymmetrizes.
+
+    Parameters:
+        coords: coordinate symbols
+        gamma: affine connection array gamma[a][b][c] = Gamma^a_{bc}
+        A: 1-form (covector) array with n components (all indices down)
+        variances_A: variances of A indices, defaults to ["down"] for a
+            covector / 1-form.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+
+    The covariant curl equals the exterior derivative minus the torsion
+    term: covariant_curl = dA - T^lam_{mu nu} A_lam.
+    """
+    if variances_A is None:
+        variances_A = ["down"]
+    n = len(coords)
+    # nabla_mu A_nu: covariant derivative of the 1-form A
+    nabla_A = covariant_derivative_of_connection(coords, gamma, A, variances=variances_A)
+    # nabla_A[mu, nu] = nabla_mu A_nu (n, n) array
+    out = sp.MutableDenseNDimArray.zeros(n, n)
+    for mu in range(n):
+        for nu in range(mu + 1, n):
+            val = _clean(nabla_A[mu, nu] - nabla_A[nu, mu])
+            out[mu, nu] = val
+            out[nu, mu] = _clean(-val)
+    return Array(out)
+
+
 def lc_contracted_bianchi_residual(
     coords: list[sp.Symbol], gamma: Array, g: Array, g_inv: Array
 ) -> Array:
