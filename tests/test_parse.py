@@ -126,6 +126,8 @@ class TestPrimitives:
     def test_geometric_scalar_vs_plain_symbol(self):
         assert parse_lagrangian(r"R") == tensor("R")  # curvature scalar
         assert parse_lagrangian(r"V") == Sym(name="V")  # generic scalar
+        assert parse_lagrangian(r"T") == tensor("T")  # torsion scalar shorthand
+        assert parse_lagrangian(r"Q") == tensor("Q")  # non-metricity scalar shorthand
 
     def test_connection_annotation_rejected_for_noncurvature_tensor(self):
         with pytest.raises(ParseError, match="curvature tensors"):

@@ -72,6 +72,26 @@ class TestObjectDiscovery:
         kinds = {o.name: o.kind for o in _ingest(eval4_maxwell).npr.objects}
         assert kinds == {"g": "metric", "F": "tensor-field"}
 
+    def test_torsion_and_nonmetricity_are_geometric_shorthands_with_symmetry(self):
+        npr = ingest_action(
+            r"d^4x \sqrt{-g}",
+            r"T^{\lambda}_{\mu\nu} T_{\lambda}^{\mu\nu}"
+            r" + Q_{\lambda\mu\nu} Q^{\lambda\mu\nu}",
+        ).npr
+
+        torsion = npr.object_named("T")
+        nonmetricity = npr.object_named("Q")
+
+        assert torsion.kind == "shorthand"
+        assert torsion.role == "shorthand"
+        assert torsion.rank == 3
+        assert torsion.symmetry == "antisymmetric"
+
+        assert nonmetricity.kind == "shorthand"
+        assert nonmetricity.role == "shorthand"
+        assert nonmetricity.rank == 3
+        assert nonmetricity.symmetry == "symmetric"
+
 
 class TestAmbiguityShape:
     def test_eval1_composite_question_for_G(self):

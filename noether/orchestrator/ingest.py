@@ -66,6 +66,12 @@ _GREEK_SCALARS = {
     "omega",
 }
 
+_GEOMETRIC_SYMMETRIES = {
+    "T": "antisymmetric",
+    "Q": "symmetric",
+}
+_COMPOSITE_GEOMETRIC_NAMES = {"G", "C", "W"}
+
 
 @dataclass
 class _SymbolInfo:
@@ -147,7 +153,9 @@ def _classify(info: _SymbolInfo) -> ObjectDecl:
             name=name, kind="function", role="coupling", rank=0, args=list(info.func_args)
         )
     if name in GEOMETRIC_NAMES:
-        symmetry = "symmetric" if info.max_rank == 2 else "none"
+        symmetry = _GEOMETRIC_SYMMETRIES.get(
+            name, "symmetric" if info.max_rank == 2 else "none"
+        )
         return ObjectDecl(
             name=name, kind="shorthand", role="shorthand", symmetry=symmetry, rank=info.max_rank
         )
@@ -276,7 +284,7 @@ def ingest_action(
                     options=["arbitrary-function", "constant"],
                 )
             )
-        if obj.kind == "shorthand" and obj.name in GEOMETRIC_NAMES and obj.name != "R":
+        if obj.kind == "shorthand" and obj.name in _COMPOSITE_GEOMETRIC_NAMES:
             ambiguities.append(
                 Ambiguity(
                     id=f"amb-composite-{obj.name}",

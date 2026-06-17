@@ -20,8 +20,8 @@ live in):
             | name index_group*            # tensor / scalar / function call
 
 Lexical conventions (documented, not physics inference):
-  - A name in GEOMETRIC_NAMES (R, G, C, W) with no indices is still a rank-0
-    tensor node (e.g. the Ricci scalar R), not a generic scalar symbol.
+  - A name in GEOMETRIC_NAMES (R, G, C, W, T, Q) with no indices is still a
+    rank-0 tensor node (e.g. the Ricci scalar R), not a generic scalar symbol.
   - Any name carrying index groups is a Tensor.
   - A bare name with a parenthesised argument list and no indices is a Func
     (e.g. F(\\phi)); a name with neither indices nor args is a scalar Sym.
@@ -51,7 +51,8 @@ from noether.npr.ast import (
     up,
 )
 
-GEOMETRIC_NAMES = {"R", "G", "C", "W"}
+GEOMETRIC_NAMES = {"R", "G", "C", "W", "T", "Q"}
+CONNECTION_ANNOTATABLE_NAMES = {"R", "G", "C", "W"}
 
 # Backslash commands that are pure spacing and carry no content.
 _SPACING_WORDS = {"quad", "qquad", "left", "right"}
@@ -382,16 +383,23 @@ class _Parser:
             indices.extend(self._group_indices(group, variance))
 
         if indices:
-            if name not in GEOMETRIC_NAMES and self._has_literal_connection_annotation():
+            if (
+                name not in CONNECTION_ANNOTATABLE_NAMES
+                and self._has_literal_connection_annotation()
+            ):
                 raise ParseError("connection annotations are only supported on curvature tensors")
             return Tensor(
                 name=name,
                 indices=indices,
-                connection=self._parse_connection_annotation() if name in GEOMETRIC_NAMES else None,
+                connection=(
+                    self._parse_connection_annotation()
+                    if name in CONNECTION_ANNOTATABLE_NAMES
+                    else None
+                ),
             )
 
         # No indices: function call, geometric scalar, or plain symbol.
-        if name in GEOMETRIC_NAMES and self._has_literal_connection_annotation():
+        if name in CONNECTION_ANNOTATABLE_NAMES and self._has_literal_connection_annotation():
             return Tensor(name=name, indices=[], connection=self._parse_connection_annotation())
         if self._at_punct("("):
             args = self._parse_arg_list()
