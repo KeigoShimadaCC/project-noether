@@ -92,6 +92,7 @@ class _GeometryCues:
     has_connection: bool = False
     has_torsion: bool = False
     has_nonmetricity: bool = False
+    has_curvature_free_cue: bool = False  # T or Q present, R absent
 
 
 def _collect(expr: Expr, into: dict[str, _SymbolInfo], *, under_deriv: bool = False) -> None:
@@ -183,6 +184,12 @@ def _geometry_cues(expr: Expr) -> _GeometryCues:
                 raise TypeError(f"unhandled expr node {node!r}")
 
     walk(expr)
+    # Curvature-free cue: torsion or non-metricity present, curvature absent.
+    # Actions like f(T) or f(Q) use T/Q but no R, suggesting the connection
+    # is constrained to be curvature-free (teleparallel / symmetric-teleparallel).
+    cues.has_curvature_free_cue = (
+        (cues.has_torsion or cues.has_nonmetricity) and not cues.has_curvature
+    )
     return cues
 
 
@@ -286,6 +293,33 @@ def _append_geometry_ambiguities(ambiguities: list[Ambiguity], cues: _GeometryCu
             ),
             kind="inferable",
             options=metric_compatibility_options,
+        )
+    )
+
+    # Curvature-free question: raised when the action uses T or Q but no R,
+    # suggesting a teleparallel (f(T)) or symmetric-teleparallel (f(Q)) theory
+    # where the curvature is constrained to vanish.  When curvature IS present,
+    # curvature-free is not offered (the action clearly uses curvature).
+    if cues.has_curvature_free_cue:
+        curvature_free_options = ["curvature-free", "curvature-allowed"]
+        curvature_free_question = (
+            "The action uses torsion or non-metricity but no curvature tensor. "
+            "Is the connection constrained to be curvature-free (teleparallel or "
+            "symmetric-teleparallel geometry), or is curvature still allowed?"
+        )
+    else:
+        curvature_free_options = ["curvature-allowed", "curvature-free"]
+        curvature_free_question = (
+            "Should the connection be allowed to carry curvature, or is it "
+            "constrained to be curvature-free (teleparallel or symmetric "
+            "teleparallel geometry)?"
+        )
+    ambiguities.append(
+        Ambiguity(
+            id="amb-curvature-free",
+            question=curvature_free_question,
+            kind="inferable",
+            options=curvature_free_options,
         )
     )
 

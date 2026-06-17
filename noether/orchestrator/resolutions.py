@@ -24,7 +24,25 @@ def _set_connection_family(npr: NPR) -> None:
     connection = npr.geometry.connection
     if connection.type == "levi-civita":
         connection.family = "riemannian"
+    elif (
+        connection.curvature_free
+        and connection.metric_compatible
+        and connection.torsion
+        and not connection.nonmetricity
+    ):
+        # Teleparallel: curvature-free, metric-compatible, torsionful (f(T) gravity).
+        connection.family = "teleparallel"
+    elif (
+        connection.curvature_free
+        and not connection.torsion
+        and connection.nonmetricity
+        and not connection.metric_compatible
+    ):
+        # Symmetric teleparallel: curvature-free, torsion-free, non-metric (f(Q) gravity).
+        connection.family = "symmetric-teleparallel"
     elif connection.metric_compatible and connection.torsion and not connection.nonmetricity:
+        # Riemann-Cartan: metric-compatible, torsionful, curvature NOT
+        # constrained (Einstein-Cartan).
         connection.family = "riemann-cartan"
     else:
         connection.family = "metric-affine"
@@ -62,6 +80,7 @@ def _propagate_geometry_resolution(npr: NPR, ambiguity: Ambiguity) -> None:
             connection.torsion = False
             connection.nonmetricity = False
             connection.metric_compatible = True
+            connection.curvature_free = False
             _remove_ricci_contraction_ambiguity(npr)
         _set_connection_family(npr)
         return
@@ -81,6 +100,11 @@ def _propagate_geometry_resolution(npr: NPR, ambiguity: Ambiguity) -> None:
 
     if ambiguity.id == "amb-metric-compatibility":
         connection.metric_compatible = ambiguity.resolution == "metric-compatible"
+        _set_connection_family(npr)
+        return
+
+    if ambiguity.id == "amb-curvature-free":
+        connection.curvature_free = ambiguity.resolution == "curvature-free"
         _set_connection_family(npr)
         return
 

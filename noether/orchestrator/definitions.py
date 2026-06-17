@@ -73,7 +73,7 @@ def _coupling_is_constant(npr: NPR, func_name: str) -> bool:
     return False
 
 
-def _metric_affine_proposals(existing: set[str]) -> list[DefinitionProposal]:
+def _metric_affine_proposals(existing: set[str], family: str) -> list[DefinitionProposal]:
     """Readability shorthands for the post-Riemannian decomposition.
 
     M1 is allowed to name these objects but not to assert the closed forms of
@@ -115,6 +115,17 @@ def _metric_affine_proposals(existing: set[str]) -> list[DefinitionProposal]:
                 "teleparallel f(Q) family"
             ),
         ),
+        DefinitionProposal(
+            id="def-T-scalar",
+            symbol="T_scalar",
+            symbol_tex="T",
+            meaning_tex=r"\text{the torsion scalar used in } f(T)",
+            rationale=(
+                "notation for the torsion scalar in the metric teleparallel "
+                "f(T) family (distinct from the torsion tensor "
+                r"T^{\lambda}_{\mu\nu})"
+            ),
+        ),
     ):
         if proposal.symbol not in existing:
             proposals.append(proposal)
@@ -128,8 +139,9 @@ def propose_definitions(npr: NPR) -> list[DefinitionProposal]:
     calling this repeatedly converges (accepted proposals stop reappearing)."""
     existing = {obj.name for obj in npr.objects}
     proposals: list[DefinitionProposal] = []
-    if npr.geometry.connection.family == "metric-affine":
-        proposals.extend(_metric_affine_proposals(existing))
+    family = npr.geometry.connection.family
+    if family in ("metric-affine", "teleparallel", "symmetric-teleparallel"):
+        proposals.extend(_metric_affine_proposals(existing, family))
     for obj in npr.objects:
         if obj.kind != "function" or not obj.args:
             continue

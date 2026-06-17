@@ -68,12 +68,14 @@ class TestHealthAndCreate:
             "amb-torsion",
             "amb-nonmetricity",
             "amb-metric-compatibility",
+            "amb-curvature-free",
         } <= questions.keys()
         assert {"levi-civita", "independent"} <= set(questions["amb-connection"]["options"])
         assert questions["amb-connection"]["kind"] == "inferable"
         assert questions["amb-torsion"]["kind"] == "inferable"
         assert questions["amb-nonmetricity"]["kind"] == "inferable"
         assert questions["amb-metric-compatibility"]["kind"] == "inferable"
+        assert questions["amb-curvature-free"]["kind"] == "inferable"
 
 
 class TestResolveAndPlan:
@@ -132,6 +134,7 @@ class TestResolveAndPlan:
                     "amb-torsion": "torsion-allowed",
                     "amb-nonmetricity": "nonmetricity-free",
                     "amb-metric-compatibility": "metric-compatible",
+                    "amb-curvature-free": "curvature-allowed",
                 }
             },
         )
@@ -175,6 +178,7 @@ class TestResolveAndPlan:
                     "amb-torsion": "torsion-allowed",
                     "amb-nonmetricity": "nonmetricity-allowed",
                     "amb-metric-compatibility": "not-metric-compatible",
+                    "amb-curvature-free": "curvature-allowed",
                 }
             },
         )

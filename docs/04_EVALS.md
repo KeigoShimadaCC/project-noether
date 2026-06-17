@@ -807,9 +807,43 @@ covariant equations of motion verify; they are held rather than added partially.
 | 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule, both EOMs by composition | H3 |
 | 7 | k-essence / general scalar Horndeski | X-dependent coupling, block decomposition, no per-theory template | H3 |
 | 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |
+| fT | metric teleparallel f(T) | curvature-free constraint, boundary-term identity T = -R + B, gated derivation | H3 |
+| fQ | symmetric teleparallel f(Q) | curvature-free constraint, boundary-term identity Q = -R + B, gated derivation | H3 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and
 an executable spec under `evals/` (machine-checkable: input transcript, expected
 canonical forms, required check verdicts). The executable form is created when
 implementation starts, and the worked solutions above get their kernel-verified
 sign-pinning pass at that time.
+
+### f(T) eval (gated)
+
+**Action:** S = int sqrt(-g) f(T), where T is the torsion scalar (the
+teleparallel equivalent of the Ricci scalar).
+
+**Geometry:** teleparallel (curvature-free, metric-compatible, torsionful).
+`ConnectionSpec` carries `curvature_free=True`, `family="teleparallel"`.
+
+**Status: gated.** The derivation infrastructure does not yet support
+constrained-connection variation (where the connection depends on the metric
+through the curvature-free constraint R(Gamma) = 0). The linear case
+f(T) = T is equivalent to GR by the boundary-term identity T = -R + 2 nabla_mu
+T^mu. SymPy cross-checks verify that Gamma = LC + K(T) is metric-compatible
+with nonzero torsion, and that the curvature-free constraint is nontrivial
+(arbitrary torsion does not produce R = 0).
+
+### f(Q) eval (gated)
+
+**Action:** S = int sqrt(-g) f(Q), where Q is the non-metricity scalar (the
+symmetric teleparallel equivalent of the Ricci scalar).
+
+**Geometry:** symmetric teleparallel (curvature-free, torsion-free,
+non-metric). `ConnectionSpec` carries `curvature_free=True`,
+`family="symmetric-teleparallel"`.
+
+**Status: gated.** The derivation infrastructure does not yet support the
+coincident gauge formulation required for f(Q) gravity. The linear case
+f(Q) = Q is equivalent to GR by the boundary-term identity Q = -R + boundary.
+SymPy cross-checks verify that Gamma = LC + L(Q) is torsion-free with
+nonzero non-metricity, and that the curvature-free constraint is nontrivial
+(arbitrary non-metricity does not produce R = 0).

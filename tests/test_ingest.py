@@ -125,12 +125,14 @@ class TestAmbiguityShape:
             "amb-torsion",
             "amb-nonmetricity",
             "amb-metric-compatibility",
+            "amb-curvature-free",
         } <= questions.keys()
         assert {"levi-civita", "independent"} <= set(questions["amb-connection"].options)
         assert questions["amb-connection"].kind == "inferable"
         assert questions["amb-torsion"].kind == "inferable"
         assert questions["amb-nonmetricity"].kind == "inferable"
         assert questions["amb-metric-compatibility"].kind == "inferable"
+        assert questions["amb-curvature-free"].kind == "inferable"
         assert all(questions[qid].resolution is None for qid in questions if qid.startswith("amb-"))
 
     def test_explicit_torsion_cue_raises_torsion_question(self):
@@ -148,6 +150,32 @@ class TestAmbiguityShape:
         assert "amb-nonmetricity" in questions
         assert "nonmetricity-present" in questions["amb-nonmetricity"].options
         assert questions["amb-nonmetricity"].kind == "inferable"
+
+    def test_fQ_action_curvature_free_cue(self):
+        """f(Q) uses Q but no R, so the curvature-free cue fires."""
+        npr = ingest_action(r"d^4x \sqrt{-g}", r"f(Q)").npr
+        questions = {a.id: a for a in npr.ambiguities}
+
+        assert "amb-curvature-free" in questions
+        assert "curvature-free" in questions["amb-curvature-free"].options
+        assert questions["amb-curvature-free"].kind == "inferable"
+
+    def test_fT_action_curvature_free_cue(self):
+        """f(T) uses T but no R, so the curvature-free cue fires."""
+        npr = ingest_action(r"d^4x \sqrt{-g}", r"f(T)").npr
+        questions = {a.id: a for a in npr.ambiguities}
+
+        assert "amb-curvature-free" in questions
+        assert "curvature-free" in questions["amb-curvature-free"].options
+        assert questions["amb-curvature-free"].kind == "inferable"
+
+    def test_curvature_present_action_has_curvature_allowed_default(self):
+        """When R is present, curvature-allowed comes first in options."""
+        npr = ingest_action(r"d^4x \sqrt{-g}", r"R").npr
+        questions = {a.id: a for a in npr.ambiguities}
+
+        assert "amb-curvature-free" in questions
+        assert questions["amb-curvature-free"].options[0] == "curvature-allowed"
 
 
 class TestKineticScalarShorthand:

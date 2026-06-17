@@ -104,6 +104,7 @@ class TestStart:
                 "amb-torsion": "torsion-allowed",
                 "amb-nonmetricity": "nonmetricity-allowed",
                 "amb-metric-compatibility": "not-metric-compatible",
+                "amb-curvature-free": "curvature-allowed",
                 "amb-ricci-contraction": "first-fourth",
             },
         )
@@ -135,6 +136,7 @@ class TestStart:
                 "amb-torsion": "torsion-allowed",
                 "amb-nonmetricity": "nonmetricity-free",
                 "amb-metric-compatibility": "metric-compatible",
+                "amb-curvature-free": "curvature-allowed",
             },
         )
         connection_index = positions["amb-connection"]

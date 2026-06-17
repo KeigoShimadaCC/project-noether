@@ -37,6 +37,7 @@ class TestGeometryResolutionPropagation:
                 "amb-torsion": "torsion-allowed",
                 "amb-nonmetricity": "nonmetricity-allowed",
                 "amb-metric-compatibility": "not-metric-compatible",
+                "amb-curvature-free": "curvature-allowed",
             },
         )
 
@@ -66,6 +67,7 @@ class TestGeometryResolutionPropagation:
                 "amb-torsion": "torsion-allowed",
                 "amb-nonmetricity": "nonmetricity-allowed",
                 "amb-metric-compatibility": "not-metric-compatible",
+                "amb-curvature-free": "curvature-allowed",
             },
         )
 
@@ -76,5 +78,93 @@ class TestGeometryResolutionPropagation:
         assert connection.torsion is False
         assert connection.nonmetricity is False
         assert connection.metric_compatible is True
+        assert connection.curvature_free is False
         assert connection.family == "riemannian"
         assert "amb-ricci-contraction" not in _question_ids(reverted)
+
+
+class TestTeleparallelFamilyRouting:
+    """Teleparallel and symmetric-teleparallel family classification from
+    curvature_free + torsion/nonmetricity/metric-compatibility flags."""
+
+    def test_teleparallel_family_set_when_curvature_free_and_torsionful(self):
+        npr = ingest_action(MEASURE, "R").npr
+
+        confirmed = apply_resolutions(
+            npr,
+            {
+                "amb-connection": "independent",
+                "amb-torsion": "torsion-allowed",
+                "amb-nonmetricity": "nonmetricity-free",
+                "amb-metric-compatibility": "metric-compatible",
+                "amb-curvature-free": "curvature-free",
+            },
+        )
+
+        connection = confirmed.geometry.connection
+        assert connection.curvature_free is True
+        assert connection.metric_compatible is True
+        assert connection.torsion is True
+        assert connection.nonmetricity is False
+        assert connection.family == "teleparallel"
+
+    def test_symmetric_teleparallel_family_set_when_curvature_free_and_nonmetric(self):
+        npr = ingest_action(MEASURE, "R").npr
+
+        confirmed = apply_resolutions(
+            npr,
+            {
+                "amb-connection": "independent",
+                "amb-torsion": "torsion-free",
+                "amb-nonmetricity": "nonmetricity-allowed",
+                "amb-metric-compatibility": "not-metric-compatible",
+                "amb-curvature-free": "curvature-free",
+            },
+        )
+
+        connection = confirmed.geometry.connection
+        assert connection.curvature_free is True
+        assert connection.metric_compatible is False
+        assert connection.torsion is False
+        assert connection.nonmetricity is True
+        assert connection.family == "symmetric-teleparallel"
+
+    def test_riemann_cartan_family_when_curvature_not_free(self):
+        """Same flags as teleparallel but curvature_free=False gives riemann-cartan."""
+        npr = ingest_action(MEASURE, "R").npr
+
+        confirmed = apply_resolutions(
+            npr,
+            {
+                "amb-connection": "independent",
+                "amb-torsion": "torsion-allowed",
+                "amb-nonmetricity": "nonmetricity-free",
+                "amb-metric-compatibility": "metric-compatible",
+                "amb-curvature-free": "curvature-allowed",
+            },
+        )
+
+        connection = confirmed.geometry.connection
+        assert connection.curvature_free is False
+        assert connection.metric_compatible is True
+        assert connection.torsion is True
+        assert connection.family == "riemann-cartan"
+
+    def test_metric_affine_family_when_curvature_free_but_mixed_flags(self):
+        """Curvature-free but with both torsion and non-metricity: metric-affine."""
+        npr = ingest_action(MEASURE, "R").npr
+
+        confirmed = apply_resolutions(
+            npr,
+            {
+                "amb-connection": "independent",
+                "amb-torsion": "torsion-allowed",
+                "amb-nonmetricity": "nonmetricity-allowed",
+                "amb-metric-compatibility": "not-metric-compatible",
+                "amb-curvature-free": "curvature-free",
+            },
+        )
+
+        connection = confirmed.geometry.connection
+        assert connection.curvature_free is True
+        assert connection.family == "metric-affine"

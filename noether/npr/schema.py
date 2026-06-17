@@ -35,6 +35,11 @@ class ConnectionSpec(BaseModel):
     torsion: bool = False
     nonmetricity: bool = False
     metric_compatible: bool = True
+    # Whether the curvature of the connection is constrained to vanish.
+    # Distinguishes teleparallel (T!=0, Q=0, R=0) from Riemann-Cartan
+    # (T!=0, Q=0, R!=0), and symmetric-teleparallel (T=0, Q!=0, R=0)
+    # from general non-metric (T=0, Q!=0, R!=0).
+    curvature_free: bool = False
     family: Literal[
         "riemannian",
         "metric-affine",

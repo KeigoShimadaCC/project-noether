@@ -192,6 +192,14 @@ plumbing deterministic in tests. The LLM gets tools, not freedom:
   non-metricity, and metric compatibility, with no answer pre-selected, while a
   curvature-free scalar action such as k-essence keeps the default
   Levi-Civita draft and raises none of those geometry questions. When the
+  action uses torsion or non-metricity but no curvature (e.g. `f(T)` or
+  `f(Q)`), ingest also raises a curvature-free question: whether the
+  connection is constrained to be curvature-free (teleparallel or symmetric
+  teleparallel geometry) or whether curvature is still allowed. The
+  `curvature_free` flag on `ConnectionSpec` distinguishes the teleparallel
+  family (metric-compatible, torsionful, curvature-free) from Riemann-Cartan
+  (same torsion flags but curvature not constrained), and similarly for
+  symmetric teleparallel vs general non-metric connections. When the
   action carries an explicit connection (e.g. `R_{mu nu}(Gamma)`), ingest adds
   a `Gamma` connection object (kind=`connection`, role=`dynamical`) to the
   objects list so the derive path can vary it; the `amb-vary-wrt` options
