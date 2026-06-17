@@ -374,3 +374,32 @@ def random_diagonal_metric(seed: int, dim: int = 4) -> ComponentGeometry:
         entries.append(-(1 + p) if i == 0 else (1 + p))
     g = sp.diag(*entries)
     return ComponentGeometry(coords, g)
+
+
+def random_affine_connection(
+    seed: int, coords: list[sp.Symbol], *, symmetric: bool = False
+) -> Array:
+    """Seeded random affine connection gamma[a][b][c] = Gamma^a_{bc}.
+
+    Each component is a small random polynomial in the coordinates.
+    When ``symmetric=False`` (default) the lower pair (b,c) is NOT
+    forced symmetric, so torsion T^a_{bc} = gamma[a,b,c] - gamma[a,c,b]
+    is generically nonzero.  When ``symmetric=True`` the connection is
+    symmetric in the lower pair (Levi-Civita-like, torsion-free).
+
+    Deterministic per seed, so cross-checks reproduce exactly.
+    """
+    rng = random.Random(seed)
+    n = len(coords)
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for a in range(n):
+        for b in range(n):
+            for c in range(b, n):
+                p = _random_poly(rng, coords)
+                out[a, b, c] = p
+                if symmetric:
+                    out[a, c, b] = p
+                elif c != b:
+                    q = _random_poly(rng, coords)
+                    out[a, c, b] = q
+    return Array(out)

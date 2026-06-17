@@ -125,8 +125,116 @@ def contracted_bianchi(ex: str = "ex") -> str:
 
     This is a citable standard result (the divergence of the Einstein tensor
     vanishes), not derived here; it enters wherever a derivative of the Ricci
-    tensor survives the reduction. Marked as such per AGENTS.md rule 1."""
+    tensor survives the reduction. Marked as such per AGENTS.md rule 1.
+
+    **Levi-Civita only.** Under torsion or non-metricity this identity is
+    modified and must not be reused; see the metric-affine primitives below."""
     return (
         f"substitute({ex}, $g^{{\\mu\\nu}} \\nabla_{{\\mu}}{{R_{{\\nu\\beta}}}} "
         f"-> 1/2 \\nabla_{{\\beta}}{{R}}$);"
     )
+
+
+# ---------------------------------------------------------------------------
+# Metric-affine (independent-connection) primitives.
+#
+# These operate with an independent affine connection Gamma^lambda_{mu nu}
+# declared as a \partial-Depends object (no symmetry in the lower pair;
+# torsion T^lambda_{mu nu} = Gamma^lambda_{mu nu} - Gamma^lambda_{nu mu}
+# is generally nonzero).  The key difference from the Levi-Civita primitives
+# above: R_{mu nu} carries NO symmetry declaration, so canonicalise will
+# not symmetrize it.  The existing Levi-Civita primitives are preserved as
+# the T = Q = 0 special case; do not fork a parallel code path where the
+# general primitive can subsume them.
+#
+# Conventions: noether-default-v1, extended per architecture.md section 7.
+#   R^rho_{sigma mu nu}(Gamma) = d_mu Gamma^rho_{nu sigma}
+#                                - d_nu Gamma^rho_{mu sigma}
+#                                + Gamma^rho_{mu lam} Gamma^lam_{nu sigma}
+#                                - Gamma^rho_{nu lam} Gamma^lam_{mu sigma}
+#   R_{sigma nu} = R^lambda_{sigma lambda nu}
+# ---------------------------------------------------------------------------
+
+# Declaration block for metric-affine geometry.  Like CURVATURE_DECL but
+# WITHOUT R_{mu nu}::Symmetric.  The connection object (default name G)
+# must be separately declared as \partial-Depends by the caller (see
+# AFFINE_CONNECTION_DEPENDS).  The symmetric H stand-in is kept so that
+# Levi-Civita reductions that route through it still work in the T=Q=0 limit.
+AFFINE_CURVATURE_DECL = (
+    r"R_{\mu\nu\rho\sigma}::RiemannTensor."
+    "\n"
+    r"H_{\mu\nu}::Symmetric."
+)
+
+# Depends block for the independent connection object (default name G).
+# Append after the metric/InverseMetric/KroneckerDelta declarations.
+AFFINE_CONNECTION_DEPENDS = (
+    r"{G^{\lambda}_{\mu\nu}, g_{\mu\nu}, g^{\mu\nu}}::Depends(\partial{#})."
+)
+
+# Same, using nabla instead of partial derivatives (for scripts that keep
+# nabla as the derivative operator throughout).
+AFFINE_CONNECTION_DEPENDS_NABLA = (
+    r"{G^{\lambda}_{\mu\nu}, g_{\mu\nu}, g^{\mu\nu}}::Depends(\nabla{#})."
+)
+
+
+def expand_riemann_affine(conn: str = "G", ex: str = "ex") -> str:
+    r"""Expand the fully-lowered Riemann tensor in terms of partial
+    derivatives of an independent connection:
+
+    ``R_{rho sigma mu nu} -> g_{rho alpha} (d_mu conn^alpha_{nu sigma}
+        - d_nu conn^alpha_{mu sigma} + conn^alpha_{mu lam} conn^lam_{nu sigma}
+        - conn^alpha_{nu lam} conn^lam_{mu sigma})``
+
+    No ``R_{mu nu}::Symmetric`` declaration is assumed; the Ricci tensor
+    is not symmetric in general.  Use with `\partial{#}::PartialDerivative`
+    and the `conn` object declared as `\partial`-Depends (following the
+    eval2 Palatini pattern).  The connection name defaults to ``G``."""
+    return (
+        f"substitute({ex}, $"
+        f"R_{{\\rho\\sigma\\mu\\nu}} -> "
+        f"g_{{\\rho\\alpha}} ( "
+        f"\\partial_{{\\mu}}{{{conn}^{{\\alpha}}_{{\\nu\\sigma}}}} "
+        f"- \\partial_{{\\nu}}{{{conn}^{{\\alpha}}_{{\\mu\\sigma}}}} "
+        f"+ {conn}^{{\\alpha}}_{{\\mu\\lambda}} {conn}^{{\\lambda}}_{{\\nu\\sigma}} "
+        f"- {conn}^{{\\alpha}}_{{\\nu\\lambda}} {conn}^{{\\lambda}}_{{\\mu\\sigma}} "
+        f")$);"
+    )
+
+
+def expand_ricci_affine(conn: str = "G", ex: str = "ex") -> str:
+    r"""Expand the Ricci tensor in terms of partial derivatives of an
+    independent connection (no symmetry assumed):
+
+    ``R_{sigma nu} -> d_lambda conn^lambda_{nu sigma}
+        - d_nu conn^lambda_{lambda sigma}
+        + conn^lambda_{lambda rho} conn^rho_{nu sigma}
+        - conn^lambda_{nu rho} conn^rho_{lambda sigma}``
+
+    This is the traced form of :func:`expand_riemann_affine`:
+    ``R_{sigma nu} = R^lambda_{sigma lambda nu}``.
+    Because the connection is independent, ``R_{sigma nu} != R_{nu sigma}``
+    in general; the Ricci tensor recovers symmetry only when torsion
+    vanishes (T=0) and the connection is metric-compatible (Q=0)."""
+    return (
+        f"substitute({ex}, $"
+        f"R_{{\\sigma\\nu}} -> "
+        f"\\partial_{{\\lambda}}{{{conn}^{{\\lambda}}_{{\\nu\\sigma}}}} "
+        f"- \\partial_{{\\nu}}{{{conn}^{{\\lambda}}_{{\\lambda\\sigma}}}} "
+        f"+ {conn}^{{\\lambda}}_{{\\lambda\\rho}} {conn}^{{\\rho}}_{{\\nu\\sigma}} "
+        f"- {conn}^{{\\lambda}}_{{\\nu\\rho}} {conn}^{{\\rho}}_{{\\lambda\\sigma}} "
+        f"$);"
+    )
+
+
+def fold_ricci_affine(ex: str = "ex") -> str:
+    r"""Fold a metric-contracted Riemann tensor into the Ricci tensor
+    on the metric-affine path (no symmetry assumed):
+
+    ``g^{mu nu} R_{alpha mu beta nu} -> R_{alpha beta}``
+
+    This is the same algebraic substitution as :func:`fold_ricci`, but
+    it is used in a context where ``R_{mu nu}`` has no ``::Symmetric``
+    declaration, so ``canonicalise`` will not reorder its indices."""
+    return f"substitute({ex}, $g^{{\\mu\\nu}} R_{{\\alpha\\mu\\beta\\nu}} -> R_{{\\alpha\\beta}}$);"

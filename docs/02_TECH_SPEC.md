@@ -554,6 +554,22 @@ its test confirms the leading fourth-derivative term collapses to
 `nabla R . nabla phi + R . nabla nabla phi` with no derivative of order three or
 higher left.
 
+The same module now also carries metric-affine (independent-connection) primitives
+for curvature defined from an affine connection `Gamma^lambda_{mu nu}` with no
+symmetry in the lower pair (torsion allowed).  These follow the eval2 Palatini
+pattern: the connection is a `\partial`-Depends object, `R_{mu nu}` carries no
+`::Symmetric` declaration, and the Ricci tensor is non-symmetric in general.
+The primitives are `expand_riemann_affine` (the Riemann expansion in partial
+derivatives of the connection), `expand_ricci_affine` (the traced form), and
+`fold_ricci_affine` (the metric contraction, without symmetry).  They are pinned
+by residue checks in `tests/test_curvature_affine.py` AND cross-checked against
+the SymPy general-connection oracle (`riemann_of_connection`,
+`ricci_of_connection`) on random backgrounds, per the dual-gate model
+(architecture.md section 3.2): a green residue alone is insufficient because of
+the torsion trap.  The existing Levi-Civita primitives are preserved as the
+`T = Q = 0` special case; the `contracted_bianchi` primitive is marked
+Levi-Civita-only and must not be reused under torsion.
+
 What is still open is the orchestration across the whole equation. Two lessons
 came out of the attempts. First, a blind one-way commutator pass does not
 converge: applied to every term it just trades the two contraction patterns'
