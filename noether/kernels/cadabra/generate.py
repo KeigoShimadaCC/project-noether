@@ -34,6 +34,7 @@ _EXAMPLE_TEMPLATE: dict[str, str] = {
     "vary-scalar-cubic": "eom_cubic_galileon_scalar",
     "vary-gauge": "eval4_maxwell",
     "perturb-scalar": "pert_scalar_quadratic",
+    "perturb-kessence": "pert_kessence_quadratic",
     "perturb-metric": "pert_metric_quadratic",
     "perturb-gauge": "pert_gauge_quadratic",
     "perturb-yang-mills": "pert_yang_mills_quadratic",
@@ -60,6 +61,27 @@ def _is_box_of(expr: Expr, name: str) -> bool:
         and isinstance(expr.expr.expr, Sym)
         and expr.expr.expr.name == name
     )
+
+
+def _has_x_coupling(expr: Expr) -> bool:
+    """True if a coupling function depends on the canonical kinetic shorthand X
+    (the Horndeski G2 / k-essence structure K(phi, X)), which needs the
+    X-expansion and sound-speed kinetic mixing of pert_kessence_quadratic
+    rather than the plain pert_scalar_quadratic scaffold."""
+    if isinstance(expr, Func) and any(isinstance(a, Sym) and a.name == "X" for a in expr.args):
+        return True
+    children: tuple[Expr, ...] = ()
+    if isinstance(expr, Sum):
+        children = tuple(expr.terms)
+    elif isinstance(expr, Prod):
+        children = tuple(expr.factors)
+    elif isinstance(expr, Pow):
+        children = (expr.base,)
+    elif isinstance(expr, Deriv):
+        children = (expr.expr,)
+    elif isinstance(expr, Func):
+        children = tuple(expr.args)
+    return any(_has_x_coupling(c) for c in children)
 
 
 def _has_box_coupling(expr: Expr, name: str) -> bool:
@@ -179,15 +201,18 @@ def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
     obj = by_name.get(wrt)
     if kind == "perturbation":
         if obj is not None and obj.kind == "scalar-field":
+            if _has_x_coupling(npr.action.lagrangian):
+                return "perturb-kessence"
             return "perturb-scalar"
         if obj is not None and obj.kind == "metric":
             return "perturb-metric"
         if obj is not None and obj.kind == "tensor-field" and obj.rank == 1:
             return "perturb-yang-mills" if _is_non_abelian(obj) else "perturb-gauge"
         raise NotImplementedError(
-            "perturbation currently has audited scaffolds for scalar fields, the "
-            "metric, and rank-1 gauge potentials (Maxwell / Yang-Mills); no "
-            f"quadratic-action example for {wrt!r}"
+            "perturbation currently has audited scaffolds for scalar fields "
+            "(including the k-essence X-expansion), the metric, and rank-1 gauge "
+            "potentials (Maxwell / Yang-Mills); no quadratic-action example for "
+            f"{wrt!r}"
         )
     if obj is None:
         return "vary-metric"

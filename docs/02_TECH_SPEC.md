@@ -390,7 +390,10 @@ perturbative expansion (xPert), Young projection.
    `derive_perturbation` (and `kind="perturbation"` on the server, MCP, and web
    clients) hands the model a scaffold chosen by field kind:
    `pert_scalar_quadratic` (eval 3p) expands a scalar action to quadratic order,
-   and `pert_metric_quadratic` (eval 3g) expands the Einstein-Hilbert action
+   `pert_kessence_quadratic` (eval 3k) does the same for an `X`-dependent scalar
+   `K(phi, X)`, expanding `X` itself so the quadratic action carries the
+   sound-speed kinetic mixing `K_XX (nabla phibar . nabla chi)^2`, and
+   `pert_metric_quadratic` (eval 3g) expands the Einstein-Hilbert action
    about a flat background to recover the linearized vacuum Einstein equation,
    the massless graviton. A rank-1 gauge potential routes to the gauge
    scaffolds: `pert_gauge_quadratic` (eval 3a) for an abelian potential gives
@@ -414,7 +417,11 @@ perturbative expansion (xPert), Young projection.
    antisymmetric structure constants contract and collapse, and the independent
    linearization route keeps weight `eps=2` (the test field carries `eps=1`)
    then expands `nabla(Abar v)` by `product_rule` before the cross-check. The
-   scaffolds cover dynamical scalar fields, the metric, and rank-1 gauge
+   k-essence scaffold expands about a covariantly-constant-gradient background
+   (`nabla nabla phibar = 0`, so `nabla Xbar = 0`), the standard setup for the
+   sound speed; on it the coupling gradients close under the single chain rule
+   `nabla K_X -> K_phiX nabla phibar` and its kin. The scaffolds cover dynamical
+   scalar fields (plain and `X`-dependent), the metric, and rank-1 gauge
    potentials, so `derive_perturbation` refuses other field kinds (the rank-2
    field strength, say) rather than guessing. The `adm` task takes a different route: `derive_adm`
    (`kind="adm"` on the server, MCP, and web clients) writes no model script.
@@ -504,11 +511,11 @@ What still does not verify: the higher Horndeski densities (an `X`-dependent
 equations of motion carry curvature derivatives and the no-Ostrogradski
 counterterms, so they are held out until they residue-check cleanly rather than
 added as a partial path; a term like `G(phi, X) R` matches no block and falls
-back to the model path or is refused. The `perturb` scaffolds likewise do not
-expand `X`, so a quadratic action for an `X`-dependent coupling is still
-unverified. The ADM split verifies for any metric action, but it is the
-universal foliation geometry, not
-a Horndeski-specific Hamiltonian.
+back to the model path or is refused. The `perturb` path does expand `X`: the
+k-essence scaffold (eval 3k) carries the quadratic action and sound speed of a
+general `K(phi, X)`, on a covariantly-constant-gradient background. The ADM
+split verifies for any metric action, but it is the universal foliation
+geometry, not a Horndeski-specific Hamiltonian.
 
 ## 7. Provenance bundles
 

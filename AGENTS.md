@@ -113,7 +113,7 @@ noether/             Python package
                      `noether elicit`, `noether serve`, `noether mcp`,
                      `noether eval{1..5}`, `noether eval1s` (ADM of GR),
                      `noether eval3s` (Minkowski spectrum)
-evals/               Executable evals 1-5, 1s, 3s, 3p, 3g, 3a, 3y, 6 (cubic Galileon),
+evals/               Executable evals 1-5, 1s, 3s, 3p, 3g, 3a, 3y, 3k, 6 (cubic Galileon),
                      7 (k-essence / general scalar Horndeski by composition),
                      8 (nonminimal scalar-tensor by composition, both EOMs)
                      + a general-path eval (test_eval_general) + registry +
@@ -147,10 +147,12 @@ held-out higher Horndeski densities (`G4(phi, X) R`, G5). The `perturb` task run
 same path for scalar fields, the metric, and rank-1 gauge potentials:
 `derive_perturbation`, reachable as `kind="perturbation"` on the server, MCP,
 and web clients, drives the frozen `pert_scalar_quadratic` scaffold (eval 3p)
-for scalars, `pert_metric_quadratic` (eval 3g) for the metric,
-`pert_gauge_quadratic` (eval 3a) for an abelian gauge potential, and
-`pert_yang_mills_quadratic` (eval 3y) for a non-abelian one (selected by the
-object's `gauge_group` marker), expanding the action to quadratic order and
+for scalars, `pert_kessence_quadratic` (eval 3k) for an `X`-dependent scalar
+`K(phi, X)` (it expands `X`, surfacing the sound-speed kinetic mixing),
+`pert_metric_quadratic` (eval 3g) for the metric, `pert_gauge_quadratic`
+(eval 3a) for an abelian gauge potential, and `pert_yang_mills_quadratic`
+(eval 3y) for a non-abelian one (selected by the object's `gauge_group`
+marker), expanding the action to quadratic order and
 checking the linearized EOM two ways; all checks must pass before a result is
 called verified. Other field kinds (the rank-2 field strength, say) are refused
 rather than guessed. The `adm` task is reachable the same way:

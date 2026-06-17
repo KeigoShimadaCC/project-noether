@@ -8,9 +8,11 @@ Status: all registered templates FROZEN (evals 1-5 golden-tested against
 cadabra2 2.5.15 on 2026-06-12; pert_scalar_quadratic added 2026-06-13,
 pert_metric_quadratic added 2026-06-15, eom_cubic_galileon_scalar (eval 6)
 added 2026-06-16, and the gauge perturbation scaffolds pert_gauge_quadratic
-(eval 3a, Maxwell) and pert_yang_mills_quadratic (eval 3y, Yang-Mills) added
+(eval 3a, Maxwell) and pert_yang_mills_quadratic (eval 3y, Yang-Mills) plus the
+k-essence X-expansion scaffold pert_kessence_quadratic (eval 3k) added
 2026-06-17, same kernel; see tests/test_cadabra_adapter.py, evals/test_eval3g.py,
-evals/test_eval3a.py, evals/test_eval3y.py, and evals/test_eval6.py).
+evals/test_eval3a.py, evals/test_eval3y.py, evals/test_eval3k.py, and
+evals/test_eval6.py).
 """
 
 _TEMPLATES: dict[str, str] = {}
@@ -1283,6 +1285,148 @@ for i in range(6):
     rename_dummies(lin)
 
 cross := @(ex) - @(lin);
+distribute(cross);
+for i in range(8):
+    eliminate_kronecker(cross)
+    distribute(cross)
+    sort_product(cross)
+    canonicalise(cross)
+    rename_dummies(cross)
+    meld(cross)
+print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
+""",
+)
+
+
+# ---------------------------------------------------------------------------
+# Perturbation, k-essence (X-dependent scalar) sector: quadratic-action
+# expansion of
+#   S = \int d^4x \sqrt{-g} K(\phi, X),   X = -1/2 (\nabla\phi)^2,
+# about \phi -> \phibar + \chi on a covariantly-constant-gradient background
+# (\nabla\nabla\phibar = 0, so \nabla Xbar = 0; the standard setup that reads off
+# the sound speed). The fluctuation of X splits into a linear and a quadratic
+# piece, dX = dX1 + dX2 with
+#   dX1 = - \nabla\phibar . \nabla\chi,   dX2 = -1/2 (\nabla\chi)^2,
+# so the second-order Taylor expansion of K, projected with keep_weight(eps=2)
+# after dX is written out, is
+#   S2 = \int sg ( -1/2 KX (\nabla\chi)^2 + 1/2 KXX (\nabla\phibar.\nabla\chi)^2
+#                  - KphiX \chi (\nabla\phibar.\nabla\chi) + 1/2 Kphiphi \chi^2 ).
+# The two kinetic terms combine into the effective inverse metric
+#   G^{ab} = KX g^{ab} + KXX \nabla^a\phibar \nabla^b\phibar,
+# whose timelike/spacelike ratio is the k-essence sound speed
+#   c_s^2 = KX / (KX + 2 Xbar KXX),   Xbar = -1/2 (\nabla\phibar)^2.
+#
+# Cadabra specifics:
+#   - \nabla inherits the weight of its argument (WeightInherit), so dX2 lands
+#     at eps=2 and dX1 at eps=1; keep_weight(eps=2) then isolates S2;
+#   - the coupling derivatives depend on \phibar, so their gradient is the
+#     chain rule \nabla KX -> KphiX \nabla\phibar etc. (\nabla Xbar = 0 on this
+#     background), applied after each integrate_by_parts / product_rule, and
+#     \nabla\nabla\phibar is set to zero.
+#
+# Two kernel checks, both in noether-default-v1:
+#   residue_zero        -- delta S2 / delta chi equals the documented k-essence
+#                          linearized operator (KX box chi - KXX \nabla^a\phibar
+#                          \nabla^b\phibar \nabla_a\nabla_b chi + ... );
+#   linearized_eom_match -- the same operator follows from linearizing the full
+#                          nonlinear k-essence EOM \nabla_a(KX \nabla^a\phi)
+#                          + Kphi = 0. With KXX != 0 the c_s^2 != 1 kinetic
+#                          mixing is exactly the new content over eval 3p.
+# ---------------------------------------------------------------------------
+
+register(
+    "pert_kessence_quadratic",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\nabla{#}::Derivative.
+\nabla{#}::WeightInherit(label=eps, type=multiplicative).
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+sg::LaTeXForm("\sqrt{-g}").
+chi::Weight(label=eps, value=1).
+dchi::Weight(label=eps, value=1).
+{phibar, K, Kphi, KX, Kphiphi, KphiX, KXX, KphiphiX, KphiXX, sg}::Weight(label=eps, value=0).
+g^{\mu\nu}::Weight(label=eps, value=0).
+g_{\mu\nu}::Weight(label=eps, value=0).
+{phibar, chi, dchi, K, Kphi, KX, Kphiphi, KphiX, KXX, KphiphiX, KphiXX}::Depends(\nabla{#}).
+
+Kexp := K + Kphi chi + KX dX + 1/2 Kphiphi chi chi + KphiX chi dX + 1/2 KXX dX dX;
+substitute(Kexp, $dX -> - g^{\alpha\beta} \nabla_{\alpha}{phibar} \nabla_{\beta}{chi} - 1/2 g^{\alpha\beta} \nabla_{\alpha}{chi} \nabla_{\beta}{chi}$);
+distribute(Kexp);
+keep_weight(Kexp, $eps=2$);
+canonicalise(Kexp);
+rename_dummies(Kexp);
+print("NOETHER_RESULT: " + str(Kexp))
+
+ex := \int{ sg @(Kexp) }{x};
+vary(ex, $chi -> dchi$);
+distribute(ex);
+product_rule(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+canonicalise(ex);
+integrate_by_parts(ex, $dchi$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+substitute(ex, $\nabla_{\mu}{\nabla_{\nu}{phibar}} -> 0$);
+substitute(ex, $\nabla_{\mu}{KX} -> KphiX \nabla_{\mu}{phibar}$);
+substitute(ex, $\nabla_{\mu}{Kphi} -> Kphiphi \nabla_{\mu}{phibar}$);
+substitute(ex, $\nabla_{\mu}{KphiX} -> KphiphiX \nabla_{\mu}{phibar}$);
+substitute(ex, $\nabla_{\mu}{KXX} -> KphiXX \nabla_{\mu}{phibar}$);
+substitute(ex, $\int{A??}{x} -> A??$);
+eliminate_kronecker(ex);
+sort_product(ex);
+canonicalise(ex);
+rename_dummies(ex);
+
+target := sg KX g^{\mu\nu} \nabla_{\mu}{\nabla_{\nu}{chi}} dchi - sg KXX g^{\mu\rho} g^{\nu\sigma} \nabla_{\mu}{phibar} \nabla_{\nu}{phibar} \nabla_{\rho}{\nabla_{\sigma}{chi}} dchi + sg KphiX g^{\mu\nu} \nabla_{\mu}{phibar} \nabla_{\nu}{chi} dchi - sg KphiXX g^{\mu\nu} g^{\rho\sigma} \nabla_{\mu}{phibar} \nabla_{\nu}{phibar} \nabla_{\rho}{phibar} \nabla_{\sigma}{chi} dchi + sg Kphiphi chi dchi + sg KphiphiX g^{\mu\nu} \nabla_{\mu}{phibar} \nabla_{\nu}{phibar} chi dchi;
+distribute(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+
+residue := @(ex) - @(target);
+distribute(residue);
+for i in range(6):
+    eliminate_kronecker(residue)
+    distribute(residue)
+    sort_product(residue)
+    canonicalise(residue)
+    rename_dummies(residue)
+    meld(residue)
+print("NOETHER_CHECK: residue=" + str(residue))
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
+
+lin := sg g^{\mu\nu} \nabla_{\mu}{ KXf \nabla_{\nu}{phif} } + sg Kphif;
+substitute(lin, $phif -> phibar + chi$);
+substitute(lin, $KXf -> KX + KphiX chi + KXX dX1$);
+substitute(lin, $Kphif -> Kphi + Kphiphi chi + KphiX dX1$);
+substitute(lin, $dX1 -> - g^{\alpha\beta} \nabla_{\alpha}{phibar} \nabla_{\beta}{chi}$);
+distribute(lin);
+product_rule(lin);
+distribute(lin);
+keep_weight(lin, $eps=1$);
+substitute(lin, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(lin, $\nabla_{\mu}{\nabla_{\nu}{phibar}} -> 0$);
+substitute(lin, $\nabla_{\mu}{KX} -> KphiX \nabla_{\mu}{phibar}$);
+substitute(lin, $\nabla_{\mu}{Kphi} -> Kphiphi \nabla_{\mu}{phibar}$);
+substitute(lin, $\nabla_{\mu}{KphiX} -> KphiphiX \nabla_{\mu}{phibar}$);
+substitute(lin, $\nabla_{\mu}{KXX} -> KphiXX \nabla_{\mu}{phibar}$);
+distribute(lin);
+eliminate_kronecker(lin);
+sort_product(lin);
+canonicalise(lin);
+rename_dummies(lin);
+
+cross := @(ex) - @(lin) dchi;
 distribute(cross);
 for i in range(8):
     eliminate_kronecker(cross)

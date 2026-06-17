@@ -3,7 +3,8 @@
 **Status:** stable; all five evals plus the stretch tasks 1s (ADM of GR),
 3s (spectrum around Minkowski), 3p (scalar quadratic action in Cadabra),
 3g (graviton quadratic action in Cadabra), 3a (Maxwell quadratic action),
-3y (Yang-Mills quadratic action), 6 (cubic Galileon scalar EOM,
+3y (Yang-Mills quadratic action), 3k (k-essence quadratic action with the
+sound-speed kinetic mixing), 6 (cubic Galileon scalar EOM,
 the first verified Horndeski member past scalar-tensor), 7 (k-essence and the
 general scalar Horndeski sector by block decomposition, no per-theory template),
 and 8 (nonminimal scalar-tensor by composition, the metric sector and the
@@ -420,11 +421,33 @@ constant `fc` to avoid shadowing Python's `str`. The independent route keeps
 weight `eps=2` (the test field `dv` carries `eps=1`) and then expands
 `∇(Ā v)` by `product_rule` before the cross-check.
 
-These four perturbation scaffolds cover dynamical scalar fields, the metric, and
-rank-1 gauge potentials, abelian and non-abelian. `derive_perturbation` selects
-by field kind, reading the `gauge_group` marker to tell Maxwell from Yang-Mills,
-and refuses other field kinds (the rank-2 field strength, say) rather than
-guessing.
+### Eval 3k — k-essence quadratic action
+
+**Status: implemented (eval 3k; `evals/eval3k_kessence_perturbation.py`,
+template `pert_kessence_quadratic`).** Eval 3k is the X-dependent scalar, where
+the perturbation must expand `X` itself. For `S = ∫d⁴x √-g K(φ, X)` with
+`X = -½(∇φ)²`, the fluctuation `φ → φ̄ + χ` carries through to
+`δX = -∇φ̄·∇χ - ½(∇χ)²`, a linear and a quadratic piece. Taylor-expanding `K`
+and keeping the quadratic part gives
+`S₂ = ∫√-g(-½K_X(∇χ)² + ½K_XX(∇φ̄·∇χ)² - K_φX χ(∇φ̄·∇χ) + ½K_φφ χ²)`.
+The two kinetic terms are the whole point: they combine into the effective
+inverse metric `G^{ab} = K_X g^{ab} + K_XX ∇^aφ̄∇^bφ̄`, whose sound speed
+`c_s² = K_X/(K_X + 2X̄K_XX)` is not 1 once `K_XX ≠ 0`. That kinetic mixing is
+exactly what eval 3p (a plain scalar, `c_s² = 1`) does not have. The background
+is taken with `∇∇φ̄ = 0` (covariantly constant gradient), the standard setup for
+reading off `c_s²`; on it `∇X̄ = 0`, so the coupling gradients close under the
+single chain rule `∇K_X → K_φX ∇φ̄` and its kin. Two kernel checks, both
+`noether-default-v1`: `δS₂/δχ` matches the documented k-essence operator
+`K_X □χ - K_XX ∇^aφ̄∇^bφ̄ ∇_a∇_bχ + …` (`residue_zero`), and linearizing the full
+nonlinear equation `∇_a(K_X∇^aφ) + K_φ = 0` reproduces it
+(`linearized_eom_match`).
+
+The perturbation scaffolds now cover dynamical scalar fields (plain and
+X-dependent), the metric, and rank-1 gauge potentials, abelian and non-abelian.
+`derive_perturbation` selects by field kind, reads the `gauge_group` marker to
+tell Maxwell from Yang-Mills and an `X`-dependent coupling to tell k-essence from
+a plain scalar, and refuses other field kinds (the rank-2 field strength, say)
+rather than guessing.
 
 ---
 
@@ -763,6 +786,7 @@ covariant equations of motion verify; they are held rather than added partially.
 | 3g | graviton quadratic action | spin-2 expansion, linearized vacuum Einstein equation | H2 |
 | 3a | Maxwell quadratic action | spin-1 expansion, source-free linearized Maxwell operator | H2 |
 | 3y | Yang-Mills quadratic action | non-abelian expansion, background-covariant derivative, gluon self-coupling | H2 |
+| 3k | k-essence quadratic action | X-expansion in the fluctuation, sound-speed kinetic mixing, coupling chain rule | H2 |
 | 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule, both EOMs by composition | H3 |
 | 7 | k-essence / general scalar Horndeski | X-dependent coupling, block decomposition, no per-theory template | H3 |
 | 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |

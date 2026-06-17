@@ -254,6 +254,16 @@ class TestPerturbationPromptGeneration:
         # the SU(N) marker routes to the Yang-Mills quadratic scaffold
         assert templates.get("pert_yang_mills_quadratic") in prompt
 
+    def test_kessence_perturbation_prompt_uses_x_expansion_scaffold(self):
+        from evals.eval7_kessence import build_npr as build_kessence_npr
+
+        npr = build_kessence_npr(resolved=True)
+        _, prompt = build_generation_prompt(npr, "phi", kind="perturbation")
+        # an X-dependent coupling K(phi, X) routes to the k-essence scaffold,
+        # which carries the sound-speed kinetic mixing, not the plain scalar one
+        assert templates.get("pert_kessence_quadratic") in prompt
+        assert templates.get("pert_scalar_quadratic") not in prompt
+
     def test_perturbation_rejects_unsupported_field(self):
         from evals.eval4_maxwell import build_npr as build_maxwell_npr
 
@@ -349,6 +359,22 @@ class TestVerifiedPerturbation:
             npr, stub, {"cadabra": CadabraAdapter()}, fields=["A"], session_id="s-test"
         )
         assert [r.wrt for r in results] == ["A"]
+        d = results[0]
+        assert d.kind == "perturbation"
+        assert d.verified is True, d.checks
+        assert d.checks.get("residue_zero") == "True"
+        assert d.checks.get("linearized_eom_match") == "True"
+        assert d.result_tex
+
+    def test_kessence_quadratic_action_verified(self):
+        from evals.eval7_kessence import build_npr as build_kessence_npr
+
+        npr = build_kessence_npr(resolved=True)
+        stub = StubLLMAdapter(reply=templates.get("pert_kessence_quadratic"))
+        results = derive_perturbation(
+            npr, stub, {"cadabra": CadabraAdapter()}, fields=["phi"], session_id="s-test"
+        )
+        assert [r.wrt for r in results] == ["phi"]
         d = results[0]
         assert d.kind == "perturbation"
         assert d.verified is True, d.checks

@@ -339,8 +339,9 @@ def derive_perturbation(
 ) -> list[FieldDerivation]:
     """Expand the action to quadratic order around a background for each
     dynamical scalar field, metric, or gauge potential (the sectors with an
-    audited scaffold today: pert_scalar_quadratic, pert_metric_quadratic, and
-    the gauge scaffolds pert_gauge_quadratic (Maxwell) / pert_yang_mills_quadratic).
+    audited scaffold today: pert_scalar_quadratic, pert_kessence_quadratic for
+    an X-dependent scalar, pert_metric_quadratic, and the gauge scaffolds
+    pert_gauge_quadratic (Maxwell) / pert_yang_mills_quadratic).
 
     Raises NotImplementedError naming any requested field whose kind has no
     quadratic-action example yet, rather than guessing one.
