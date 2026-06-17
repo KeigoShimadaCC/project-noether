@@ -25,16 +25,16 @@ Lexical conventions (documented, not physics inference):
   - Any name carrying index groups is a Tensor.
   - A bare name with a parenthesised argument list and no indices is a Func
     (e.g. F(\\phi)); a name with neither indices nor args is a scalar Sym.
-  - A trailing "(\\Gamma)" on an indexed curvature tensor is read as a
-    connection annotation: it is dropped from the expression and recorded on
-    the ParseResult so ingest can raise the independent-connection question.
+  - A trailing "(\\Gamma)" on an indexed curvature tensor is preserved on the
+    tensor node as its connection annotation, so the AST distinguishes
+    R_{\\mu\\nu}(\\Gamma) from the bare metric Ricci tensor R_{\\mu\\nu}.
 
 Anything outside this grammar raises ParseError rather than guessing.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from noether.npr.ast import (
     Deriv,
@@ -119,8 +119,6 @@ def tokenize(s: str) -> list[Token]:
 @dataclass
 class ParseResult:
     expr: Expr
-    connection_annotated: bool = False
-    annotated_tensors: list[str] = field(default_factory=list)
 
 
 # -- parser ------------------------------------------------------------------
@@ -148,8 +146,6 @@ class _Parser:
     def __init__(self, tokens: list[Token]) -> None:
         self.toks = tokens
         self.pos = 0
-        self.connection_annotated = False
-        self.annotated_tensors: list[str] = []
         self._box_counter = 0
 
     # -- token helpers --
@@ -348,8 +344,14 @@ class _Parser:
         if len(idxs) != 1:
             raise ParseError(f"\\{op_word} takes exactly one index, got {len(idxs)}")
         op = "covariant" if op_word == "nabla" else "partial"
+        connection = self._parse_connection_annotation() if op == "covariant" else None
         operand = self._parse_factor()
-        return Deriv(op=op, index=idxs[0], expr=operand)
+        return Deriv(
+            op=op,
+            index=idxs[0],
+            expr=operand,
+            connection=connection or ("metric" if op == "covariant" else None),
+        )
 
     def _parse_named(self, name: str) -> Expr:
         indices: list[Index] = []
@@ -380,10 +382,17 @@ class _Parser:
             indices.extend(self._group_indices(group, variance))
 
         if indices:
-            self._maybe_connection_annotation(name)
-            return Tensor(name=name, indices=indices)
+            if name not in GEOMETRIC_NAMES and self._has_literal_connection_annotation():
+                raise ParseError("connection annotations are only supported on curvature tensors")
+            return Tensor(
+                name=name,
+                indices=indices,
+                connection=self._parse_connection_annotation() if name in GEOMETRIC_NAMES else None,
+            )
 
         # No indices: function call, geometric scalar, or plain symbol.
+        if name in GEOMETRIC_NAMES and self._has_literal_connection_annotation():
+            return Tensor(name=name, indices=[], connection=self._parse_connection_annotation())
         if self._at_punct("("):
             args = self._parse_arg_list()
             return Func(name=name, args=args)
@@ -400,10 +409,18 @@ class _Parser:
         self._expect("punct", ")")
         return args
 
-    def _maybe_connection_annotation(self, name: str) -> None:
+    def _parse_connection_annotation(self) -> str | None:
         # Recognise a literal '(\Gamma)' suffix on a curvature tensor.
+        if not self._has_literal_connection_annotation():
+            return None
+        self._next()
+        self._next()
+        self._next()
+        return "Gamma"
+
+    def _has_literal_connection_annotation(self) -> bool:
         t0, t1, t2 = self._peek(0), self._peek(1), self._peek(2)
-        if (
+        return (
             t0 is not None
             and t0.kind == "punct"
             and t0.value == "("
@@ -413,12 +430,7 @@ class _Parser:
             and t2 is not None
             and t2.kind == "punct"
             and t2.value == ")"
-        ):
-            self._next()
-            self._next()
-            self._next()
-            self.connection_annotated = True
-            self.annotated_tensors.append(name)
+        )
 
     def _make_box(self, operand: Expr) -> Expr:
         self._box_counter += 1
@@ -426,7 +438,8 @@ class _Parser:
         return Deriv(
             op="covariant",
             index=up(dummy),
-            expr=Deriv(op="covariant", index=down(dummy), expr=operand),
+            expr=Deriv(op="covariant", index=down(dummy), expr=operand, connection="metric"),
+            connection="metric",
         )
 
 
@@ -477,11 +490,7 @@ def parse_lagrangian(tex: str) -> Expr:
 
 def parse_action(tex: str) -> ParseResult:
     """Parse a Lagrangian density, returning the Expr plus syntactic metadata
-    (connection annotations) that ingest needs for the ambiguity ledger."""
+    carried directly on the AST."""
     parser = _Parser(tokenize(tex))
     expr = parser.parse()
-    return ParseResult(
-        expr=expr,
-        connection_annotated=parser.connection_annotated,
-        annotated_tensors=list(parser.annotated_tensors),
-    )
+    return ParseResult(expr=expr)

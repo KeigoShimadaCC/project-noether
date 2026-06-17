@@ -54,11 +54,18 @@ class TestExactAgainstStoredNpr:
             parse_lagrangian(_tex(eval1_eh_trace)) == eval1_eh_trace.build_npr().action.lagrangian
         )
 
-    def test_eval2_palatini_drops_connection_annotation(self):
+    def test_eval2_palatini_preserves_connection_annotation(self):
         result = parse_action(_tex(eval2_palatini))
-        assert result.connection_annotated is True
-        assert result.annotated_tensors == ["R"]
         assert result.expr == eval2_palatini.build_npr().action.lagrangian
+        assert result.expr != parse_lagrangian(r"g^{\mu\nu} R_{\mu\nu}")
+
+    def test_annotated_curvature_render_reparse_is_stable(self):
+        expr = parse_lagrangian(r"g^{\mu\nu} R_{\mu\nu}(\Gamma)")
+        assert parse_lagrangian(render(expr)) == expr
+
+    def test_annotated_curvature_scalar_render_reparse_is_stable(self):
+        expr = parse_lagrangian(r"R(\Gamma)")
+        assert parse_lagrangian(render(expr)) == expr
 
     def test_eval4_maxwell(self):
         assert parse_lagrangian(_tex(eval4_maxwell)) == eval4_maxwell.build_npr().action.lagrangian
@@ -119,6 +126,10 @@ class TestPrimitives:
     def test_geometric_scalar_vs_plain_symbol(self):
         assert parse_lagrangian(r"R") == tensor("R")  # curvature scalar
         assert parse_lagrangian(r"V") == Sym(name="V")  # generic scalar
+
+    def test_connection_annotation_rejected_for_noncurvature_tensor(self):
+        with pytest.raises(ParseError, match="curvature tensors"):
+            parse_lagrangian(r"F_{\mu\nu}(\Gamma)")
 
     def test_nonnumeric_division_rejected(self):
         with pytest.raises(ParseError):

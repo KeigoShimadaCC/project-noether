@@ -66,7 +66,10 @@ def _index_tex(ix: Index) -> str:
 def _tensor_tex(t: Tensor) -> str:
     """Render index groups in declared order: R^{rho}{}_{sigma mu nu}."""
     if not t.indices:
-        return _name_tex(t.name)
+        out = _name_tex(t.name)
+        if t.connection is not None:
+            out += f"({_name_tex(t.connection)})"
+        return out
     out = _name_tex(t.name)
     i = 0
     first_group = True
@@ -80,6 +83,8 @@ def _tensor_tex(t: Tensor) -> str:
         joiner = "" if not first_group else ""
         out += f"{joiner}{'' if first_group else '{}'}{sym}{{{' '.join(group)}}}"
         first_group = False
+    if t.connection is not None:
+        out += f"({_name_tex(t.connection)})"
     return out
 
 
@@ -101,13 +106,16 @@ def render(expr: Expr) -> str:
             return f"{_name_tex(name)}({inner})"
         case Tensor():
             return _tensor_tex(expr)
-        case Deriv(op=op, index=index, expr=inner):
+        case Deriv(op=op, index=index, expr=inner, connection=connection):
             op_tex = r"\nabla" if op == "covariant" else r"\partial"
             sym = "^" if index.variance == "up" else "_"
             body = render(inner)
             if isinstance(inner, Sum | Prod):
                 body = f"\\left( {body} \\right)"
-            return f"{op_tex}{sym}{{{_index_tex(index)}}} {body}"
+            annotation = ""
+            if op == "covariant" and connection not in (None, "metric"):
+                annotation = f"({_name_tex(connection)})"
+            return f"{op_tex}{sym}{{{_index_tex(index)}}}{annotation} {body}"
         case Pow(base=base, exp=exp):
             body = render(base)
             if not isinstance(base, Sym | Num) or (isinstance(base, Num) and base.q != 1):

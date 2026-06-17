@@ -3,8 +3,9 @@
 import pytest
 from pydantic import TypeAdapter
 
-from noether.npr.ast import Expr, add, cov, down, num, prod, tensor, up
+from noether.npr.ast import Deriv, Expr, Sym, add, cov, down, num, prod, tensor, up
 from noether.npr.latex import render
+from noether.npr.parse import parse_lagrangian
 from noether.npr.validate import ValidationError, free_indices, validate_expression
 
 EXPR = TypeAdapter(Expr)
@@ -17,12 +18,20 @@ def eh_trace_lagrangian():
 class TestAst:
     def test_json_round_trip(self):
         expr = add(
-            tensor("R", down("mu"), down("nu")),
-            prod(num(-1, 2), tensor("g", down("mu"), down("nu")), tensor("R")),
+            tensor("R", down("mu"), down("nu"), connection="Gamma"),
+            prod(num(-1, 2), tensor("g", down("mu"), down("nu")), tensor("R", connection="Gamma")),
         )
         dumped = EXPR.dump_python(expr)
         loaded = EXPR.validate_python(dumped)
         assert EXPR.dump_python(loaded) == dumped
+
+    def test_cov_builder_defaults_to_metric_connection(self):
+        assert cov(down("mu"), tensor("F", up("mu"), up("nu"))) == Deriv(
+            op="covariant",
+            index=down("mu"),
+            expr=tensor("F", up("mu"), up("nu")),
+            connection="metric",
+        )
 
 
 class TestValidation:
@@ -82,3 +91,12 @@ class TestLatex:
             prod(num(-1, 2), tensor("g", down("mu"), down("nu")), tensor("R")),
         )
         assert render(expr) == render(expr.model_copy(deep=True))
+
+    def test_nonmetric_derivative_round_trip(self):
+        expr = Deriv(
+            op="covariant",
+            index=down("mu"),
+            expr=Sym(name="phi"),
+            connection="Gamma",
+        )
+        assert parse_lagrangian(render(expr)) == expr

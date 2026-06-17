@@ -30,13 +30,13 @@ def target_metric_eom() -> Expr:
     """R_{(mu nu)} - 1/2 g_{mu nu} g^{ab} R_{ab}, Ricci of the independent
     connection (symmetrized explicitly because torsion breaks the symmetry)."""
     return add(
-        prod(num(1, 2), tensor("R", MU, NU)),
-        prod(num(1, 2), tensor("R", NU, MU)),
+        prod(num(1, 2), tensor("R", MU, NU, connection="Gamma")),
+        prod(num(1, 2), tensor("R", NU, MU, connection="Gamma")),
         prod(
             num(-1, 2),
             tensor("g", MU, NU),
             tensor("g", up("alpha"), up("beta")),
-            tensor("R", down("alpha"), down("beta")),
+            tensor("R", down("alpha"), down("beta"), connection="Gamma"),
         ),
     )
 
@@ -86,7 +86,7 @@ ELICITATION_ANSWERS = {
 def build_npr(resolved: bool = True) -> NPR:
     lagrangian = prod(
         tensor("g", up("mu"), up("nu")),
-        tensor("R", down("mu"), down("nu")),
+        tensor("R", down("mu"), down("nu"), connection="Gamma"),
     )
     ambiguities = [a.model_copy(deep=True) for a in AMBIGUITIES]
     if resolved:

@@ -49,6 +49,7 @@ class Tensor(BaseModel):
     node: Literal["tensor"] = "tensor"
     name: str
     indices: list[Index] = []
+    connection: str | None = None
 
 
 class Deriv(BaseModel):
@@ -58,6 +59,7 @@ class Deriv(BaseModel):
     op: Literal["covariant", "partial"]
     index: Index
     expr: "Expr"
+    connection: str | None = "metric"
 
 
 class Pow(BaseModel):
@@ -100,12 +102,12 @@ def num(p: int, q: int = 1) -> Num:
     return Num(p=p, q=q)
 
 
-def tensor(name: str, *indices: Index) -> Tensor:
-    return Tensor(name=name, indices=list(indices))
+def tensor(name: str, *indices: Index, connection: str | None = None) -> Tensor:
+    return Tensor(name=name, indices=list(indices), connection=connection)
 
 
-def cov(index: Index, expr: Expr) -> Deriv:
-    return Deriv(op="covariant", index=index, expr=expr)
+def cov(index: Index, expr: Expr, *, connection: str = "metric") -> Deriv:
+    return Deriv(op="covariant", index=index, expr=expr, connection=connection)
 
 
 def prod(*factors: Expr) -> Prod:

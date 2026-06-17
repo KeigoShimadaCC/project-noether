@@ -117,6 +117,26 @@ def _collect(expr: Expr, into: dict[str, _SymbolInfo], *, under_deriv: bool = Fa
             raise TypeError(f"unhandled expr node {expr!r}")
 
 
+def _has_explicit_connection(expr: Expr) -> bool:
+    match expr:
+        case Num() | Sym():
+            return False
+        case Func(args=args):
+            return any(_has_explicit_connection(arg) for arg in args)
+        case Tensor(connection=connection):
+            return connection is not None
+        case Deriv(expr=inner, connection=connection):
+            return connection not in (None, "metric") or _has_explicit_connection(inner)
+        case Pow(base=base):
+            return _has_explicit_connection(base)
+        case Prod(factors=factors):
+            return any(_has_explicit_connection(factor) for factor in factors)
+        case Sum(terms=terms):
+            return any(_has_explicit_connection(term) for term in terms)
+        case _:
+            raise TypeError(f"unhandled expr node {expr!r}")
+
+
 def _classify(info: _SymbolInfo) -> ObjectDecl:
     """Syntactic classification only. Roles are provisional placeholders."""
     name = info.name
@@ -285,7 +305,7 @@ def ingest_action(
         )
 
     connection = ConnectionSpec(type="levi-civita")
-    if parsed.connection_annotated:
+    if _has_explicit_connection(lagrangian):
         ambiguities.append(
             Ambiguity(
                 id="amb-connection",
