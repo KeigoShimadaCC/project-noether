@@ -598,6 +598,43 @@ helpers (`torsion_of_connection`, `torsion_trace_vector`,
 `torsion_traceless_tensor`) in `geometry.py`, and the pinned tests in
 `tests/test_torsion_affine.py`.
 
+The non-metricity primitive `Q_{lambda mu nu} = nabla_lambda g_{mu nu}` is
+residue-pinned in the same module, together with the rewrite
+`nabla_lambda g_{mu nu} -> Q_{lambda mu nu}` that replaces the baked-in
+`nabla g -> 0` on the metric-affine path.  The rewrite for the inverse
+metric is `nabla_lambda g^{mu nu} -> -g^{mu rho} g^{nu sigma} Q_{lambda rho sigma}`,
+derived from the metric-compatibility condition for `g^{mu rho} g_{rho nu}`.
+On the Levi-Civita path Q = 0 and these rewrites reduce to the old
+zero substitutions.  The irreducible non-metricity decomposition splits Q
+into three parts under the Lorentz group:
+
+- Weyl-vector trace part (4 components in dim 4):
+  `Q^(W)_{lambda mu nu} = (1/((n+2)(n-1)))
+      [(n+1) omega_lambda g_{mu nu} - (omega_mu g_{lambda nu}
+        + omega_nu g_{lambda mu})]`
+  where `omega_lambda = Q_{lambda mu nu} g^{mu nu}`.  This carries the
+  full Weyl trace and has zero second trace.
+- Second-trace part (4 components):
+  `Q^(2T)_{lambda mu nu} = (1/((n+2)(n-1)))
+      [-2 qtilde_lambda g_{mu nu} + n(qtilde_mu g_{lambda nu}
+        + qtilde_nu g_{lambda mu})]`
+  where `qtilde_mu = Q_{lambda mu nu} g^{lambda nu}`.  This carries the
+  full second trace and has zero Weyl trace.
+- Traceless-tensor remainder (32 components):
+  `Q^(TL)_{lambda mu nu} = Q_{lambda mu nu} - Q^(W) - Q^(2T)`.
+  Doubly traceless.
+
+As with the torsion decomposition, Kronecker-delta contractions produce
+free-index mismatches in Cadabra sums, so the algebraic identities (trace
+extraction, traceless properties) are verified in Cadabra and the full
+componentwise check is done by the SymPy cross-check.  The decomposition
+is distinct from the disformation L(Q) in the post-Riemannian split.
+The non-metricity primitives are in `curvature.py`, the SymPy helpers
+(`nonmetricity_of_connection`, `nonmetricity_weyl_trace`,
+`nonmetricity_second_trace`, `nonmetricity_weyl_part`,
+`nonmetricity_second_trace_part`, `nonmetricity_traceless_tensor`) in
+`geometry.py`, and the pinned tests in `tests/test_nonmetricity_affine.py`.
+
 The torsionful commutator and non-symmetric scalar Hessian are also in
 `curvature.py`, pinned by residue checks in `tests/test_commutator_affine.py`
 and cross-checked against the SymPy oracle on random torsionful backgrounds.

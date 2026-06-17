@@ -451,3 +451,245 @@ def hessian_antisymmetry_affine(field: str, ex: str = "ex") -> str:
         f"- \\nabla_{{\\nu}}{{\\nabla_{{\\mu}}{{{field}}}}} "
         f"-> - T^{{\\lambda}}_{{\\mu\\nu}} \\nabla_{{\\lambda}}{{{field}}}$);"
     )
+
+
+# ---------------------------------------------------------------------------
+# Non-metricity primitives (independent-connection path).
+#
+# Non-metricity: Q_{lambda mu nu} = nabla_lambda g_{mu nu}
+# Convention: noether-default-v1 (architecture.md section 7).
+# Q is symmetric in the last pair (mu, nu).
+#
+# Under Levi-Civita (metric-compatible connection), nabla_lambda g_{mu nu} = 0
+# and Q = 0.  On the metric-affine path, Q is generally nonzero.
+#
+# The rewrite nabla_lambda g_{mu nu} -> Q_{lambda mu nu} replaces the
+# baked-in nabla g -> 0 substitution used in blocks.py and templates.py.
+# Those baked-in substitutions are valid ONLY on the Levi-Civita path; on
+# the metric-affine path, use define_nonmetricity and rewrite_nabla_metric
+# instead.
+#
+# The irreducible decomposition splits Q into three parts under the Lorentz
+# group:
+#   Q^(W)_{lambda mu nu} = (1/((n+2)(n-1)))
+#       [(n+1) omega_lambda g_{mu nu} - (omega_mu g_{lambda nu}
+#         + omega_nu g_{lambda mu})]
+#                          Weyl-vector trace part (4 components in dim 4)
+#   Q^(2T)_{lambda mu nu} = (1/((n+2)(n-1)))
+#       [-2 qtilde_lambda g_{mu nu} + n(qtilde_mu g_{lambda nu}
+#         + qtilde_nu g_{lambda mu})]
+#                          second-trace part (4 components in dim 4)
+#   Q^(TL)_{lambda mu nu} = Q - Q^(W) - Q^(2T)
+#                          traceless-tensor remainder (32 components in dim 4)
+# where:
+#   omega_lambda = Q_{lambda mu nu} g^{mu nu}  (Weyl / first trace)
+#   qtilde_mu = Q_{lambda mu nu} g^{lambda nu}  (second trace)
+#
+# Key properties:
+#   - Q^(W) has Trace A (g^{mu nu} Q^(W)_{lambda mu nu}) = omega_lambda
+#     and Trace B (g^{lambda nu} Q^(W)_{lambda mu nu}) = 0
+#   - Q^(2T) has Trace A = 0 and Trace B = qtilde_mu
+#   - Q^(TL) has both traces = 0 (traceless in both senses)
+#   - Q = Q^(W) + Q^(2T) + Q^(TL) (reconstruction)
+#
+# The decomposition is distinct from the disformation form L(Q) defined by
+# the post-Riemannian decomposition Gamma = LC + K(T) + L(Q).  L(Q) is
+# built from Q but with different index structure; the irreducible parts
+# above are the Lorentz-irreducible decomposition of Q itself.
+#
+# Convention signs for the decomposition: the coefficients above follow from
+# solving the trace-matching system and are NOT asserted from memory.  They
+# are residue-pinned and SymPy-cross-checked.
+# ---------------------------------------------------------------------------
+
+# Declaration for the non-metricity tensor Q_{lambda mu nu}.
+# TableauSymmetry(shape={2}, indices={1,2}) enforces symmetry in the last
+# pair (mu, nu) using 0-indexed positions.  The Weyl and second-trace
+# covectors are declared as Depends so they survive connection substitution.
+NONMETRICITY_DECL = (
+    r"Q_{\lambda\mu\nu}::TableauSymmetry(shape={2}, indices={1,2})."
+    "\n"
+    r"Q_{\mu}::Depends(\partial{#})."
+    "\n"
+    r"q_{\mu}::Depends(\partial{#})."
+)
+
+# Same but with nabla as the derivative operator.
+NONMETRICITY_DECL_NABLA = (
+    r"Q_{\lambda\mu\nu}::TableauSymmetry(shape={2}, indices={1,2})."
+    "\n"
+    r"Q_{\mu}::Depends(\nabla{#})."
+    "\n"
+    r"q_{\mu}::Depends(\nabla{#})."
+)
+
+
+def define_nonmetricity(conn: str = "G", ex: str = "ex") -> str:
+    r"""Define the non-metricity tensor as the covariant derivative of the
+    metric using an independent connection:
+
+    ``Q_{lambda mu nu} -> partial_lambda g_{mu nu}
+        - conn^rho_{lambda mu} g_{rho nu}
+        - conn^rho_{lambda nu} g_{rho mu}``
+
+    This expands Q in terms of partial derivatives and the independent
+    connection, suitable for residue checking.  Use with
+    ``\partial{#}::PartialDerivative`` and the ``conn`` object declared as
+    ``\partial``-Depends (see :data:`AFFINE_CONNECTION_DEPENDS`).  The
+    connection name defaults to ``G``."""
+    return (
+        f"substitute({ex}, $"
+        f"Q_{{\\lambda\\mu\\nu}} -> "
+        f"\\partial_{{\\lambda}}{{g_{{\\mu\\nu}}}} "
+        f"- {conn}^{{\\rho}}_{{\\lambda\\mu}} g_{{\\rho\\nu}} "
+        f"- {conn}^{{\\rho}}_{{\\lambda\\nu}} g_{{\\rho\\mu}}$);"
+    )
+
+
+def nonmetricity_weyl_trace(conn: str = "G", ex: str = "ex") -> str:
+    r"""Define the Weyl (first) trace vector of non-metricity:
+
+    ``Q_mu -> g^{alpha beta} Q_{mu alpha beta}``
+
+    The Weyl trace is omega_mu = Q_{mu alpha beta} g^{alpha beta},
+    contracting the symmetric pair of Q.  We use the symbol ``Q_mu``
+    for this trace (consistent with the standard metric-affine literature
+    where Q_mu denotes the trace on the metric indices).
+
+    The ``conn`` parameter is unused but kept for API consistency with
+    other trace functions; the substitution is purely algebraic in Q."""
+    return (
+        f"substitute({ex}, $"
+        f"Q_{{\\mu}} -> "
+        f"g^{{\\alpha\\beta}} Q_{{\\mu\\alpha\\beta}}$);"
+    )
+
+
+def nonmetricity_second_trace(conn: str = "G", ex: str = "ex") -> str:
+    r"""Define the second trace vector of non-metricity:
+
+    ``q_mu -> g^{lambda nu} Q_{lambda mu nu}``
+
+    The second trace is qtilde_mu = Q_{lambda mu nu} g^{lambda nu},
+    contracting the first and third indices.  We use the symbol ``q_mu``
+    for this trace to distinguish it from the Weyl trace ``Q_mu``.
+
+    The ``conn`` parameter is unused but kept for API consistency."""
+    return (
+        f"substitute({ex}, $"
+        f"q_{{\\mu}} -> "
+        f"g^{{\\lambda\\nu}} Q_{{\\lambda\\mu\\nu}}$);"
+    )
+
+
+def rewrite_nabla_metric_to_Q(ex: str = "ex") -> str:
+    r"""Rewrite the covariant derivative of the metric to the non-metricity
+    tensor, replacing the baked-in ``nabla g -> 0``:
+
+    ``nabla_lambda g_{mu nu} -> Q_{lambda mu nu}``
+
+    On the Levi-Civita path, Q = 0 and this reduces to the old substitution.
+    On the metric-affine path, Q is nonzero and this preserves the
+    non-metricity information instead of silently dropping it.
+
+    Requires ``Q_{\\lambda\\mu\\nu}`` declared (see :data:`NONMETRICITY_DECL`).
+    """
+    return (
+        f"substitute({ex}, $"
+        f"\\nabla_{{\\lambda}}{{g_{{\\mu\\nu}}}} "
+        f"-> Q_{{\\lambda\\mu\\nu}}$);"
+    )
+
+
+def rewrite_nabla_inverse_metric_to_Q(ex: str = "ex") -> str:
+    r"""Rewrite the covariant derivative of the inverse metric in terms of
+    non-metricity:
+
+    ``nabla_lambda g^{mu nu} -> -g^{mu rho} g^{nu sigma} Q_{lambda rho sigma}``
+
+    This follows from 0 = nabla_lambda(g^{mu rho} g_{rho nu}), giving:
+    nabla_lambda g^{mu nu} = -g^{mu rho} g^{nu sigma} Q_{lambda rho sigma}.
+
+    Requires ``Q_{\\lambda\\mu\\nu}`` declared (see :data:`NONMETRICITY_DECL`).
+    """
+    return (
+        f"substitute({ex}, $"
+        f"\\nabla_{{\\lambda}}{{g^{{\\mu\\nu}}}} "
+        f"-> -g^{{\\mu\\rho}} g^{{\\nu\\sigma}} Q_{{\\lambda\\rho\\sigma}}$);"
+    )
+
+
+def nonmetricity_weyl_part(ex: str = "ex") -> str:
+    r"""Substitute the Weyl-vector trace irreducible part of non-metricity:
+
+    ``QW_{lambda mu nu} -> (1/((n+2)(n-1)))
+        [(n+1) omega_lambda g_{mu nu}
+         - (omega_mu g_{lambda nu} + omega_nu g_{lambda mu})]``
+
+    In the Cadabra substitution, n is left as a literal number (the caller
+    must replace with the actual dimension, typically 4).  The Weyl trace
+    ``Q_mu`` (representing omega_mu) must already be defined or substituted.
+
+    For n=4 (dim=4): (n+2)(n-1) = 18, (n+1) = 5
+    """
+    return (
+        f"substitute({ex}, $"
+        f"QW_{{\\lambda\\mu\\nu}} -> "
+        f"(1/18)(5 Q_{{\\lambda}} g_{{\\mu\\nu}} "
+        f"- Q_{{\\mu}} g_{{\\lambda\\nu}} "
+        f"- Q_{{\\nu}} g_{{\\lambda\\mu}})$);"
+    )
+
+
+def nonmetricity_second_trace_part(ex: str = "ex") -> str:
+    r"""Substitute the second-trace irreducible part of non-metricity:
+
+    ``Q2T_{lambda mu nu} -> (1/((n+2)(n-1)))
+        [-2 qtilde_lambda g_{mu nu}
+         + n(qtilde_mu g_{lambda nu} + qtilde_nu g_{lambda mu})]``
+
+    For n=4 (dim=4): (n+2)(n-1) = 18, coefficient of qtilde terms: -2 and 4.
+    The second trace ``q_mu`` (representing qtilde_mu) must already be defined.
+    """
+    return (
+        f"substitute({ex}, $"
+        f"Q2T_{{\\lambda\\mu\\nu}} -> "
+        f"(1/18)(-2 q_{{\\lambda}} g_{{\\mu\\nu}} "
+        f"+ 4 q_{{\\mu}} g_{{\\lambda\\nu}} "
+        f"+ 4 q_{{\\nu}} g_{{\\lambda\\mu}})$);"
+    )
+
+
+def nonmetricity_traceless_part(ex: str = "ex") -> str:
+    r"""Define the traceless-tensor irreducible part as the remainder:
+
+    ``QTL_{lambda mu nu} -> Q_{lambda mu nu}
+        - QW_{lambda mu nu} - Q2T_{lambda mu nu}``
+
+    The Weyl and second-trace parts (QW, Q2T) must already be present in
+    the expression for this to produce the correct result."""
+    return (
+        f"substitute({ex}, $"
+        f"QTL_{{\\lambda\\mu\\nu}} -> "
+        f"Q_{{\\lambda\\mu\\nu}} "
+        f"- QW_{{\\lambda\\mu\\nu}} "
+        f"- Q2T_{{\\lambda\\mu\\nu}}$);"
+    )
+
+
+def reassemble_nonmetricity(ex: str = "ex") -> str:
+    r"""Substitute the reassembled non-metricity from its three irreducible
+    parts:
+
+    ``Q_{lambda mu nu} -> QW_{lambda mu nu}
+        + Q2T_{lambda mu nu} + QTL_{lambda mu nu}``
+
+    This is the reconstruction substitution for the residue check: applying
+    it and then subtracting the original Q should yield zero."""
+    return (
+        f"substitute({ex}, $"
+        f"Q_{{\\lambda\\mu\\nu}} -> "
+        f"QW_{{\\lambda\\mu\\nu}} "
+        f"+ Q2T_{{\\lambda\\mu\\nu}} "
+        f"+ QTL_{{\\lambda\\mu\\nu}}$);"
+    )

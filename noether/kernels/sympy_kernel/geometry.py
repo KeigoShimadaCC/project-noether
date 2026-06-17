@@ -418,6 +418,167 @@ def torsion_traceless_tensor(gamma, geom: ComponentGeometry) -> Array:
     return Array(out)
 
 
+def nonmetricity_of_connection(
+    coords: list[sp.Symbol], gamma, g
+) -> Array:
+    """Q_{lambda mu nu} = nabla_lambda g_{mu nu} of a general connection.
+
+    Convention: noether-default-v1 (architecture.md section 7).
+    Q is symmetric in the last pair (mu, nu).  For the Levi-Civita
+    connection (Christoffel symbols), Q = 0 (metric compatibility).
+
+    Q_{lambda mu nu} = partial_lambda g_{mu nu}
+                       - Gamma^rho_{lambda mu} g_{rho nu}
+                       - Gamma^rho_{lambda nu} g_{rho mu}
+
+    Parameters:
+        coords: coordinate symbols
+        gamma: affine connection array gamma[a][b][c] = Gamma^a_{bc}
+        g: metric matrix (symmetric)
+    """
+    n, x = len(coords), coords
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(mu, n):
+                val = sp.diff(g[mu, nu], x[lam])
+                for rho in range(n):
+                    val -= gamma[rho, lam, mu] * g[rho, nu]
+                    val -= gamma[rho, lam, nu] * g[rho, mu]
+                val = _clean(val)
+                out[lam, mu, nu] = val
+                out[lam, nu, mu] = val  # symmetric in last pair
+    return Array(out)
+
+
+def nonmetricity_weyl_trace(
+    coords: list[sp.Symbol], gamma, g, g_inv
+) -> Array:
+    """omega_lambda = Q_{lambda mu nu} g^{mu nu} (the Weyl / first trace).
+
+    Returns a 1-form (all indices down).  The Weyl trace is the contraction
+    of Q on its symmetric pair.
+    """
+    Q = nonmetricity_of_connection(coords, gamma, g)
+    n = Q.shape[0]
+    out = sp.MutableDenseNDimArray.zeros(n)
+    for lam in range(n):
+        out[lam] = _clean(
+            sum(Q[lam, mu, nu] * g_inv[mu, nu] for mu in range(n) for nu in range(n))
+        )
+    return Array(out)
+
+
+def nonmetricity_second_trace(
+    coords: list[sp.Symbol], gamma, g, g_inv
+) -> Array:
+    """qtilde_mu = Q_{lambda mu nu} g^{lambda nu} (the second trace).
+
+    Returns a 1-form (all indices down).  The second trace contracts the
+    first and third indices of Q.
+    """
+    Q = nonmetricity_of_connection(coords, gamma, g)
+    n = Q.shape[0]
+    out = sp.MutableDenseNDimArray.zeros(n)
+    for mu in range(n):
+        out[mu] = _clean(
+            sum(Q[lam, mu, nu] * g_inv[lam, nu] for lam in range(n) for nu in range(n))
+        )
+    return Array(out)
+
+
+def nonmetricity_weyl_part(
+    coords: list[sp.Symbol], gamma, g, g_inv
+) -> Array:
+    """The Weyl-vector trace irreducible part of non-metricity:
+
+    Q^(W)_{lambda mu nu} = (1/((n+2)(n-1)))
+        [(n+1) omega_lambda g_{mu nu}
+         - (omega_mu g_{lambda nu} + omega_nu g_{lambda mu})]
+
+    where omega_lambda = Q_{lambda mu nu} g^{mu nu} is the Weyl trace.
+
+    Properties:
+      Trace A (g^{mu nu} Q^(W)_{lambda mu nu}) = omega_lambda
+      Trace B (g^{lambda nu} Q^(W)_{lambda mu nu}) = 0
+    """
+    omega = nonmetricity_weyl_trace(coords, gamma, g, g_inv)
+    n = omega.shape[0]
+    denom = (n + 2) * (n - 1)
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(mu, n):
+                val = (
+                    (n + 1) * omega[lam] * g[mu, nu]
+                    - omega[mu] * g[lam, nu]
+                    - omega[nu] * g[lam, mu]
+                ) / denom
+                val = _clean(val)
+                out[lam, mu, nu] = val
+                out[lam, nu, mu] = val  # symmetric in last pair
+    return Array(out)
+
+
+def nonmetricity_second_trace_part(
+    coords: list[sp.Symbol], gamma, g, g_inv
+) -> Array:
+    """The second-trace irreducible part of non-metricity:
+
+    Q^(2T)_{lambda mu nu} = (1/((n+2)(n-1)))
+        [-2 qtilde_lambda g_{mu nu}
+         + n(qtilde_mu g_{lambda nu} + qtilde_nu g_{lambda mu})]
+
+    where qtilde_mu = Q_{lambda mu nu} g^{lambda nu} is the second trace.
+
+    Properties:
+      Trace A (g^{mu nu} Q^(2T)_{lambda mu nu}) = 0
+      Trace B (g^{lambda nu} Q^(2T)_{lambda mu nu}) = qtilde_mu
+    """
+    qtilde = nonmetricity_second_trace(coords, gamma, g, g_inv)
+    n = qtilde.shape[0]
+    denom = (n + 2) * (n - 1)
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(mu, n):
+                val = (
+                    -2 * qtilde[lam] * g[mu, nu]
+                    + n * (qtilde[mu] * g[lam, nu] + qtilde[nu] * g[lam, mu])
+                ) / denom
+                val = _clean(val)
+                out[lam, mu, nu] = val
+                out[lam, nu, mu] = val  # symmetric in last pair
+    return Array(out)
+
+
+def nonmetricity_traceless_tensor(
+    coords: list[sp.Symbol], gamma, g, g_inv
+) -> Array:
+    """The traceless-tensor irreducible part of non-metricity:
+
+    Q^(TL)_{lambda mu nu} = Q_{lambda mu nu}
+        - Q^(W)_{lambda mu nu} - Q^(2T)_{lambda mu nu}
+
+    This is the remainder after subtracting the Weyl and second-trace parts.
+    It is traceless in both senses:
+      Trace A: g^{mu nu} Q^(TL)_{lambda mu nu} = 0
+      Trace B: g^{lambda nu} Q^(TL)_{lambda mu nu} = 0
+    """
+    Q = nonmetricity_of_connection(coords, gamma, g)
+    qw = nonmetricity_weyl_part(coords, gamma, g, g_inv)
+    q2t = nonmetricity_second_trace_part(coords, gamma, g, g_inv)
+    n = Q.shape[0]
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                out[lam, mu, nu] = _clean(
+                    Q[lam, mu, nu] - qw[lam, mu, nu] - q2t[lam, mu, nu]
+                )
+    return Array(out)
+
+
 def covariant_derivative_of_connection(
     coords: list[sp.Symbol], gamma, arr, variances: list[str]
 ) -> Array:
