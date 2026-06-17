@@ -100,8 +100,9 @@ class TestAmbiguityShape:
         assert "amb-composite-G" in ids
 
     def test_eval2_connection_question_from_annotation(self):
-        ids = {a.id for a in _ingest(eval2_palatini).npr.ambiguities}
-        assert "amb-connection" in ids
+        questions = {a.id: a for a in _ingest(eval2_palatini).npr.ambiguities}
+        assert "amb-connection" in questions
+        assert {"levi-civita", "independent"} <= set(questions["amb-connection"].options)
 
     def test_eval3_coupling_questions_for_both_functions(self):
         ids = {a.id for a in _ingest(eval3_scalar_tensor).npr.ambiguities}
@@ -114,6 +115,39 @@ class TestAmbiguityShape:
     def test_eval4_minimal_ledger_has_no_spurious_questions(self):
         ids = {a.id for a in _ingest(eval4_maxwell).npr.ambiguities}
         assert ids == {"amb-conventions", "amb-vary-wrt"}
+
+    def test_bare_curvature_raises_full_geometry_questionnaire(self):
+        npr = ingest_action(r"d^4x \sqrt{-g}", r"R").npr
+        questions = {a.id: a for a in npr.ambiguities}
+
+        assert {
+            "amb-connection",
+            "amb-torsion",
+            "amb-nonmetricity",
+            "amb-metric-compatibility",
+        } <= questions.keys()
+        assert {"levi-civita", "independent"} <= set(questions["amb-connection"].options)
+        assert questions["amb-connection"].kind == "inferable"
+        assert questions["amb-torsion"].kind == "inferable"
+        assert questions["amb-nonmetricity"].kind == "inferable"
+        assert questions["amb-metric-compatibility"].kind == "inferable"
+        assert all(questions[qid].resolution is None for qid in questions if qid.startswith("amb-"))
+
+    def test_explicit_torsion_cue_raises_torsion_question(self):
+        npr = ingest_action(r"d^4x \sqrt{-g}", r"f(R,T)").npr
+        questions = {a.id: a for a in npr.ambiguities}
+
+        assert "amb-torsion" in questions
+        assert "torsion-present" in questions["amb-torsion"].options
+        assert questions["amb-torsion"].kind == "inferable"
+
+    def test_explicit_nonmetricity_cue_raises_nonmetricity_question(self):
+        npr = ingest_action(r"d^4x \sqrt{-g}", r"f(Q)").npr
+        questions = {a.id: a for a in npr.ambiguities}
+
+        assert "amb-nonmetricity" in questions
+        assert "nonmetricity-present" in questions["amb-nonmetricity"].options
+        assert questions["amb-nonmetricity"].kind == "inferable"
 
 
 class TestKineticScalarShorthand:
@@ -154,6 +188,18 @@ class TestKineticScalarShorthand:
         npr = ingest_action(r"d^4x \sqrt{-g}", r"G(X) R").npr
         assert npr.object_named("X").kind == "scalar-field"
         assert "amb-kinetic-X" not in {a.id for a in npr.ambiguities}
+
+    def test_k_essence_raises_no_geometry_question_and_defaults_to_levi_civita(self):
+        npr = ingest_action(r"d^4x \sqrt{-g}", r"K(\phi, X) - V(\phi)").npr
+        ids = {a.id for a in npr.ambiguities}
+
+        assert {
+            "amb-connection",
+            "amb-torsion",
+            "amb-nonmetricity",
+            "amb-metric-compatibility",
+        }.isdisjoint(ids)
+        assert npr.geometry.connection.type == "levi-civita"
 
 
 class TestResolutionUnblocks:

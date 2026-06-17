@@ -28,8 +28,16 @@ classifies every open item into one of three bins:
   These are asked as confirm-or-correct items with the default shown:
   "I will take X = -½∇φ∇φ unless you say otherwise."
 - **Undecidable:** only the physicist knows (which symbols are dynamical, whether
-  the connection is independent, what to vary, which background and gauge).
+  the connection is a dynamical field, what to vary, which background and gauge).
   These are always asked, never defaulted.
+
+For metric-affine geometry, the action's structure can force a narrower set of
+questions. A term with curvature or an explicit connection opens the geometry
+questionnaire. Connection type, torsion, non-metricity, and metric compatibility
+are asked as menu-bound inferable questions, because the notation constrains the
+space of sensible answers even though the physicist still has to confirm one. A
+curvature-free scalar action does not open that questionnaire and stays on the
+default Levi-Civita draft.
 
 ### 1.2 Question discipline
 

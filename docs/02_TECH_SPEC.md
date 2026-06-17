@@ -176,10 +176,17 @@ plumbing deterministic in tests. The LLM gets tools, not freedom:
   discovery plus the ambiguity ledger). Ingest never assigns field roles,
   conventions, the fields to vary, or the curvature/connection/coupling meaning
   of a symbol; it emits each as an open question, so a freshly ingested action is
-  structurally un-plannable until elicitation resolves it. The LLM narrates and
-  may propose answers, but cannot make ingest guess. Validated against the five
-  acceptance actions (`tests/test_parse.py`, `tests/test_ingest.py`); reachable
-  from the CLI as `noether ingest "<lagrangian>"`.
+  structurally un-plannable until elicitation resolves it. On the metric-affine
+  path, the geometry questionnaire opens whenever the action carries curvature or
+  other connection-dependent geometry, not just an explicit `(\Gamma)` suffix:
+  ingest now asks on-menu questions for connection type, torsion,
+  non-metricity, and metric compatibility, with no answer pre-selected, while a
+  curvature-free scalar action such as k-essence keeps the default
+  Levi-Civita draft and raises none of those geometry questions. The LLM
+  narrates and may propose answers, but cannot make ingest guess. Validated
+  against the five acceptance actions (`tests/test_parse.py`,
+  `tests/test_ingest.py`); reachable from the CLI as `noether ingest
+  "<lagrangian>"`.
 - `ask_user(questions) -> answers` (elicitation; see 03_METHODOLOGY §1).
   Implemented in `noether.orchestrator.elicit` with a propose-then-confirm
   contract that makes AGENTS.md rule 4 structural: `propose_resolutions` asks the

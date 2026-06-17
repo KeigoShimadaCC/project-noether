@@ -175,6 +175,10 @@ from the Riemann tensor of `Γ`:
 
 1. Two dynamical fields: `g` (symmetric) and `Γ` (independent; no symmetry in
    lower indices, so torsion is allowed; metric compatibility not assumed).
+   Ingest gets there by opening the geometry questionnaire rather than by
+   hard-coding the Palatini reading: connection type, torsion, non-metricity,
+   and metric compatibility are all surfaced as on-menu questions, with no
+   answer pre-selected.
 2. `R_{μν}(Γ)` depends on `Γ` only; the metric enters only through `√-g` and
    contractions. Note: `R_{μν}(Γ)` is **not** symmetric in general; only its
    symmetric part couples to `δg^{μν}`.

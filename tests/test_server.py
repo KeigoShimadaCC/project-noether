@@ -59,6 +59,22 @@ class TestHealthAndCreate:
     def test_unknown_session_is_404(self, client):
         assert client.get("/sessions/s-doesnotexist").status_code == 404
 
+    def test_metric_curvature_session_lists_full_geometry_questionnaire(self, client):
+        body = _create(client, "R")
+        questions = {q["id"]: q for q in body["questions"]}
+
+        assert {
+            "amb-connection",
+            "amb-torsion",
+            "amb-nonmetricity",
+            "amb-metric-compatibility",
+        } <= questions.keys()
+        assert {"levi-civita", "independent"} <= set(questions["amb-connection"]["options"])
+        assert questions["amb-connection"]["kind"] == "inferable"
+        assert questions["amb-torsion"]["kind"] == "inferable"
+        assert questions["amb-nonmetricity"]["kind"] == "inferable"
+        assert questions["amb-metric-compatibility"]["kind"] == "inferable"
+
 
 class TestResolveAndPlan:
     def test_plan_blocked_while_questions_open(self, client):

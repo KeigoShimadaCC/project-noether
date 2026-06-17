@@ -71,6 +71,8 @@ _GEOMETRIC_SYMMETRIES = {
     "Q": "symmetric",
 }
 _COMPOSITE_GEOMETRIC_NAMES = {"G", "C", "W"}
+_CURVATURE_NAMES = {"R", "G", "C", "W"}
+_EXPLICIT_CONNECTION_NAMES = {"Gamma"}
 
 
 @dataclass
@@ -82,6 +84,14 @@ class _SymbolInfo:
     seen_func: bool = False
     differentiated: bool = False
     func_args: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _GeometryCues:
+    has_curvature: bool = False
+    has_connection: bool = False
+    has_torsion: bool = False
+    has_nonmetricity: bool = False
 
 
 def _collect(expr: Expr, into: dict[str, _SymbolInfo], *, under_deriv: bool = False) -> None:
@@ -141,6 +151,143 @@ def _has_explicit_connection(expr: Expr) -> bool:
             return any(_has_explicit_connection(term) for term in terms)
         case _:
             raise TypeError(f"unhandled expr node {expr!r}")
+
+
+def _geometry_cues(expr: Expr) -> _GeometryCues:
+    cues = _GeometryCues()
+
+    def walk(node: Expr) -> None:
+        match node:
+            case Num() | Sym():
+                return
+            case Func(args=args):
+                for arg in args:
+                    walk(arg)
+            case Tensor(name=name, connection=connection):
+                cues.has_curvature |= name in _CURVATURE_NAMES
+                cues.has_connection |= name in _EXPLICIT_CONNECTION_NAMES or connection is not None
+                cues.has_torsion |= name == "T"
+                cues.has_nonmetricity |= name == "Q"
+            case Deriv(expr=inner, connection=connection):
+                cues.has_connection |= connection not in (None, "metric")
+                walk(inner)
+            case Pow(base=base):
+                walk(base)
+            case Prod(factors=factors):
+                for factor in factors:
+                    walk(factor)
+            case Sum(terms=terms):
+                for term in terms:
+                    walk(term)
+            case _:
+                raise TypeError(f"unhandled expr node {node!r}")
+
+    walk(expr)
+    return cues
+
+
+def _needs_geometry_questionnaire(cues: _GeometryCues) -> bool:
+    return any(
+        (
+            cues.has_curvature,
+            cues.has_connection,
+            cues.has_torsion,
+            cues.has_nonmetricity,
+        )
+    )
+
+
+def _append_geometry_ambiguities(ambiguities: list[Ambiguity], cues: _GeometryCues) -> None:
+    independent_first = cues.has_connection or cues.has_torsion or cues.has_nonmetricity
+    connection_options = (
+        ["independent", "levi-civita"] if independent_first else ["levi-civita", "independent"]
+    )
+    if cues.has_connection:
+        connection_question = (
+            "The action carries an explicit connection: should it be treated as "
+            "an independent connection or as the metric Levi-Civita one?"
+        )
+    elif cues.has_torsion:
+        connection_question = (
+            "The action uses explicit torsion T, which points to connection-dependent "
+            "geometry: is the connection independent or Levi-Civita?"
+        )
+    elif cues.has_nonmetricity:
+        connection_question = (
+            "The action uses explicit non-metricity Q, which points to "
+            "connection-dependent geometry: is the connection independent or "
+            "Levi-Civita?"
+        )
+    else:
+        connection_question = (
+            "The action carries curvature: is the geometry Levi-Civita, or does it "
+            "use an independent connection?"
+        )
+    ambiguities.append(
+        Ambiguity(
+            id="amb-connection",
+            question=connection_question,
+            kind="inferable",
+            options=connection_options,
+        )
+    )
+
+    torsion_options = (
+        ["torsion-present", "torsion-free"]
+        if cues.has_torsion
+        else ["torsion-free", "torsion-allowed"]
+    )
+    torsion_question = (
+        "The action uses explicit torsion T. Should torsion be treated as present, "
+        "or should the connection be torsion-free?"
+        if cues.has_torsion
+        else "Should the connection be torsion-free, or should torsion be allowed?"
+    )
+    ambiguities.append(
+        Ambiguity(
+            id="amb-torsion",
+            question=torsion_question,
+            kind="inferable",
+            options=torsion_options,
+        )
+    )
+
+    nonmetricity_options = (
+        ["nonmetricity-present", "nonmetricity-free"]
+        if cues.has_nonmetricity
+        else ["nonmetricity-free", "nonmetricity-allowed"]
+    )
+    nonmetricity_question = (
+        "The action uses explicit non-metricity Q. Should non-metricity be treated "
+        "as present, or should the connection stay metric-compatible there?"
+        if cues.has_nonmetricity
+        else "Should the connection be metric-compatible, or should non-metricity be allowed?"
+    )
+    ambiguities.append(
+        Ambiguity(
+            id="amb-nonmetricity",
+            question=nonmetricity_question,
+            kind="inferable",
+            options=nonmetricity_options,
+        )
+    )
+
+    metric_compatibility_options = (
+        ["not-metric-compatible", "metric-compatible"]
+        if cues.has_nonmetricity
+        else ["metric-compatible", "not-metric-compatible"]
+    )
+    ambiguities.append(
+        Ambiguity(
+            id="amb-metric-compatibility",
+            question=(
+                "Should the connection be metric-compatible, or should the metric "
+                "have a nonzero covariant derivative?"
+            ),
+            kind="inferable",
+            options=metric_compatibility_options,
+        )
+    )
 
 
 def _classify(info: _SymbolInfo) -> ObjectDecl:
@@ -234,6 +381,7 @@ def ingest_action(
     """
     parsed = parse_action(lagrangian_tex)
     lagrangian = parsed.expr
+    geometry_cues = _geometry_cues(lagrangian)
 
     symbols: dict[str, _SymbolInfo] = {}
     _collect(lagrangian, symbols)
@@ -313,18 +461,8 @@ def ingest_action(
         )
 
     connection = ConnectionSpec(type="levi-civita")
-    if _has_explicit_connection(lagrangian):
-        ambiguities.append(
-            Ambiguity(
-                id="amb-connection",
-                question=(
-                    "The curvature is annotated with an explicit connection: is it "
-                    "Levi-Civita (metric-compatible) or an independent connection?"
-                ),
-                kind="undecidable",
-                options=["levi-civita", "independent"],
-            )
-        )
+    if _needs_geometry_questionnaire(geometry_cues):
+        _append_geometry_ambiguities(ambiguities, geometry_cues)
 
     dimension = _measure_dimension(measure_tex)
     if dimension is not None and dimension != 4:
