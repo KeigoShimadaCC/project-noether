@@ -418,6 +418,61 @@ def torsion_traceless_tensor(gamma, geom: ComponentGeometry) -> Array:
     return Array(out)
 
 
+def covariant_derivative_of_connection(
+    coords: list[sp.Symbol], gamma, arr, variances: list[str]
+) -> Array:
+    """Covariant derivative of a tensor using a general (possibly asymmetric)
+    affine connection gamma[a][b][c] = Gamma^a_{bc}.
+
+    Convention matches ComponentGeometry.covariant_derivative:
+      nabla_a T^{...}_{...} = partial_a T + (connection terms)
+
+    For each upper index s:  + Gamma^{idx_s}_{a lam} T(..., lam, ...)
+    For each lower index s:  - Gamma^{lam}_{a idx_s} T(..., lam, ...)
+
+    The connection gamma may be asymmetric (torsionful). Returns an array
+    with a new leading 'down' axis.
+    """
+    n, x = len(coords), coords
+    if not variances:
+        return Array([_clean(sp.diff(arr, x[a])) for a in range(n)])
+    rank = len(variances)
+    shape = (n,) + (n,) * rank
+    out = sp.MutableDenseNDimArray.zeros(*shape)
+    for a in range(n):
+        for idx in _all_indices(n, rank):
+            val = sp.diff(arr[idx], x[a])
+            for s, var in enumerate(variances):
+                for lam in range(n):
+                    swapped = idx[:s] + (lam,) + idx[s + 1 :]
+                    if var == "up":
+                        val += gamma[idx[s], a, lam] * arr[swapped]
+                    else:
+                        val -= gamma[lam, a, idx[s]] * arr[swapped]
+            out[(a, *idx)] = _clean(val)
+    return Array(out)
+
+
+def riemann_down_of_connection(
+    coords: list[sp.Symbol], gamma, g
+) -> Array:
+    """R_{rho sigma mu nu} (all indices down) of a general connection.
+
+    Computed as g_{rho alpha} R^alpha_{sigma mu nu}(Gamma).
+    """
+    n = len(coords)
+    R_up = riemann_of_connection(coords, gamma)
+    out = sp.MutableDenseNDimArray.zeros(n, n, n, n)
+    for rho in range(n):
+        for sig in range(n):
+            for mu in range(n):
+                for nu in range(n):
+                    out[rho, sig, mu, nu] = _clean(
+                        sum(g[rho, alpha] * R_up[alpha, sig, mu, nu] for alpha in range(n))
+                    )
+    return Array(out)
+
+
 def _levi_civita_value(i: int, j: int, k: int, ll: int, n: int) -> int:
     """Value of the Levi-Civita symbol epsilon_{ijkl} (not tensor) in n dimensions.
 

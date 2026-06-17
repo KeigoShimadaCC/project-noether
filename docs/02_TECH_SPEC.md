@@ -598,6 +598,35 @@ helpers (`torsion_of_connection`, `torsion_trace_vector`,
 `torsion_traceless_tensor`) in `geometry.py`, and the pinned tests in
 `tests/test_torsion_affine.py`.
 
+The torsionful commutator and non-symmetric scalar Hessian are also in
+`curvature.py`, pinned by residue checks in `tests/test_commutator_affine.py`
+and cross-checked against the SymPy oracle on random torsionful backgrounds.
+These generalize the Levi-Civita commutator and symmetric Hessian to a
+connection carrying torsion:
+
+- `commute_third_derivative_affine`: the general commutator on a scalar
+  field's covariant derivative,
+  `[nabla_a, nabla_b] nabla_c phi = -R^d_{cab} nabla_d phi
+  - T^d_{ab} nabla_d nabla_c phi`, carrying the torsion term that the
+  Levi-Civita primitive omits.  When T=0 it reduces to the existing
+  `commute_third_derivative`.
+- `hessian_antisymmetry_affine`: the non-symmetric scalar Hessian under
+  torsion, `nabla_mu nabla_nu phi - nabla_nu nabla_mu phi =
+  -T^lambda_{mu nu} nabla_lambda phi`.  The antisymmetric part is nonzero
+  on a torsionful background and zero at T=0, so the LC
+  `hessian_to_symmetric` (which routes through a symmetric stand-in and
+  silently drops the antisymmetric part) is invalid under torsion.
+
+The SymPy cross-check uses a new `covariant_derivative_of_connection`
+function in `geometry.py` that computes the covariant derivative of a
+tensor using a general (possibly asymmetric) connection, plus
+`riemann_down_of_connection` for the fully-lowered Riemann.  The key
+correctness point: when `nabla_a` acts on the (0,2) tensor `nabla_b V_c`,
+the connection term for the derivative index `b` produces the torsion
+contribution `-T^d_{ab} nabla_d V_c` in the commutator.  This is the term
+missing from the LC formula and the reason the LC primitive gives a wrong
+answer under torsion (the torsion trap).
+
 What is still open is the orchestration across the whole equation. Two lessons
 came out of the attempts. First, a blind one-way commutator pass does not
 converge: applied to every term it just trades the two contraction patterns'

@@ -380,3 +380,74 @@ def reassemble_torsion(ex: str = "ex") -> str:
         f"T^{{\\lambda}}_{{\\mu\\nu}} -> "
         f"t1^{{\\lambda}}_{{\\mu\\nu}} + t2^{{\\lambda}}_{{\\mu\\nu}} + q^{{\\lambda}}_{{\\mu\\nu}}$);"
     )
+
+
+# ---------------------------------------------------------------------------
+# Torsionful commutator and non-symmetric Hessian (independent-connection).
+#
+# These generalize the Levi-Civita commutator and symmetric Hessian to a
+# connection with torsion.  The key differences from the LC primitives above:
+#
+# - The commutator gains a torsion term:
+#   [nabla_a, nabla_b] nabla_c field = -R^d_{cab} nabla_d field
+#                                       - T^d_{ab} nabla_d nabla_c field
+#   When T=0 this reduces to the existing commute_third_derivative (the
+#   torsion term vanishes and R^d_{cab} is the same Riemann contraction).
+#
+# - The scalar Hessian is NON-symmetric under torsion:
+#   nabla_mu nabla_nu field - nabla_nu nabla_mu field = -T^lambda_{mu nu} nabla_lambda field
+#   The LC hessian_to_symmetric (which routes through a symmetric stand-in
+#   H_{mu nu}) is INVALID here; it silently drops the antisymmetric part.
+#
+# Conventions: noether-default-v1, extended per architecture.md section 7.
+#   T^lambda_{mu nu} = Gamma^lambda_{mu nu} - Gamma^lambda_{nu mu}
+#   R^rho_{sigma mu nu}(Gamma) as defined in AFFINE_CURVATURE_DECL.
+#
+# The torsion tensor T must be declared (see TORSION_DECL) and the
+# connection must be declared as Depends (see AFFINE_CONNECTION_DEPENDS or
+# AFFINE_CONNECTION_DEPENDS_NABLA) before applying these primitives.
+# ---------------------------------------------------------------------------
+
+
+def commute_third_derivative_affine(field: str, ex: str = "ex") -> str:
+    r"""Reduce the antisymmetrized third derivative of ``field`` under a
+    torsionful connection, carrying the torsion term the LC primitive omits:
+
+    ``[nabla_a, nabla_b] nabla_c field = -R^d_{cab} nabla_d field
+                                         - T^d_{ab} nabla_d nabla_c field``
+
+    Written with the Riemann index lowered for clean canonicalisation.
+    When torsion vanishes (T=0) this reduces to :func:`commute_third_derivative`.
+
+    Requires ``T^{\\lambda}_{\\mu\\nu}`` declared (see :data:`TORSION_DECL`).
+    The ``R_{\\mu\\nu\\rho\\sigma}`` RiemannTensor declaration must be present
+    (see :data:`AFFINE_CURVATURE_DECL`)."""
+    return (
+        f"substitute({ex}, $"
+        f"\\nabla_{{\\mu}}{{\\nabla_{{\\nu}}{{\\nabla_{{\\rho}}{{{field}}}}}}} "
+        f"- \\nabla_{{\\nu}}{{\\nabla_{{\\mu}}{{\\nabla_{{\\rho}}{{{field}}}}}}} "
+        f"-> - g^{{\\delta\\lambda}} R_{{\\lambda\\rho\\mu\\nu}} \\nabla_{{\\delta}}{{{field}}}"
+        f" - T^{{\\delta}}_{{\\mu\\nu}} \\nabla_{{\\delta}}{{\\nabla_{{\\rho}}{{{field}}}}}$);"
+    )
+
+
+def hessian_antisymmetry_affine(field: str, ex: str = "ex") -> str:
+    r"""Route the antisymmetric part of the scalar Hessian through the
+    torsion tensor under a torsionful connection:
+
+    ``nabla_mu nabla_nu field - nabla_nu nabla_mu field
+        -> -T^lambda_{mu nu} nabla_lambda field``
+
+    This is the general (torsionful) version of the scalar Hessian identity.
+    Under Levi-Civita (T=0) the antisymmetric part vanishes and the Hessian
+    is symmetric, so :func:`hessian_to_symmetric` is valid.  Under torsion
+    the antisymmetric part is NONZERO and ``hessian_to_symmetric`` would
+    silently drop it, producing a wrong result (the torsion trap).
+
+    Requires ``T^{\\lambda}_{\\mu\\nu}`` declared (see :data:`TORSION_DECL`)."""
+    return (
+        f"substitute({ex}, $"
+        f"\\nabla_{{\\mu}}{{\\nabla_{{\\nu}}{{{field}}}}} "
+        f"- \\nabla_{{\\nu}}{{\\nabla_{{\\mu}}{{{field}}}}} "
+        f"-> - T^{{\\lambda}}_{{\\mu\\nu}} \\nabla_{{\\lambda}}{{{field}}}$);"
+    )
