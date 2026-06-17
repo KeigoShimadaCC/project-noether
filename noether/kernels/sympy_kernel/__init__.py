@@ -11,6 +11,13 @@ from noether.kernels.sympy_kernel.geometry import (
     ComponentGeometry,
     components,
     random_diagonal_metric,
+    torsion_of_connection,
 )
 
-__all__ = ["ComponentGeometry", "SympyKernelAdapter", "components", "random_diagonal_metric"]
+__all__ = [
+    "ComponentGeometry",
+    "SympyKernelAdapter",
+    "components",
+    "random_diagonal_metric",
+    "torsion_of_connection",
+]

@@ -286,6 +286,157 @@ def ricci_of_connection(coords: list[sp.Symbol], gamma) -> Array:
     return Array(out)
 
 
+def torsion_of_connection(gamma) -> Array:
+    """T^lambda_{mu nu} = Gamma^lambda_{mu nu} - Gamma^lambda_{nu mu}.
+
+    Convention: noether-default-v1 (AGENTS.md section 5). The torsion tensor
+    is antisymmetric in the lower pair: T^lambda_{mu nu} = -T^lambda_{nu mu}.
+    """
+    n = gamma.shape[0]
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                out[lam, mu, nu] = _clean(gamma[lam, mu, nu] - gamma[lam, nu, mu])
+    return Array(out)
+
+
+def torsion_trace_vector(gamma, g_inv=None) -> Array:
+    """T_mu = T^lambda_{lambda mu} (the torsion trace vector).
+
+    Returns a 1-form (all indices down). If g_inv is given, the trace is
+    computed as g^{lambda kappa} T_{kappa mu ...}; otherwise T^lambda_{lambda mu}
+    is taken from the upper-lower form directly.
+    """
+    T = torsion_of_connection(gamma)
+    n = T.shape[0]
+    out = sp.MutableDenseNDimArray.zeros(n)
+    for mu in range(n):
+        out[mu] = _clean(sum(T[lam, lam, mu] for lam in range(n)))
+    return Array(out)
+
+
+def torsion_axial_vector(gamma, geom: ComponentGeometry) -> Array:
+    """A^rho = epsilon^{rho sigma kappa lambda} T_{sigma kappa lambda} / 6.
+
+    The axial vector is (1/6) times the Levi-Civita dual of the totally
+    antisymmetric part of T_{lambda mu nu} (all indices lowered). Convention:
+    noether-default-v1 with epsilon^{0123} = +1/sqrt(-g) for the contravariant
+    Levi-Civita tensor.
+
+    Returns a vector (one index up).
+    """
+    T = torsion_of_connection(gamma)
+    n = geom.dim
+    T_down = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                T_down[lam, mu, nu] = _clean(
+                    sum(geom.g[lam, k] * T[k, mu, nu] for k in range(n))
+                )
+    T_down = Array(T_down)
+    A_up = sp.MutableDenseNDimArray.zeros(n)
+    for rho in range(n):
+        val = sp.Integer(0)
+        for sig in range(n):
+            for kap in range(n):
+                for lam in range(n):
+                    eps = _levi_civita_value(rho, sig, kap, lam, n)
+                    val += eps * T_down[sig, kap, lam]
+        A_up[rho] = _clean(val * sp.Rational(1, 6))
+    return Array(A_up)
+
+
+def torsion_trace_part(gamma) -> Array:
+    """The trace-vector irreducible part of the torsion:
+
+    _(1)T^lambda_{mu nu} = (1/3)(delta^lambda_mu T_nu - delta^lambda_nu T_mu)
+
+    where T_mu = T^rho_{rho mu} is the trace vector.
+    """
+    T_vec = torsion_trace_vector(gamma)
+    n = T_vec.shape[0]
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                val = sp.Rational(1, 3) * (
+                    (1 if lam == mu else 0) * T_vec[nu]
+                    - (1 if lam == nu else 0) * T_vec[mu]
+                )
+                out[lam, mu, nu] = _clean(val)
+    return Array(out)
+
+
+def torsion_axial_part(gamma, geom: ComponentGeometry) -> Array:
+    """The axial-vector irreducible part of the torsion:
+
+    _(2)T^lambda_{mu nu} = -(1/6) epsilon^lambda_{mu nu rho} A^rho
+
+    where A^rho is the axial vector.
+    """
+    A = torsion_axial_vector(gamma, geom)
+    n = geom.dim
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                val = sp.Integer(0)
+                for rho in range(n):
+                    # epsilon^lam_{mu nu rho} = g^{lam kappa} epsilon_{kappa mu nu rho}
+                    eps_up_first = _clean(
+                        sum(
+                            geom.g_inv[lam, k]
+                            * _levi_civita_value(k, mu, nu, rho, n)
+                            for k in range(n)
+                        )
+                    )
+                    val += eps_up_first * A[rho]
+                out[lam, mu, nu] = _clean(-sp.Rational(1, 6) * val)
+    return Array(out)
+
+
+def torsion_traceless_tensor(gamma, geom: ComponentGeometry) -> Array:
+    """The traceless-tensor irreducible part of the torsion:
+
+    q^lambda_{mu nu} = T^lambda_{mu nu} - _(1)T^lambda_{mu nu} - _(2)T^lambda_{mu nu}
+
+    This is the remainder after subtracting the trace and axial parts.
+    It is traceless (q^lambda_{lambda mu} = 0) and has no totally
+    antisymmetric component.
+    """
+    T = torsion_of_connection(gamma)
+    t1 = torsion_trace_part(gamma)
+    t2 = torsion_axial_part(gamma, geom)
+    n = T.shape[0]
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                out[lam, mu, nu] = _clean(T[lam, mu, nu] - t1[lam, mu, nu] - t2[lam, mu, nu])
+    return Array(out)
+
+
+def _levi_civita_value(i: int, j: int, k: int, ll: int, n: int) -> int:
+    """Value of the Levi-Civita symbol epsilon_{ijkl} (not tensor) in n dimensions.
+
+    Returns +1 for even permutations, -1 for odd permutations, 0 if any index
+    repeats. Only valid for n >= 4 and exactly 4 indices.
+    """
+    indices = (i, j, k, ll)
+    if len(set(indices)) < 4:
+        return 0
+    # Count inversions to determine the sign
+    perm = list(indices)
+    inversions = 0
+    for a in range(len(perm)):
+        for b in range(a + 1, len(perm)):
+            if perm[a] > perm[b]:
+                inversions += 1
+    return 1 if inversions % 2 == 0 else -1
+
+
 def projective_connection(geom: ComponentGeometry, covector) -> Array:
     """Gamma^lam_{mu nu} = C^lam_{mu nu}(g) + delta^lam_nu A_mu."""
     n = geom.dim

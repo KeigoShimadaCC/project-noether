@@ -238,3 +238,145 @@ def fold_ricci_affine(ex: str = "ex") -> str:
     it is used in a context where ``R_{mu nu}`` has no ``::Symmetric``
     declaration, so ``canonicalise`` will not reorder its indices."""
     return f"substitute({ex}, $g^{{\\mu\\nu}} R_{{\\alpha\\mu\\beta\\nu}} -> R_{{\\alpha\\beta}}$);"
+
+
+# ---------------------------------------------------------------------------
+# Torsion primitives (independent-connection path).
+#
+# Torsion: T^lambda_{mu nu} = Gamma^lambda_{mu nu} - Gamma^lambda_{nu mu}
+# Convention: noether-default-v1 (AGENTS.md section 5).  The torsion tensor
+# is antisymmetric in the lower pair.
+#
+# The irreducible decomposition splits T into three parts under the Lorentz
+# group:
+#   _(1)T^lambda_{mu nu} = (1/3)(delta^lambda_mu T_nu - delta^lambda_nu T_mu)
+#                          trace-vector part (4 components in dim 4)
+#   _(2)T^lambda_{mu nu} = -(1/6) epsilon^lambda_{mu nu rho} A^rho
+#                          axial-vector part (4 components in dim 4)
+#   q^lambda_{mu nu}     = T^lambda_{mu nu} - _(1)T - _(2)T
+#                          traceless-tensor part (16 components in dim 4)
+# where:
+#   T_mu = T^lambda_{lambda mu}            (torsion trace vector)
+#   A^rho = epsilon^{rho sigma kappa lambda} T_{sigma kappa lambda} / 6
+#                                          (torsion axial vector)
+#
+# The decomposition is distinct from the contortion form K(T) defined by
+# the post-Riemannian decomposition Gamma = LC + K(T) + L(Q).  K(T) is
+# built from T but with different index structure; the irreducible parts
+# above are the Lorentz-irreducible decomposition of T itself.
+#
+# Convention sign note: the axial vector sign follows from the definition
+# A^rho = (1/6) epsilon^{rho sigma kappa lambda} T_{sigma kappa lambda},
+# with epsilon^{0123} = +1/sqrt(-g).  The decomposition formula uses
+# epsilon^lambda_{mu nu rho} A^rho with the minus sign shown, which
+# reproduces the totally antisymmetric part of T_{lambda mu nu}.
+# These signs are NOT asserted from memory; they are residue-pinned and
+# SymPy-cross-checked.
+# ---------------------------------------------------------------------------
+
+# Declaration for the torsion tensor T^lambda_{mu nu} and its trace T_mu.
+# The TableauSymmetry on T enforces antisymmetry in the lower pair.
+TORSION_DECL = (
+    r"T^{\lambda}_{\mu\nu}::TableauSymmetry(shape={1,1}, indices={1,2})."
+    "\n"
+    r"T_{\mu}::Depends(\partial{#})."
+)
+
+# Same but with nabla as the derivative operator.
+TORSION_DECL_NABLA = (
+    r"T^{\lambda}_{\mu\nu}::TableauSymmetry(shape={1,1}, indices={1,2})."
+    "\n"
+    r"T_{\mu}::Depends(\nabla{#})."
+)
+
+# Epsilon tensor declaration for the axial-vector decomposition.
+# Must be appended alongside a metric declaration for the delta= option.
+EPSILON_DECL = r"\epsilon_{\mu\nu\rho\sigma}::EpsilonTensor(delta=g_{\mu\nu})."
+
+
+def define_torsion(conn: str = "G", ex: str = "ex") -> str:
+    r"""Define the torsion tensor as the antisymmetric difference of the
+    connection:
+
+    ``T^lambda_{mu nu} -> Gamma^lambda_{mu nu} - Gamma^lambda_{nu mu}``
+
+    Applies the substitution to the named expression. The connection object
+    ``conn`` defaults to ``G``, matching the independent-connection convention
+    in :data:`AFFINE_CONNECTION_DEPENDS`."""
+    return (
+        f"substitute({ex}, $"
+        f"T^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"{conn}^{{\\lambda}}_{{\\mu\\nu}} - {conn}^{{\\lambda}}_{{\\nu\\mu}}$);"
+    )
+
+
+def torsion_trace_vector(conn: str = "G", ex: str = "ex") -> str:
+    r"""Define the torsion trace vector:
+
+    ``T_mu -> g^{lambda kappa}(Gamma^kappa_{lambda mu} - Gamma^kappa_{mu lambda})``
+
+    This is the contraction T^lambda_{lambda mu} written out explicitly
+    in terms of the independent connection."""
+    return (
+        f"substitute({ex}, $"
+        f"T_{{\\mu}} -> "
+        f"g^{{\\lambda\\kappa}}"
+        f"({conn}^{{\\kappa}}_{{\\lambda\\mu}} - {conn}^{{\\kappa}}_{{\\mu\\lambda}})$);"
+    )
+
+
+def torsion_trace_part(ex: str = "ex") -> str:
+    r"""Substitute the trace-vector irreducible part of the torsion:
+
+    ``t1^lambda_{mu nu} -> (1/3)(delta^lambda_mu T_nu - delta^lambda_nu T_mu)``
+
+    The trace vector T_mu must already be defined or substituted in the
+    expression.  Uses the KroneckerDelta declaration from the base block."""
+    return (
+        f"substitute({ex}, $"
+        f"t1^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"(1/3)(g^{{\\lambda}}_{{\\mu}} T_{{\\nu}} - g^{{\\lambda}}_{{\\nu}} T_{{\\mu}})$);"
+    )
+
+
+def torsion_axial_part(ex: str = "ex") -> str:
+    r"""Substitute the axial-vector irreducible part of the torsion:
+
+    ``t2^lambda_{mu nu} -> -(1/6) epsilon^lambda_{mu nu rho} A^rho``
+
+    The axial vector A^rho and the epsilon tensor must be declared
+    (see :data:`EPSILON_DECL`).  A^rho is typically defined as a named
+    expression computed from the torsion, not substituted by this function."""
+    return (
+        f"substitute({ex}, $"
+        f"t2^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"-(1/6) \\epsilon^{{\\lambda}}_{{\\mu\\nu\\rho}} A^{{\\rho}}$);"
+    )
+
+
+def torsion_traceless_part(ex: str = "ex") -> str:
+    r"""Define the traceless-tensor irreducible part as the remainder:
+
+    ``q^lambda_{mu nu} -> T^lambda_{mu nu} - t1^lambda_{mu nu} - t2^lambda_{mu nu}``
+
+    The trace and axial parts (t1, t2) must already be present in the
+    expression for this to produce the correct result."""
+    return (
+        f"substitute({ex}, $"
+        f"q^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"T^{{\\lambda}}_{{\\mu\\nu}} - t1^{{\\lambda}}_{{\\mu\\nu}} - t2^{{\\lambda}}_{{\\mu\\nu}}$);"
+    )
+
+
+def reassemble_torsion(ex: str = "ex") -> str:
+    r"""Substitute the reassembled torsion from its three irreducible parts:
+
+    ``T^lambda_{mu nu} -> t1^lambda_{mu nu} + t2^lambda_{mu nu} + q^lambda_{mu nu}``
+
+    This is the reconstruction substitution for the residue check: applying
+    it and then subtracting the original T should yield zero."""
+    return (
+        f"substitute({ex}, $"
+        f"T^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"t1^{{\\lambda}}_{{\\mu\\nu}} + t2^{{\\lambda}}_{{\\mu\\nu}} + q^{{\\lambda}}_{{\\mu\\nu}}$);"
+    )

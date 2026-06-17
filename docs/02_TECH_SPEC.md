@@ -570,6 +570,34 @@ the torsion trap.  The existing Levi-Civita primitives are preserved as the
 `T = Q = 0` special case; the `contracted_bianchi` primitive is marked
 Levi-Civita-only and must not be reused under torsion.
 
+The torsion primitive `T^lambda_{mu nu} = Gamma^lambda_{mu nu} -
+Gamma^lambda_{nu mu}` is residue-pinned in the same module, with the
+irreducible torsion decomposition into trace-vector, axial-vector, and
+traceless-tensor parts.  The decomposition formulas are:
+
+- Trace part: `(1/3)(delta^lambda_mu T_nu - delta^lambda_nu T_mu)` where
+  `T_mu = T^rho_{rho mu}`.
+- Axial part: `-(1/6) epsilon^lambda_{mu nu rho} A^rho` where
+  `A^rho = (1/6) epsilon^{rho sigma kappa lambda} T_{sigma kappa lambda}`.
+- Traceless tensor: `q = T - trace_part - axial_part`, satisfying
+  `q^lambda_{lambda mu} = 0` and no totally antisymmetric component.
+
+The three parts reassemble to T (residue 0 in the algebraic identities;
+full componentwise verification by the SymPy oracle on random dim-4
+backgrounds).  The decomposition is distinct from the contortion `K(T)` in
+the post-Riemannian decomposition `Gamma = LC + K(T) + L(Q)`: the
+contortion involves metric-based index raising while the irreducible trace
+part uses only the Kronecker delta.  A Cadabra limitation prevents direct
+tensor-level residue computation of `T - (t1 + t2 + q)` because
+Kronecker-delta contractions produce free-index mismatches in sums; the
+algebraic identities (trace extraction, traceless property) are verified in
+Cadabra, and the full componentwise check is delegated to the SymPy
+cross-check.  The torsion primitives are in `curvature.py`, the SymPy
+helpers (`torsion_of_connection`, `torsion_trace_vector`,
+`torsion_axial_vector`, `torsion_trace_part`, `torsion_axial_part`,
+`torsion_traceless_tensor`) in `geometry.py`, and the pinned tests in
+`tests/test_torsion_affine.py`.
+
 What is still open is the orchestration across the whole equation. Two lessons
 came out of the attempts. First, a blind one-way commutator pass does not
 converge: applied to every term it just trades the two contraction patterns'
