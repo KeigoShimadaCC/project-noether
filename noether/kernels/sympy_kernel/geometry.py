@@ -743,6 +743,118 @@ def random_diagonal_metric(seed: int, dim: int = 4) -> ComponentGeometry:
     return ComponentGeometry(coords, g)
 
 
+def christoffel_of_metric(
+    coords: list[sp.Symbol], g, g_inv
+) -> Array:
+    """Levi-Civita (Christoffel) connection of a metric.
+
+    Gamma^a_{bc} = (1/2) g^{ad} (d_b g_{dc} + d_c g_{db} - d_d g_{bc})
+
+    Convention: noether-default-v1.  The Christoffel symbols are symmetric
+    in the lower pair (b,c).
+
+    Parameters:
+        coords: coordinate symbols
+        g: metric matrix (symmetric, n x n)
+        g_inv: inverse metric matrix (n x n)
+    """
+    n, x = len(coords), coords
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for a in range(n):
+        for b in range(n):
+            for c in range(b, n):
+                val = sp.Rational(1, 2) * sum(
+                    g_inv[a, d]
+                    * (sp.diff(g[d, c], x[b]) + sp.diff(g[d, b], x[c]) - sp.diff(g[b, c], x[d]))
+                    for d in range(n)
+                )
+                val = _clean(val)
+                out[a, b, c] = val
+                out[a, c, b] = val  # symmetric in lower pair
+    return Array(out)
+
+
+def contortion_of_torsion(gamma, g, g_inv) -> Array:
+    """Contortion tensor K^lambda_{mu nu} from the torsion of a connection.
+
+    K^lambda_{mu nu} = (1/2)(T^lambda_{mu nu}
+                          + g^{lambda sigma} g_{mu tau} T^tau_{sigma nu}
+                          + g^{lambda sigma} g_{nu tau} T^tau_{sigma mu})
+
+    Convention: metric-affine-v1.  The contortion is the torsion-dependent
+    part of the post-Riemannian decomposition Gamma = LC + K(T) + L(Q).
+    It inverts to the torsion: K^lambda_{mu nu} - K^lambda_{nu mu} = T^lambda_{mu nu}.
+
+    Parameters:
+        gamma: affine connection array gamma[a][b][c] = Gamma^a_{bc}
+        g: metric matrix (symmetric, n x n)
+        g_inv: inverse metric matrix (n x n)
+    """
+    T = torsion_of_connection(gamma)
+    n = T.shape[0]
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                term1 = T[lam, mu, nu]
+                # g^{lam sig} g_{mu tau} T^tau_{sig nu}
+                term2 = sum(
+                    g_inv[lam, sig] * g[mu, tau] * T[tau, sig, nu]
+                    for sig in range(n) for tau in range(n)
+                )
+                # g^{lam sig} g_{nu tau} T^tau_{sig mu}
+                term3 = sum(
+                    g_inv[lam, sig] * g[nu, tau] * T[tau, sig, mu]
+                    for sig in range(n) for tau in range(n)
+                )
+                out[lam, mu, nu] = _clean(
+                    sp.Rational(1, 2) * (term1 + term2 + term3)
+                )
+    return Array(out)
+
+
+def disformation_of_nonmetricity(
+    coords: list[sp.Symbol], gamma, g, g_inv
+) -> Array:
+    """Disformation tensor L^lambda_{mu nu} from the non-metricity.
+
+    L^lambda_{mu nu} = (1/2) g^{lambda rho}(-Q_{mu nu rho}
+                                        - Q_{nu rho mu} + Q_{rho mu nu})
+
+    Convention: metric-affine-v1.  The disformation is the non-metricity-
+    dependent part of the post-Riemannian decomposition
+    Gamma = LC + K(T) + L(Q).  It inverts to the non-metricity:
+    when T=0, Q_{lambda mu nu} = -(L^rho_{lambda mu} g_{rho nu}
+                                   + L^rho_{lambda nu} g_{rho mu}).
+
+    The disformation is symmetric in the lower pair (mu, nu), reflecting
+    that it originates from non-metricity (which is symmetric in its
+    last pair) rather than torsion.
+
+    Parameters:
+        coords: coordinate symbols (unused, kept for API consistency)
+        gamma: affine connection array gamma[a][b][c] = Gamma^a_{bc}
+        g: metric matrix (symmetric, n x n)
+        g_inv: inverse metric matrix (n x n)
+    """
+    Q = nonmetricity_of_connection(coords, gamma, g)
+    n = Q.shape[0]
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                val = sum(
+                    g_inv[lam, rho] * (
+                        -Q[mu, nu, rho]
+                        - Q[nu, rho, mu]
+                        + Q[rho, mu, nu]
+                    )
+                    for rho in range(n)
+                )
+                out[lam, mu, nu] = _clean(sp.Rational(1, 2) * val)
+    return Array(out)
+
+
 def random_affine_connection(
     seed: int, coords: list[sp.Symbol], *, symmetric: bool = False
 ) -> Array:

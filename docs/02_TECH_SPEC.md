@@ -635,6 +635,35 @@ The non-metricity primitives are in `curvature.py`, the SymPy helpers
 `nonmetricity_second_trace_part`, `nonmetricity_traceless_tensor`) in
 `geometry.py`, and the pinned tests in `tests/test_nonmetricity_affine.py`.
 
+The post-Riemannian decomposition `Gamma = LC(g) + K(T) + L(Q)` is the
+representation backbone for metric-affine geometry.  Its primitives are in
+`curvature.py` and `geometry.py`, pinned by residue checks in
+`tests/test_post_riemannian.py` and cross-checked against the SymPy oracle.
+The contortion and disformation signs are NOT asserted from memory; they
+are derived and residue-pinned, then recorded as the named convention block
+`metric-affine-v1`:
+
+- Contortion: `K^lambda_{mu nu} = (1/2)(T^lambda_{mu nu}
+  + g^{lambda sigma} g_{mu tau} T^tau_{sigma nu}
+  + g^{lambda sigma} g_{nu tau} T^tau_{sigma mu})`.  Inversion:
+  `K^lambda_{mu nu} - K^lambda_{nu mu} = T^lambda_{mu nu}` (residue 0).
+- Disformation: `L^lambda_{mu nu} = (1/2) g^{lambda rho}(-Q_{mu nu rho}
+  - Q_{nu rho mu} + Q_{rho mu nu})`.  Symmetric in lower pair.  Inversion:
+  `Q_{lambda mu nu} = -(L^rho_{lambda mu} g_{rho nu}
+  + L^rho_{lambda nu} g_{rho mu})` when T=0 (residue 0).
+- Decomposition: `Gamma^lambda_{mu nu} = LC^lambda_{mu nu} + K^lambda_{mu nu}
+  + L^lambda_{mu nu}` (SymPy componentwise on random backgrounds).
+
+Cadabra verification strategy: the full expansion `Gamma - (LC + K + L)`
+hits the Kronecker-delta limitation.  Instead, the decomposition is verified
+through the inversion identities (K antisymmetry, L inversion) plus a
+structural substitution-fires check, with the full componentwise equality
+confirmed by the SymPy oracle.  SymPy helpers added:
+`christoffel_of_metric`, `contortion_of_torsion`,
+`disformation_of_nonmetricity` in `geometry.py`.  Cadabra primitives
+added: `define_contortion`, `define_disformation`, `decompose_connection`,
+`expand_lc` in `curvature.py`.
+
 The torsionful commutator and non-symmetric scalar Hessian are also in
 `curvature.py`, pinned by residue checks in `tests/test_commutator_affine.py`
 and cross-checked against the SymPy oracle on random torsionful backgrounds.

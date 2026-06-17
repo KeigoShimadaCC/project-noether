@@ -693,3 +693,170 @@ def reassemble_nonmetricity(ex: str = "ex") -> str:
         f"+ Q2T_{{\\lambda\\mu\\nu}} "
         f"+ QTL_{{\\lambda\\mu\\nu}}$);"
     )
+
+
+# ---------------------------------------------------------------------------
+# Post-Riemannian decomposition (independent-connection path).
+#
+# Any affine connection splits into the Levi-Civita part plus a distortion
+# tensor that further decomposes into contortion (from torsion) and
+# disformation (from non-metricity):
+#
+#   Gamma^lambda_{mu nu} = LC^lambda_{mu nu}(g) + K^lambda_{mu nu}(T)
+#                        + L^lambda_{mu nu}(Q)
+#
+# where:
+#   LC  = Levi-Civita (Christoffel) connection of the metric
+#   K   = contortion (from torsion)
+#   L   = disformation (from non-metricity)
+#
+# Convention: metric-affine-v1.  The contortion and disformation signs are
+# NOT asserted from memory; they are derived and residue-pinned against
+# the SymPy oracle, then recorded as this named convention block.
+#
+# Contortion (closed form, metric-affine-v1):
+#   K^lambda_{mu nu} = (1/2)(T^lambda_{mu nu}
+#                         + g^{lambda sigma} g_{mu tau} T^tau_{sigma nu}
+#                         + g^{lambda sigma} g_{nu tau} T^tau_{sigma mu})
+#
+# Inversion: K^lambda_{mu nu} - K^lambda_{nu mu} = T^lambda_{mu nu}
+# (the antisymmetric part of K recovers the torsion).
+#
+# Disformation (closed form, metric-affine-v1):
+#   L^lambda_{mu nu} = (1/2) g^{lambda rho}(-Q_{mu nu rho}
+#                                      - Q_{nu rho mu} + Q_{rho mu nu})
+#
+# Inversion (with T=0): Q_{lambda mu nu} = -(L^rho_{lambda mu} g_{rho nu}
+#                                           + L^rho_{lambda nu} g_{rho mu})
+# The disformation is symmetric in the lower pair (mu, nu).
+#
+# Key property: the decomposition is unique.  Given T and Q, K and L
+# are uniquely determined by the formulas above, and LC + K + L = Gamma
+# is an algebraic identity.
+# ---------------------------------------------------------------------------
+
+
+def define_contortion(ex: str = "ex") -> str:
+    r"""Define the contortion tensor in terms of the torsion:
+
+    ``K^lambda_{mu nu} -> (1/2)(T^lambda_{mu nu}
+        + g^{lambda sigma} g_{mu tau} T^tau_{sigma nu}
+        + g^{lambda sigma} g_{nu tau} T^tau_{sigma mu})``
+
+    Convention: metric-affine-v1.  The contortion is the torsion-dependent
+    part of the post-Riemannian decomposition.  Its antisymmetric part
+    recovers the torsion: K^lambda_{mu nu} - K^lambda_{nu mu} = T^lambda_{mu nu}.
+
+    Requires ``T^{\\lambda}_{\\mu\\nu}`` declared (see :data:`TORSION_DECL`)."""
+    return (
+        f"substitute({ex}, $"
+        f"K^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"(1/2)(T^{{\\lambda}}_{{\\mu\\nu}} "
+        f"+ g^{{\\lambda\\sigma}} g_{{\\mu\\tau}} T^{{\\tau}}_{{\\sigma\\nu}} "
+        f"+ g^{{\\lambda\\sigma}} g_{{\\nu\\tau}} T^{{\\tau}}_{{\\sigma\\mu}})$);"
+    )
+
+
+def define_disformation(ex: str = "ex") -> str:
+    r"""Define the disformation tensor in terms of the non-metricity:
+
+    ``L^lambda_{mu nu} -> (1/2) g^{lambda rho}(-Q_{mu nu rho}
+        - Q_{nu rho mu} + Q_{rho mu nu})``
+
+    Convention: metric-affine-v1.  The disformation is the non-metricity-
+    dependent part of the post-Riemannian decomposition.  The disformation
+    is symmetric in the lower pair (mu, nu).
+
+    Requires ``Q_{\\lambda\\mu\\nu}`` declared (see :data:`NONMETRICITY_DECL`)."""
+    return (
+        f"substitute({ex}, $"
+        f"L^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"(1/2) g^{{\\lambda\\rho}}"
+        f"(-Q_{{\\mu\\nu\\rho}} - Q_{{\\nu\\rho\\mu}} + Q_{{\\rho\\mu\\nu}})$);"
+    )
+
+
+def decompose_connection(conn: str = "G", ex: str = "ex") -> str:
+    r"""Substitute the post-Riemannian decomposition of an independent
+    connection:
+
+    ``conn^lambda_{mu nu} -> LC^lambda_{mu nu} + K^lambda_{mu nu}
+        + L^lambda_{mu nu}``
+
+    where LC is the Levi-Civita (Christoffel) connection, K is the
+    contortion, and L is the disformation.  The connection name defaults
+    to ``G``.  After applying this substitution, use :func:`expand_lc`,
+    :func:`define_contortion`, and :func:`define_disformation` to expand
+    the three parts in terms of the metric, torsion, and non-metricity.
+
+    Convention: metric-affine-v1."""
+    return (
+        f"substitute({ex}, $"
+        f"{conn}^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"LC^{{\\lambda}}_{{\\mu\\nu}} "
+        f"+ K^{{\\lambda}}_{{\\mu\\nu}} "
+        f"+ L^{{\\lambda}}_{{\\mu\\nu}}$);"
+    )
+
+
+def expand_lc(ex: str = "ex") -> str:
+    r"""Expand the Levi-Civita (Christoffel) connection:
+
+    ``LC^lambda_{mu nu} -> (1/2) g^{lambda rho}
+        (partial_mu g_{rho nu} + partial_nu g_{rho mu}
+         - partial_rho g_{mu nu})``
+
+    This is the standard Christoffel symbol of the first kind with
+    the first index raised.  Use with ``\\partial{#}::PartialDerivative``
+    and the metric declared as ``\\partial``-Depends.
+
+    Convention: noether-default-v1 (same sign as ComponentGeometry.christoffel)."""
+    return (
+        f"substitute({ex}, $"
+        f"LC^{{\\lambda}}_{{\\mu\\nu}} -> "
+        f"(1/2) g^{{\\lambda\\rho}}"
+        f"(\\partial_{{\\mu}}{{g_{{\\rho\\nu}}}} "
+        f"+ \\partial_{{\\nu}}{{g_{{\\rho\\mu}}}} "
+        f"- \\partial_{{\\rho}}{{g_{{\\mu\\nu}}}})$);"
+    )
+
+
+def contortion_antisymmetry(ex: str = "ex") -> str:
+    r"""Substitute the antisymmetric difference of the contortion back to
+    the torsion:
+
+    ``K^lambda_{mu nu} - K^lambda_{nu mu} -> T^lambda_{mu nu}``
+
+    This is the inversion identity: the antisymmetric part of K(T)
+    reproduces the input torsion T.  Valid when T and K are defined
+    per metric-affine-v1 conventions.
+
+    Requires ``T^{\\lambda}_{\\mu\\nu}`` and ``K^{\\lambda}_{\\mu\\nu}``
+    declared."""
+    return (
+        f"substitute({ex}, $"
+        f"K^{{\\lambda}}_{{\\mu\\nu}} - K^{{\\lambda}}_{{\\nu\\mu}} "
+        f"-> T^{{\\lambda}}_{{\\mu\\nu}}$);"
+    )
+
+
+def disformation_to_nonmetricity(ex: str = "ex") -> str:
+    r"""Substitute the metric contraction of the disformation back to
+    the non-metricity:
+
+    ``-(L^rho_{lambda mu} g_{rho nu} + L^rho_{lambda nu} g_{rho mu})
+    -> Q_{lambda mu nu}``
+
+    This is the inversion identity: from L(Q) one recovers Q.
+    Valid when Q and L are defined per metric-affine-v1 conventions
+    and T=0 (pure disformation, no contortion).
+
+    Requires ``Q_{\\lambda\\mu\\nu}`` and ``L^{\\lambda}_{\\mu\\nu}``
+    declared."""
+    return (
+        f"substitute({ex}, $"
+        f"-(L^{{\\rho}}_{{\\lambda\\mu}} g_{{\\rho\\nu}} "
+        f"+ L^{{\\rho}}_{{\\lambda\\nu}} g_{{\\rho\\mu}}) "
+        f"-> Q_{{\\lambda\\mu\\nu}}$);"
+    )
+
