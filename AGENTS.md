@@ -77,7 +77,8 @@ docs/                Design and research documents (00 through 04)
 noether/             Python package
   npr/               Problem representation: conventions, AST, schema, LaTeX,
                      validation, and the LaTeX action parser (parse.py)
-  kernels/           Adapters: base contract, cadabra/ (subprocess; runs frozen
+  kernels/           Adapters: base contract (including Capability.INDEPENDENT_CONNECTION),
+                     cadabra/ (subprocess; runs frozen
                      golden templates, inline LLM-generated scripts via
                      generate.py, and blocks.py, which decomposes an additive
                      action into building blocks and assembles one script the
@@ -131,8 +132,11 @@ pyproject.toml       Package, deps, ruff, pytest config
 
 The general derivation path (model writes a Cadabra script, kernel verifies it
 through an in-script residue check) now serves arbitrary well-posed actions for
-the `vary` task across the metric, scalar, and gauge-field classes; see
-`docs/02_TECH_SPEC.md` section 6, item 7. A scalar action with a `box`-coupling
+the `vary` task across the metric, scalar, connection, and gauge-field classes;
+see `docs/02_TECH_SPEC.md` section 6, item 7. Connection variation routes to
+the `vary-connection` worked example (the audited `eval2_palatini_connection`
+template) and carries `Capability.INDEPENDENT_CONNECTION`, so a connection field
+is never silently routed to the metric worked example. A scalar action with a `box`-coupling
 (the Horndeski G3 term `K(phi) box phi`) routes to the audited
 `eom_cubic_galileon_scalar` scaffold (eval 6), the first verified member past
 scalar-tensor; see `docs/02_TECH_SPEC.md` section 6.1 for the representation

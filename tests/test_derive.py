@@ -10,7 +10,7 @@ import pytest
 
 from evals.eval1s_adm import build_npr as build_adm_npr
 from evals.eval3_scalar_tensor import build_npr
-from noether.kernels.base import ComputedResult, KernelRawOutput, KernelScript
+from noether.kernels.base import Capability, ComputedResult, KernelRawOutput, KernelScript
 from noether.kernels.cadabra import CadabraAdapter, templates
 from noether.kernels.cadabra.generate import (
     build_generation_prompt,
@@ -64,6 +64,88 @@ class TestPromptGeneration:
         # the plain scalar-tensor example, which has no double-IBP idiom
         assert templates.get("eom_cubic_galileon_scalar") in scalar_prompt
         assert templates.get("eval3_scalar_tensor_scalar") not in scalar_prompt
+
+
+class TestConnectionVariationRouting:
+    """VAL-EOM-005/006/007: connection variation must route through the general
+    derivation path (not only the frozen template), must never fall through to
+    the metric worked example, and the Cadabra adapter must advertise the
+    INDEPENDENT_CONNECTION capability."""
+
+    @pytest.fixture()
+    def palatini_npr(self):
+        from evals.eval2_palatini import build_npr as build_palatini_npr
+
+        return build_palatini_npr(resolved=True)
+
+    def test_connection_field_selects_vary_connection_key(self, palatini_npr):
+        from noether.kernels.cadabra.generate import _variation_key
+
+        key = _variation_key(palatini_npr, "Gamma", "eom")
+        assert key == "vary-connection", (
+            "connection field must select vary-connection, not fall through "
+            f"to vary-metric (got {key!r})"
+        )
+
+    def test_connection_variation_uses_palatini_connection_template(self, palatini_npr):
+        _, prompt = build_generation_prompt(palatini_npr, "Gamma")
+        # the worked example for connection variation is the audited Palatini
+        # connection template, never the metric one
+        assert templates.get("eval2_palatini_connection") in prompt
+        assert templates.get("eval3_scalar_tensor_metric") not in prompt
+
+    def test_cadabra_adapter_advertises_independent_connection(self):
+        adapter = CadabraAdapter()
+        assert Capability.INDEPENDENT_CONNECTION in adapter.capabilities(), (
+            "CadabraAdapter.capabilities() must include INDEPENDENT_CONNECTION"
+        )
+
+    def test_connection_derive_uses_independent_connection_capability(self, palatini_npr):
+        from noether.orchestrator.derive import _compositional_decomposition
+
+        # Connection fields have no compositional decomposition; they always
+        # route to the model-written script path (with vary-connection example)
+        dec = _compositional_decomposition(palatini_npr, "Gamma", "eom")
+        assert dec is None, (
+            "connection fields must not route through the compositional path"
+        )
+
+    def test_derive_field_connection_capability(self, palatini_npr):
+        # derive_field should set the capability to INDEPENDENT_CONNECTION
+        # for a connection wrt field, not the generic VARY.
+        # Verify that the routing picks the right example.
+        from noether.kernels.cadabra.generate import _variation_key
+
+        npr = palatini_npr
+        key = _variation_key(npr, "Gamma", "eom")
+        assert key == "vary-connection"
+
+    def test_metric_field_never_routes_to_connection_example(self, palatini_npr):
+        """VAL-EOM-006: a metric field must never be routed to the
+        connection-variation worked example."""
+        from noether.kernels.cadabra.generate import _variation_key
+
+        key = _variation_key(palatini_npr, "g", "eom")
+        assert key != "vary-connection"
+        assert key == "vary-metric"
+
+    @requires_cadabra
+    @pytest.mark.kernel_cadabra
+    def test_connection_derive_field_sets_capability(self, palatini_npr):
+        """When derive_field runs for a connection, the resulting
+        FieldDerivation carries INDEPENDENT_CONNECTION, not VARY."""
+        stub = StubLLMAdapter(reply=templates.get("eval2_palatini_connection"))
+        result = derive_field(
+            palatini_npr,
+            "Gamma",
+            stub,
+            {"cadabra": CadabraAdapter()},
+            session_id="s-conn-test",
+        )
+        assert result.capability is Capability.INDEPENDENT_CONNECTION, (
+            f"expected INDEPENDENT_CONNECTION, got {result.capability!r}"
+        )
+        assert result.wrt == "Gamma"
 
 
 class TestCompositionalRouting:

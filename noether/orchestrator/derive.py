@@ -154,12 +154,21 @@ def _compositional_decomposition(npr: NPR, wrt: str, kind: str) -> Decomposition
     None when the path does not apply; a partial Decomposition (``full`` False)
     when some term matches no registered block.
 
+    Connection fields are NOT handled compositionally (there are no registered
+    building blocks for the connection equation yet); they route to the
+    model-written script path with the connection-variation worked example
+    (generate._variation_key -> vary-connection).
+
     The assembled scripts render the scalar as `phi`, so a scalar field under
     any other name routes to the model path rather than being mislabeled."""
     if kind != "eom":
         return None
     obj = next((o for o in npr.objects if o.name == wrt), None)
     if obj is None:
+        return None
+    # Connection variation has no compositional blocks; it always routes to
+    # the model-written script path (with the vary-connection worked example).
+    if obj.kind == "connection":
         return None
     if obj.kind == "scalar-field" and wrt == "phi":
         return decompose_scalar(npr.action.lagrangian, wrt)
@@ -206,7 +215,18 @@ def derive_field(
     if cadabra is None or not cadabra.available():
         raise RuntimeError("cadabra kernel unavailable; cannot run a derivation")
 
-    capability = Capability.PERTURB if kind == "perturbation" else Capability.VARY
+    # When varying an independent connection, the capability is
+    # INDEPENDENT_CONNECTION (matching the planner step), not the generic VARY.
+    # A connection field must never be silently routed to the metric worked
+    # example (VAL-EOM-006).
+    by_name = {o.name: o for o in npr.objects}
+    wrt_obj = by_name.get(wrt)
+    if kind == "perturbation":
+        capability = Capability.PERTURB
+    elif wrt_obj is not None and wrt_obj.kind == "connection":
+        capability = Capability.INDEPENDENT_CONNECTION
+    else:
+        capability = Capability.VARY
     label = "quadratic-action expansion" if kind == "perturbation" else "general variation"
 
     # Compositional path: when the scalar Lagrangian fully decomposes into

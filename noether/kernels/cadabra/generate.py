@@ -30,6 +30,7 @@ from noether.npr.schema import NPR
 # the prompt. These are frozen and golden-tested (see tests/test_cadabra_*).
 _EXAMPLE_TEMPLATE: dict[str, str] = {
     "vary-metric": "eval3_scalar_tensor_metric",
+    "vary-connection": "eval2_palatini_connection",
     "vary-scalar": "eval3_scalar_tensor_scalar",
     "vary-scalar-cubic": "eom_cubic_galileon_scalar",
     "vary-gauge": "eval4_maxwell",
@@ -142,6 +143,14 @@ Metric variation rules (mostly-plus, noether-default-v1):
        \nabla_{\nu}{h_{\rho\sigma}} + \nabla_{\sigma}{h_{\rho\nu}}
        - \nabla_{\rho}{h_{\nu\sigma}} ).
 Scalar variation rules: \phi -> dphi, and for any coupling C(\phi): C -> Cp dphi.
+Connection variation rules (independent connection, noether-default-v1):
+  G^{\lambda}_{\mu\nu} -> dG^{\lambda}_{\mu\nu},  (no metric-compatibility substitution)
+  Ricci expanded in partials of G: R_{\sigma\nu}(G) = \partial_{\lambda}{G^{\lambda}_{\nu\sigma}}
+                                    - \partial_{\nu}{G^{\lambda}_{\lambda\sigma}}
+                                    + G^{\lambda}_{\lambda\rho} G^{\rho}_{\nu\sigma}
+                                    - G^{\lambda}_{\nu\rho} G^{\rho}_{\lambda\sigma},
+  Use \partial{#}::PartialDerivative (not \nabla) so integrate_by_parts works on dG.
+  Do NOT declare R_{\mu\nu}::Symmetric (independent-connection Ricci is not symmetric).
 Output ONLY the script."""
 
 PERTURBATION_CONTRACT = r"""You are a Cadabra2 scripting backend for Noether.
@@ -218,6 +227,8 @@ def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
         return "vary-metric"
     if obj.kind == "metric":
         return "vary-metric"
+    if obj.kind == "connection":
+        return "vary-connection"
     if obj.kind == "scalar-field":
         if _has_box_coupling(npr.action.lagrangian, wrt):
             return "vary-scalar-cubic"

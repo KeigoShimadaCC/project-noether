@@ -65,6 +65,7 @@ class CadabraAdapter:
             Capability.IBP,
             Capability.CANONICALIZE,
             Capability.SUBSTITUTE,
+            Capability.INDEPENDENT_CONNECTION,
         }
 
     def run(self, task: KernelTask, npr: Any = None) -> ComputedResult:

@@ -394,8 +394,13 @@ perturbative expansion (xPert), Young projection.
    marked unverified and is surfaced as such, never as truth. Every run, verified
    or not, writes a provenance bundle. The bright line holds: the model writes a
    script, the kernel decides whether the answer is trustworthy. This covers the
-   `vary` task (equations of motion) for the metric, scalar, and gauge-field
-   classes today. The general path is gated by `evals/test_eval_general.py`,
+   `vary` task (equations of motion) for the metric, scalar, connection, and
+   gauge-field classes today. Connection variation (`wrt` a `connection` object)
+   routes to the `vary-connection` worked example (`eval2_palatini_connection`)
+   and uses `Capability.INDEPENDENT_CONNECTION` rather than the generic `VARY`,
+   so a connection field is never silently routed to the metric worked example.
+   The Cadabra adapter advertises `INDEPENDENT_CONNECTION` in its capabilities.
+   The general path is gated by `evals/test_eval_general.py`,
    which checks it reproduces eval 3's two kernel-verified equations of motion
    end to end. The `vary` task also has a compositional path that needs no
    model: when an additive Lagrangian decomposes fully into registered building
