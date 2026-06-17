@@ -388,23 +388,35 @@ perturbative expansion (xPert), Young projection.
    (an `X`-dependent `G4(phi, X) R`, say) leaves the decomposition partial so the
    model-written path runs instead. The `perturb` task now runs through the same model-written path:
    `derive_perturbation` (and `kind="perturbation"` on the server, MCP, and web
-   clients) hands the model one of two scaffolds depending on the field kind:
+   clients) hands the model a scaffold chosen by field kind:
    `pert_scalar_quadratic` (eval 3p) expands a scalar action to quadratic order,
    and `pert_metric_quadratic` (eval 3g) expands the Einstein-Hilbert action
    about a flat background to recover the linearized vacuum Einstein equation,
-   the massless graviton. Both use Cadabra weights to track fluctuation order
-   and check the linearized equation of motion twice, against the documented
-   operator and by an independent route (linearizing the full nonlinear scalar
-   equation, or rebuilding the linearized Einstein tensor from the linearized
-   Christoffels). All checks must pass before the result is called verified.
+   the massless graviton. A rank-1 gauge potential routes to the gauge
+   scaffolds: `pert_gauge_quadratic` (eval 3a) for an abelian potential gives
+   the source-free linearized Maxwell operator `nabla_mu f^{mu nu}` behind the
+   photon's two transverse polarizations, and `pert_yang_mills_quadratic`
+   (eval 3y) handles a non-abelian `gauge_group`, adding the
+   background-covariant derivative and the gluon self-coupling
+   `g f^{abc} v^b Fbar^c` to that operator. Every scaffold uses Cadabra weights
+   to track fluctuation order and checks the linearized equation of motion
+   twice, against the documented operator and by an independent route
+   (linearizing the full nonlinear equation, or rebuilding the linearized
+   Einstein tensor from the linearized Christoffels). All checks must pass
+   before the result is called verified.
    The metric expansion has two extra wrinkles the scaffold handles: a second
    derivative comes off the test field through two `integrate_by_parts` passes
    with `\nabla` as a `::Derivative`, and equal terms written at different index
    heights only meld after everything is lowered to one explicit-`eta`
    convention and `\nabla` is rewritten as a commuting `::PartialDerivative`.
-   The two scaffolds cover dynamical scalar fields and the metric, so
-   `derive_perturbation` refuses other field kinds (a gauge potential, say)
-   rather than guessing. The `adm` task takes a different route: `derive_adm`
+   The Yang-Mills scaffold carries its own: adjoint indices are a second index
+   group with a Killing metric and `position=independent` so the totally
+   antisymmetric structure constants contract and collapse, and the independent
+   linearization route keeps weight `eps=2` (the test field carries `eps=1`)
+   then expands `nabla(Abar v)` by `product_rule` before the cross-check. The
+   scaffolds cover dynamical scalar fields, the metric, and rank-1 gauge
+   potentials, so `derive_perturbation` refuses other field kinds (the rank-2
+   field strength, say) rather than guessing. The `adm` task takes a different route: `derive_adm`
    (`kind="adm"` on the server, MCP, and web clients) writes no model script.
    Its deliverable is the ADM (3+1) decomposition of the gravitational sector,
    the Gauss-Codazzi split `sqrt(-g) R = N sqrt(h)(R3 + K_ij K^ij - K^2) -

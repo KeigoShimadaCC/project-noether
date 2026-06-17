@@ -237,12 +237,31 @@ class TestPerturbationPromptGeneration:
         _, prompt = build_generation_prompt(npr, "g", kind="perturbation")
         assert templates.get("pert_metric_quadratic") in prompt
 
-    def test_perturbation_rejects_unsupported_field(self):
+    def test_maxwell_perturbation_prompt_uses_gauge_scaffold(self):
         from evals.eval4_maxwell import build_npr as build_maxwell_npr
 
         npr = build_maxwell_npr(resolved=True)
+        _, prompt = build_generation_prompt(npr, "A", kind="perturbation")
+        # an abelian gauge potential routes to the Maxwell quadratic scaffold
+        assert templates.get("pert_gauge_quadratic") in prompt
+        assert templates.get("pert_yang_mills_quadratic") not in prompt
+
+    def test_yang_mills_perturbation_prompt_uses_non_abelian_scaffold(self):
+        from evals.eval3y_yang_mills_perturbation import build_npr as build_ym_npr
+
+        npr = build_ym_npr(resolved=True)
+        _, prompt = build_generation_prompt(npr, "A", kind="perturbation")
+        # the SU(N) marker routes to the Yang-Mills quadratic scaffold
+        assert templates.get("pert_yang_mills_quadratic") in prompt
+
+    def test_perturbation_rejects_unsupported_field(self):
+        from evals.eval4_maxwell import build_npr as build_maxwell_npr
+
+        # the field-strength shorthand F is not a dynamical field kind, so it
+        # has no quadratic-action scaffold and the refusal still holds
+        npr = build_maxwell_npr(resolved=True)
         with pytest.raises(NotImplementedError):
-            build_generation_prompt(npr, "A", kind="perturbation")
+            build_generation_prompt(npr, "F", kind="perturbation")
 
 
 class TestPerturbationGate:
@@ -261,13 +280,16 @@ class TestPerturbationGate:
     def test_perturbation_refuses_unsupported_field(self):
         from evals.eval4_maxwell import build_npr as build_maxwell_npr
 
+        # the field-strength shorthand F has no quadratic-action scaffold; the
+        # refusal must name it rather than guess (the gauge potential A is
+        # supported and exercised in TestVerifiedPerturbation)
         npr = build_maxwell_npr(resolved=True)
         with pytest.raises(NotImplementedError):
             derive_perturbation(
                 npr,
                 StubLLMAdapter(),
                 {"cadabra": CadabraAdapter()},
-                fields=["A"],
+                fields=["F"],
                 session_id="s",
             )
 
@@ -295,6 +317,38 @@ class TestVerifiedPerturbation:
             npr, stub, {"cadabra": CadabraAdapter()}, fields=["g"], session_id="s-test"
         )
         assert [r.wrt for r in results] == ["g"]
+        d = results[0]
+        assert d.kind == "perturbation"
+        assert d.verified is True, d.checks
+        assert d.checks.get("residue_zero") == "True"
+        assert d.checks.get("linearized_eom_match") == "True"
+        assert d.result_tex
+
+    def test_maxwell_quadratic_action_verified(self):
+        from evals.eval4_maxwell import build_npr as build_maxwell_npr
+
+        npr = build_maxwell_npr(resolved=True)
+        stub = StubLLMAdapter(reply=templates.get("pert_gauge_quadratic"))
+        results = derive_perturbation(
+            npr, stub, {"cadabra": CadabraAdapter()}, fields=["A"], session_id="s-test"
+        )
+        assert [r.wrt for r in results] == ["A"]
+        d = results[0]
+        assert d.kind == "perturbation"
+        assert d.verified is True, d.checks
+        assert d.checks.get("residue_zero") == "True"
+        assert d.checks.get("linearized_eom_match") == "True"
+        assert d.result_tex
+
+    def test_yang_mills_quadratic_action_verified(self):
+        from evals.eval3y_yang_mills_perturbation import build_npr as build_ym_npr
+
+        npr = build_ym_npr(resolved=True)
+        stub = StubLLMAdapter(reply=templates.get("pert_yang_mills_quadratic"))
+        results = derive_perturbation(
+            npr, stub, {"cadabra": CadabraAdapter()}, fields=["A"], session_id="s-test"
+        )
+        assert [r.wrt for r in results] == ["A"]
         d = results[0]
         assert d.kind == "perturbation"
         assert d.verified is True, d.checks

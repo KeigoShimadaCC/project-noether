@@ -35,7 +35,18 @@ _EXAMPLE_TEMPLATE: dict[str, str] = {
     "vary-gauge": "eval4_maxwell",
     "perturb-scalar": "pert_scalar_quadratic",
     "perturb-metric": "pert_metric_quadratic",
+    "perturb-gauge": "pert_gauge_quadratic",
+    "perturb-yang-mills": "pert_yang_mills_quadratic",
 }
+
+_ABELIAN_GROUPS = frozenset({"", "u(1)", "abelian", "none"})
+
+
+def _is_non_abelian(obj) -> bool:
+    """True when a gauge potential carries a non-abelian group (Yang-Mills).
+    None or U(1) is abelian (Maxwell); the marker is never inferred silently."""
+    group = getattr(obj, "gauge_group", None)
+    return group is not None and group.strip().lower() not in _ABELIAN_GROUPS
 
 
 def _is_box_of(expr: Expr, name: str) -> bool:
@@ -171,9 +182,12 @@ def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
             return "perturb-scalar"
         if obj is not None and obj.kind == "metric":
             return "perturb-metric"
+        if obj is not None and obj.kind == "tensor-field" and obj.rank == 1:
+            return "perturb-yang-mills" if _is_non_abelian(obj) else "perturb-gauge"
         raise NotImplementedError(
-            "perturbation currently has audited scaffolds for scalar and metric "
-            f"fields; no quadratic-action example for {wrt!r}"
+            "perturbation currently has audited scaffolds for scalar fields, the "
+            "metric, and rank-1 gauge potentials (Maxwell / Yang-Mills); no "
+            f"quadratic-action example for {wrt!r}"
         )
     if obj is None:
         return "vary-metric"

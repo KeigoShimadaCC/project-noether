@@ -6,9 +6,11 @@ kernel scripts character by character in production; it parameterizes these.
 
 Status: all registered templates FROZEN (evals 1-5 golden-tested against
 cadabra2 2.5.15 on 2026-06-12; pert_scalar_quadratic added 2026-06-13,
-pert_metric_quadratic added 2026-06-15, and eom_cubic_galileon_scalar (eval 6)
-added 2026-06-16, same kernel; see tests/test_cadabra_adapter.py,
-evals/test_eval3g.py, and evals/test_eval6.py).
+pert_metric_quadratic added 2026-06-15, eom_cubic_galileon_scalar (eval 6)
+added 2026-06-16, and the gauge perturbation scaffolds pert_gauge_quadratic
+(eval 3a, Maxwell) and pert_yang_mills_quadratic (eval 3y, Yang-Mills) added
+2026-06-17, same kernel; see tests/test_cadabra_adapter.py, evals/test_eval3g.py,
+evals/test_eval3a.py, evals/test_eval3y.py, and evals/test_eval6.py).
 """
 
 _TEMPLATES: dict[str, str] = {}
@@ -1011,5 +1013,284 @@ rename_dummies(residue);
 meld(residue);
 print("NOETHER_CHECK: residue=" + str(residue))
 print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
+""",
+)
+
+
+# ---------------------------------------------------------------------------
+# Perturbation, gauge-field (Maxwell) sector: quadratic-action expansion of
+#   S = -1/4 \int d^4x \sqrt{-g} F_{\mu\nu} F^{\mu\nu}
+# about a background potential, A_\mu -> Abar_\mu + a_\mu, so the field strength
+# splits F = Fbar + f with the linearized strength f_{\mu\nu} = \nabla_\mu a_\nu
+# - \nabla_\nu a_\mu. Maxwell is already quadratic, so keep_weight(eps=2) leaves
+# the fluctuation Maxwell action -1/4 sg f^2.
+#
+# The same Cadabra facts as the other perturbation scaffolds shape the script:
+#   - integrate_by_parts peels one derivative at a time off the test field da;
+#   - ::Derivative does not commute nested derivatives and meld will not melt
+#     terms written at different index heights, so the linearized-EOM cross
+#     check is reduced in a loop (eliminate_kronecker / canonicalise / meld)
+#     until the differently-routed da terms line up.
+#
+# Two kernel checks, both in noether-default-v1:
+#   residue_zero        -- delta S2 / delta a equals the documented linearized
+#                          Maxwell operator sg \nabla_\mu f^{\mu\nu};
+#   linearized_eom_match -- the same operator follows from linearizing the full
+#                          nonlinear EOM \nabla_\mu F^{\mu\nu} = 0 (its eps=1
+#                          part), an independent route that does not reuse the
+#                          target. This reproduces the source-free wave operator
+#                          behind the photon's two transverse polarizations.
+# ---------------------------------------------------------------------------
+
+register(
+    "pert_gauge_quadratic",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\nabla{#}::Derivative.
+\nabla{#}::WeightInherit(label=eps, type=multiplicative).
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+Fbar_{\mu\nu}::AntiSymmetric.
+f_{\mu\nu}::AntiSymmetric.
+sg::LaTeXForm("\sqrt{-g}").
+a_{\mu}::Weight(label=eps, value=1).
+da_{\mu}::Weight(label=eps, value=1).
+f_{\mu\nu}::Weight(label=eps, value=1).
+Fbar_{\mu\nu}::Weight(label=eps, value=0).
+g^{\mu\nu}::Weight(label=eps, value=0).
+g_{\mu\nu}::Weight(label=eps, value=0).
+sg::Weight(label=eps, value=0).
+{Fbar_{\mu\nu}, f_{\mu\nu}, a_{\mu}, da_{\mu}, Abar_{\mu}}::Depends(\nabla{#}).
+
+S2 := - 1/4 sg g^{\mu\alpha} g^{\nu\beta} ( Fbar_{\mu\nu} + f_{\mu\nu} ) ( Fbar_{\alpha\beta} + f_{\alpha\beta} );
+substitute(S2, $f_{\mu\nu} -> \nabla_{\mu}{a_{\nu}} - \nabla_{\nu}{a_{\mu}}$);
+distribute(S2);
+keep_weight(S2, $eps=2$);
+canonicalise(S2);
+rename_dummies(S2);
+print("NOETHER_RESULT: " + str(S2))
+
+ex := \int{ @(S2) }{x};
+vary(ex, $a_{\mu} -> da_{\mu}$);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+canonicalise(ex);
+integrate_by_parts(ex, $da_{\mu}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+substitute(ex, $\int{A??}{x} -> A??$);
+eliminate_kronecker(ex);
+sort_product(ex);
+canonicalise(ex);
+rename_dummies(ex);
+
+target := sg g^{\mu\alpha} g^{\nu\beta} \nabla_{\mu}{ \nabla_{\alpha}{a_{\beta}} } da_{\nu} - sg g^{\mu\alpha} g^{\nu\beta} \nabla_{\mu}{ \nabla_{\beta}{a_{\alpha}} } da_{\nu};
+distribute(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+
+residue := @(ex) - @(target);
+distribute(residue);
+eliminate_kronecker(residue);
+sort_product(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: residue=" + str(residue))
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
+
+full := sg g^{\mu\alpha} g^{\nu\beta} \nabla_{\mu}{ Fbar_{\alpha\beta} + f_{\alpha\beta} };
+substitute(full, $f_{\alpha\beta} -> \nabla_{\alpha}{a_{\beta}} - \nabla_{\beta}{a_{\alpha}}$);
+distribute(full);
+keep_weight(full, $eps=1$);
+substitute(full, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+eliminate_kronecker(full);
+sort_product(full);
+canonicalise(full);
+rename_dummies(full);
+
+cross := @(ex) - @(full) da_{\nu};
+distribute(cross);
+for i in range(6):
+    eliminate_kronecker(cross)
+    distribute(cross)
+    sort_product(cross)
+    canonicalise(cross)
+    rename_dummies(cross)
+    meld(cross)
+print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
+""",
+)
+
+
+# ---------------------------------------------------------------------------
+# Perturbation, non-abelian gauge-field (Yang-Mills) sector: quadratic-action
+# expansion of
+#   S = -1/4 \int d^4x \sqrt{-g} F^a_{\mu\nu} F^{a\,\mu\nu},
+#   F^a_{\mu\nu} = \nabla_\mu A^a_\nu - \nabla_\nu A^a_\mu
+#                  + gc fc^{a}{}_{bc} A^b_\mu A^c_\nu,
+# about a background A -> Abar + v. To second order in the fluctuation v the
+# action is
+#   S2 = -1/4 sg ( f1^a_{\mu\nu} f1^{a\,\mu\nu}
+#                  + 2 gc fc^{abc} Fbar^a_{\mu\nu} v^b_\mu v^c_\nu ),
+# with the background-covariant linearized strength
+#   f1^a_{\mu\nu} = Dbar_\mu v^a_\nu - Dbar_\nu v^a_\mu,
+#   Dbar_\mu v^a_\nu = \nabla_\mu v^a_\nu + gc fc^{a}{}_{bc} Abar^b_\mu v^c_\nu.
+# Both f1 and the background strength Fbar are written out in primitives so the
+# kernel checks a pure expression in \nabla, Abar, v.
+#
+# Cadabra specifics that the script depends on (all hand-audited):
+#   - adjoint indices {a..q} are a second index group with a Killing metric k
+#     and position=independent, so repeated adjoint indices contract and the
+#     totally antisymmetric structure constant fc collapses (fc_{abc}fc_{acb}
+#     = -fc_{abc}fc_{abc}); the spacetime indices share that position style;
+#   - the fluctuation is named v / dv (not a) so it never collides with the
+#     adjoint index a, and the structure constant is fc (not str) so it never
+#     shadows Python's str();
+#   - composite symbols on the left of := cannot carry indices, so f1 / Fbar /
+#     Ff / Af are declared abstractly and substituted by their primitive
+#     expansion;
+#   - the constants k, fc, gc, sg are covariantly constant: their \nabla is set
+#     to zero after every integrate_by_parts / product_rule.
+#
+# Two kernel checks, both in noether-default-v1:
+#   residue_zero        -- delta S2 / delta v equals the documented linearized
+#                          YM operator Dbar_\mu f1^{a\mu\nu}
+#                          + gc fc^{abc} v^b_\mu Fbar^{c\mu\nu};
+#   linearized_eom_match -- the same operator follows from linearizing the full
+#                          nonlinear YM EOM D_\mu F^{a\mu\nu} = 0. The test field
+#                          dv carries eps=1, so the linear operator times dv sits
+#                          at eps=2: keep_weight(eps=2) then product_rule expands
+#                          \nabla(Abar v) before the cross check. This is the
+#                          non-abelian generalization of the photon operator, now
+#                          with the gluon self-coupling to the background.
+# ---------------------------------------------------------------------------
+
+register(
+    "pert_yang_mills_quadratic",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(name="spacetime", position=independent).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+{a,b,c,d,e,p,q}::Indices(name="adjoint", position=independent).
+x::Coordinate.
+\nabla{#}::Derivative.
+\nabla{#}::WeightInherit(label=eps, type=multiplicative).
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+k_{a b}::Metric.
+k^{a b}::InverseMetric.
+k^{a}_{b}::KroneckerDelta.
+k_{a}^{b}::KroneckerDelta.
+fc_{a b c}::AntiSymmetric.
+sg::LaTeXForm("\sqrt{-g}").
+v_{a \mu}::Weight(label=eps, value=1).
+dv_{a \mu}::Weight(label=eps, value=1).
+Abar_{a \mu}::Weight(label=eps, value=0).
+{g_{\mu\nu}, k_{a b}, fc_{a b c}, sg, gc}::Weight(label=eps, value=0).
+{Abar_{a \mu}, v_{a \mu}, dv_{a \mu}}::Depends(\nabla{#}).
+
+S2 := - 1/4 sg g^{\mu\rho} g^{\nu\sigma} f1_{a \mu\nu} f1_{a \rho\sigma} - 1/2 sg gc g^{\mu\rho} g^{\nu\sigma} Fbar_{a \rho\sigma} fc_{a b c} v_{b \mu} v_{c \nu};
+print("NOETHER_RESULT: " + str(S2))
+substitute(S2, $f1_{a \mu\nu} -> \nabla_{\mu}{v_{a \nu}} - \nabla_{\nu}{v_{a \mu}} + gc fc_{a b c} ( Abar_{b \mu} v_{c \nu} - Abar_{b \nu} v_{c \mu} )$);
+substitute(S2, $Fbar_{a \mu\nu} -> \nabla_{\mu}{Abar_{a \nu}} - \nabla_{\nu}{Abar_{a \mu}} + gc fc_{a b c} Abar_{b \mu} Abar_{c \nu}$);
+distribute(S2);
+canonicalise(S2);
+rename_dummies(S2);
+
+ex := \int{ @(S2) }{x};
+vary(ex, $v_{a \mu} -> dv_{a \mu}$);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+canonicalise(ex);
+integrate_by_parts(ex, $dv_{a \mu}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{k^{a b}} -> 0$);
+substitute(ex, $\nabla_{\mu}{k_{a b}} -> 0$);
+substitute(ex, $\nabla_{\mu}{fc_{a b c}} -> 0$);
+substitute(ex, $\nabla_{\mu}{gc} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+substitute(ex, $\int{A??}{x} -> A??$);
+distribute(ex);
+for i in range(6):
+    eliminate_kronecker(ex)
+    distribute(ex)
+    sort_product(ex)
+    canonicalise(ex)
+    rename_dummies(ex)
+
+target := sg g^{\mu\alpha} g^{\nu\beta} \nabla_{\mu}{f1_{a \alpha\beta}} dv_{a \nu} + sg gc fc_{a b c} g^{\mu\alpha} g^{\nu\beta} Abar_{b \mu} f1_{c \alpha\beta} dv_{a \nu} + sg gc fc_{a b c} g^{\mu\alpha} g^{\nu\beta} v_{b \mu} Fbar_{c \alpha\beta} dv_{a \nu};
+substitute(target, $f1_{a \mu\nu} -> \nabla_{\mu}{v_{a \nu}} - \nabla_{\nu}{v_{a \mu}} + gc fc_{a b c} ( Abar_{b \mu} v_{c \nu} - Abar_{b \nu} v_{c \mu} )$);
+substitute(target, $Fbar_{a \mu\nu} -> \nabla_{\mu}{Abar_{a \nu}} - \nabla_{\nu}{Abar_{a \mu}} + gc fc_{a b c} Abar_{b \mu} Abar_{c \nu}$);
+distribute(target);
+product_rule(target);
+distribute(target);
+substitute(target, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(target, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(target, $\nabla_{\mu}{fc_{a b c}} -> 0$);
+substitute(target, $\nabla_{\mu}{gc} -> 0$);
+distribute(target);
+for i in range(6):
+    eliminate_kronecker(target)
+    distribute(target)
+    sort_product(target)
+    canonicalise(target)
+    rename_dummies(target)
+
+resid := @(ex) - @(target);
+distribute(resid);
+for i in range(8):
+    eliminate_kronecker(resid)
+    distribute(resid)
+    sort_product(resid)
+    canonicalise(resid)
+    rename_dummies(resid)
+    meld(resid)
+print("NOETHER_CHECK: residue_zero=" + str(str(resid) == "0"))
+
+lin := sg g^{\mu\alpha} g^{\nu\beta} \nabla_{\mu}{Ff_{a \alpha\beta}} dv_{a \nu} + sg gc fc_{a b c} g^{\mu\alpha} g^{\nu\beta} Af_{b \mu} Ff_{c \alpha\beta} dv_{a \nu};
+substitute(lin, $Ff_{a \mu\nu} -> \nabla_{\mu}{Af_{a \nu}} - \nabla_{\nu}{Af_{a \mu}} + gc fc_{a b c} Af_{b \mu} Af_{c \nu}$);
+substitute(lin, $Af_{a \mu} -> Abar_{a \mu} + v_{a \mu}$);
+distribute(lin);
+keep_weight(lin, $eps=2$);
+product_rule(lin);
+distribute(lin);
+substitute(lin, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(lin, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(lin, $\nabla_{\mu}{fc_{a b c}} -> 0$);
+substitute(lin, $\nabla_{\mu}{gc} -> 0$);
+distribute(lin);
+for i in range(6):
+    eliminate_kronecker(lin)
+    distribute(lin)
+    sort_product(lin)
+    canonicalise(lin)
+    rename_dummies(lin)
+
+cross := @(ex) - @(lin);
+distribute(cross);
+for i in range(8):
+    eliminate_kronecker(cross)
+    distribute(cross)
+    sort_product(cross)
+    canonicalise(cross)
+    rename_dummies(cross)
+    meld(cross)
+print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
 """,
 )

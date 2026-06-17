@@ -24,6 +24,10 @@ class ObjectDecl(BaseModel):
     rank: int = 0
     args: list[str] = []  # for kind="function": names of scalar arguments
     definition_tex: str | None = None  # for shorthands, e.g. X
+    # for kind="tensor-field": the gauge group, when the field is a gauge
+    # potential. None or "U(1)" is abelian (Maxwell); a non-abelian group such
+    # as "SU(2)"/"SU(N)" selects the Yang-Mills sector. Never inferred silently.
+    gauge_group: str | None = None
 
 
 class ConnectionSpec(BaseModel):

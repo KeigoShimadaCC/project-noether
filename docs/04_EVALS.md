@@ -2,7 +2,8 @@
 
 **Status:** stable; all five evals plus the stretch tasks 1s (ADM of GR),
 3s (spectrum around Minkowski), 3p (scalar quadratic action in Cadabra),
-3g (graviton quadratic action in Cadabra), 6 (cubic Galileon scalar EOM,
+3g (graviton quadratic action in Cadabra), 3a (Maxwell quadratic action),
+3y (Yang-Mills quadratic action), 6 (cubic Galileon scalar EOM,
 the first verified Horndeski member past scalar-tensor), 7 (k-essence and the
 general scalar Horndeski sector by block decomposition, no per-theory template),
 and 8 (nonminimal scalar-tensor by composition, the metric sector and the
@@ -378,10 +379,52 @@ in two `integrate_by_parts` passes, because the routine peels one derivative at
 a time and `∇` is declared a `::Derivative`. And `meld` will not collapse equal
 terms written at different index heights, so the scaffold lowers every index to
 one explicit-`η` convention and rewrites `∇` as a commuting `::PartialDerivative`
-before the equal-but-differently-written terms cancel. This is the second sector
-`derive_perturbation` drives through the model-written path; only the scalar and
-metric sectors have audited scaffolds, so other field kinds (a gauge potential,
-say) are refused rather than guessed.
+before the equal-but-differently-written terms cancel.
+
+### Eval 3a — Maxwell quadratic action
+
+**Status: implemented (eval 3a; `evals/eval3a_maxwell_perturbation.py`,
+template `pert_gauge_quadratic`).** Eval 3a is the spin-1 perturbation. For
+`S = -¼∫d⁴x √-g F_μν F^μν` the potential splits `A_μ → Āμ + a_μ`, so the field
+strength splits `F = F̄ + f` with the linearized strength
+`f_μν = ∇_μ a_ν - ∇_ν a_μ`. Maxwell is already quadratic, so `keep_weight(eps=2)`
+leaves the fluctuation action `-¼ √-g f_μν f^μν`, whose equation of motion is the
+source-free linearized Maxwell operator `∇_μ f^μν = 0`, the wave operator behind
+the photon's two transverse polarizations. Two kernel checks, both
+`noether-default-v1`: `δS₂/δa` matches the documented operator `√-g ∇_μ f^μν`
+(`residue_zero`), and linearizing the full nonlinear equation `∇_μ F^μν = 0`
+reproduces it (`linearized_eom_match`). The cross-check reduces in a loop
+(`eliminate_kronecker` / `canonicalise` / `meld`) until the differently-routed
+`a` terms line up, since `∇` does not commute and `meld` will not melt terms at
+different index heights.
+
+### Eval 3y — Yang-Mills quadratic action
+
+**Status: implemented (eval 3y; `evals/eval3y_yang_mills_perturbation.py`,
+template `pert_yang_mills_quadratic`).** Eval 3y is the non-abelian sector. For
+`S = -¼∫d⁴x √-g F^a_μν F^{a μν}` with
+`F^a_μν = ∇_μ A^a_ν - ∇_ν A^a_μ + g f^{abc} A^b_μ A^c_ν`, the expansion about
+`A → Ā + v` gives the quadratic action
+`S₂ = -¼ √-g (f1^a_μν f1^{a μν} + 2 g f^{abc} F̄^a_μν v^b_μ v^c_ν)`, with the
+background-covariant linearized strength `f1^a_μν = D̄_μ v^a_ν - D̄_ν v^a_μ` and
+`D̄_μ v^a_ν = ∇_μ v^a_ν + g f^{abc} Ā^b_μ v^c_ν`. Its equation of motion is the
+photon operator plus the gluon self-coupling to the background,
+`D̄_μ f1^{a μν} + g f^{abc} v^b_μ F̄^{c μν} = 0`. Two kernel checks, both
+`noether-default-v1`: `δS₂/δv` matches that documented operator (`residue_zero`),
+and linearizing the full nonlinear Yang-Mills equation `D_μ F^{a μν} = 0`
+reproduces it (`linearized_eom_match`). The adjoint indices form a second index
+group with a Killing metric and `position=independent`, so the totally
+antisymmetric structure constants contract and collapse; the fluctuation is
+named `v`/`dv` to avoid clashing with the adjoint index `a`, and the structure
+constant `fc` to avoid shadowing Python's `str`. The independent route keeps
+weight `eps=2` (the test field `dv` carries `eps=1`) and then expands
+`∇(Ā v)` by `product_rule` before the cross-check.
+
+These four perturbation scaffolds cover dynamical scalar fields, the metric, and
+rank-1 gauge potentials, abelian and non-abelian. `derive_perturbation` selects
+by field kind, reading the `gauge_group` marker to tell Maxwell from Yang-Mills,
+and refuses other field kinds (the rank-2 field strength, say) rather than
+guessing.
 
 ---
 
@@ -718,6 +761,8 @@ covariant equations of motion verify; they are held rather than added partially.
 | 3s | spectrum around Minkowski | perturbation, gauge, kinetic diagonalization | H2 |
 | 3p | scalar quadratic action | symbolic quadratic expansion on a general background | H2 |
 | 3g | graviton quadratic action | spin-2 expansion, linearized vacuum Einstein equation | H2 |
+| 3a | Maxwell quadratic action | spin-1 expansion, source-free linearized Maxwell operator | H2 |
+| 3y | Yang-Mills quadratic action | non-abelian expansion, background-covariant derivative, gluon self-coupling | H2 |
 | 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule, both EOMs by composition | H3 |
 | 7 | k-essence / general scalar Horndeski | X-dependent coupling, block decomposition, no per-theory template | H3 |
 | 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |

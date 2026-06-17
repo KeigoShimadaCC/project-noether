@@ -338,27 +338,36 @@ def derive_perturbation(
     results_root: Path | None = None,
 ) -> list[FieldDerivation]:
     """Expand the action to quadratic order around a background for each
-    dynamical scalar field or metric (the sectors with an audited scaffold
-    today: pert_scalar_quadratic and pert_metric_quadratic).
+    dynamical scalar field, metric, or gauge potential (the sectors with an
+    audited scaffold today: pert_scalar_quadratic, pert_metric_quadratic, and
+    the gauge scaffolds pert_gauge_quadratic (Maxwell) / pert_yang_mills_quadratic).
 
     Raises NotImplementedError naming any requested field whose kind has no
     quadratic-action example yet, rather than guessing one.
     """
-    perturbable = ("scalar-field", "metric")
     by_name = {o.name: o for o in npr.objects}
+
+    def _supported(o) -> bool:
+        # a gauge potential is rank 1; the field strength (rank 2) is not the
+        # perturbed degree of freedom, so it falls through to the refusal.
+        if o.kind in ("scalar-field", "metric"):
+            return True
+        return o.kind == "tensor-field" and o.rank == 1
+
     if fields is None:
-        fields = [o.name for o in npr.objects if o.kind in perturbable and o.role == "dynamical"]
+        fields = [o.name for o in npr.objects if _supported(o) and o.role == "dynamical"]
     if not fields:
         raise NotImplementedError(
-            "perturbation currently supports dynamical scalar fields and the "
-            "metric; this action declares neither"
+            "perturbation currently supports dynamical scalar fields, the metric, "
+            "and rank-1 gauge potentials; this action declares none"
         )
     for name in fields:
         obj = by_name.get(name)
-        if obj is None or obj.kind not in perturbable:
+        if obj is None or not _supported(obj):
             raise NotImplementedError(
-                "perturbation currently has audited scaffolds for scalar and "
-                f"metric fields; cannot expand {name!r}"
+                "perturbation currently has audited scaffolds for scalar fields, "
+                "the metric, and rank-1 gauge potentials (Maxwell / Yang-Mills); "
+                f"cannot expand {name!r}"
             )
     return [
         derive_field(
