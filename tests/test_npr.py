@@ -133,6 +133,7 @@ class TestSchema:
             torsion_sign="+1",
             nonmetricity_definition="nabla-g",
             contortion_sign="+1",
+            disformation_sign="+1",
             ricci_contraction="first-fourth",
             symmetrization_weight="1/n!",
         )
@@ -147,7 +148,8 @@ class TestSchema:
                 riemann_sign="-1",
                 torsion_sign="-1",
                 nonmetricity_definition="minus-nabla-g",
-                contortion_sign="pending-m2",
+                contortion_sign="+1",
+                disformation_sign="-1",
                 ricci_contraction="first-fourth",
                 symmetrization_weight="1",
             ),
@@ -186,5 +188,6 @@ class TestSchema:
     def test_default_metric_affine_slots_are_present(self):
         assert NOETHER_DEFAULT_V1.torsion_sign == "+1"
         assert NOETHER_DEFAULT_V1.nonmetricity_definition == "nabla-g"
-        assert NOETHER_DEFAULT_V1.contortion_sign == "pending-m2"
+        assert NOETHER_DEFAULT_V1.contortion_sign == "+1"
+        assert NOETHER_DEFAULT_V1.disformation_sign == "+1"
         assert NOETHER_DEFAULT_V1.ricci_contraction == "first-third"

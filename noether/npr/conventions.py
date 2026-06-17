@@ -24,9 +24,15 @@ class Conventions(BaseModel):
     # "nabla-g": Q_{lambda mu nu} = nabla_lambda g_{mu nu}
     # "minus-nabla-g": Q_{lambda mu nu} = -nabla_lambda g_{mu nu}
     nonmetricity_definition: Literal["nabla-g", "minus-nabla-g"]
-    # The explicit contortion/disformation closed forms are pinned in M2. M1
-    # only carries the convention slot through the NPR.
-    contortion_sign: Literal["pending-m2", "+1", "-1"]
+    # Contortion sign: "+1" means K^lambda_{mu nu} = +(1/2)(T^lambda_{mu nu}
+    #   + g^{lambda sigma} g_{mu tau} T^tau_{sigma nu}
+    #   + g^{lambda sigma} g_{nu tau} T^tau_{sigma mu}), per metric-affine-v1.
+    # "-1" flips the leading factor to -(1/2).
+    contortion_sign: Literal["+1", "-1"]
+    # Disformation sign: "+1" means L^lambda_{mu nu} = +(1/2) g^{lambda rho}
+    #   (-Q_{mu nu rho} - Q_{nu rho mu} + Q_{rho mu nu}), per metric-affine-v1.
+    # "-1" flips the leading factor to -(1/2).
+    disformation_sign: Literal["+1", "-1"]
     # "first-third": R_{mu nu} = R^lambda_{mu lambda nu}
     # "first-fourth": R_{mu nu} = R^lambda_{mu nu lambda}
     ricci_contraction: Literal["first-third", "first-fourth"]
@@ -40,7 +46,8 @@ NOETHER_DEFAULT_V1 = Conventions(
     riemann_sign="+1",
     torsion_sign="+1",
     nonmetricity_definition="nabla-g",
-    contortion_sign="pending-m2",
+    contortion_sign="+1",
+    disformation_sign="+1",
     ricci_contraction="first-third",
     symmetrization_weight="1/n!",
 )

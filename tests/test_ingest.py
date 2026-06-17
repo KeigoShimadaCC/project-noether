@@ -224,6 +224,7 @@ class TestConventionOverrides:
             torsion_sign="-1",
             nonmetricity_definition="minus-nabla-g",
             contortion_sign="+1",
+            disformation_sign="+1",
             ricci_contraction="first-fourth",
             symmetrization_weight="1",
         )
