@@ -34,11 +34,22 @@ class ConnectionSpec(BaseModel):
     type: Literal["levi-civita", "independent"]
     torsion: bool = False
     nonmetricity: bool = False
+    metric_compatible: bool = True
+    family: Literal[
+        "riemannian",
+        "metric-affine",
+        "riemann-cartan",
+        "teleparallel",
+        "symmetric-teleparallel",
+    ] = "riemannian"
 
 
 class Geometry(BaseModel):
     metric_name: str = "g"
-    connection: ConnectionSpec = ConnectionSpec(type="levi-civita")
+    connection_name: str = "Gamma"
+    connection: ConnectionSpec = Field(
+        default_factory=lambda: ConnectionSpec(type="levi-civita")
+    )
 
 
 class Action(BaseModel):

@@ -1,11 +1,13 @@
-"""NPR layer: AST serialization, structural validation, LaTeX determinism."""
+"""NPR layer: AST serialization, schema round-trips, and structural validation."""
 
 import pytest
 from pydantic import TypeAdapter
 
 from noether.npr.ast import Deriv, Expr, Sym, add, cov, down, num, prod, tensor, up
+from noether.npr.conventions import NOETHER_DEFAULT_V1, Conventions
 from noether.npr.latex import render
 from noether.npr.parse import parse_lagrangian
+from noether.npr.schema import NPR, Action, ConnectionSpec, Geometry, ObjectDecl, Task
 from noether.npr.validate import ValidationError, free_indices, validate_expression
 
 EXPR = TypeAdapter(Expr)
@@ -100,3 +102,66 @@ class TestLatex:
             connection="Gamma",
         )
         assert parse_lagrangian(render(expr)) == expr
+
+
+class TestSchema:
+    def test_metric_affine_convention_fields_validate_with_alternative_ricci_contraction(self):
+        conventions = Conventions(
+            id="metric-affine-test",
+            dimension=4,
+            signature="mostly-plus",
+            riemann_sign="+1",
+            torsion_sign="+1",
+            nonmetricity_definition="nabla-g",
+            contortion_sign="+1",
+            ricci_contraction="first-fourth",
+            symmetrization_weight="1/n!",
+        )
+        assert conventions.ricci_contraction == "first-fourth"
+
+    def test_metric_affine_npr_json_round_trip_preserves_geometry_and_conventions(self):
+        npr = NPR(
+            conventions=Conventions(
+                id="metric-affine-test",
+                dimension="D",
+                signature="mostly-minus",
+                riemann_sign="-1",
+                torsion_sign="-1",
+                nonmetricity_definition="minus-nabla-g",
+                contortion_sign="pending-m2",
+                ricci_contraction="first-fourth",
+                symmetrization_weight="1",
+            ),
+            geometry=Geometry(
+                metric_name="g",
+                connection_name="Gamma",
+                connection=ConnectionSpec(
+                    type="independent",
+                    torsion=True,
+                    nonmetricity=True,
+                    metric_compatible=False,
+                    family="metric-affine",
+                ),
+            ),
+            objects=[
+                ObjectDecl(name="g", kind="metric", role="dynamical", symmetry="symmetric", rank=2),
+                ObjectDecl(name="Gamma", kind="connection", role="dynamical", rank=3),
+            ],
+            action=Action(
+                measure_tex=r"d^Dx \sqrt{-g}",
+                lagrangian=tensor("R", connection="Gamma"),
+                lagrangian_tex=r"R(\Gamma)",
+            ),
+            task=Task(type="vary", with_respect_to=["g", "Gamma"]),
+        )
+
+        round_tripped = NPR.model_validate_json(npr.model_dump_json())
+
+        assert round_tripped.geometry == npr.geometry
+        assert round_tripped.conventions == npr.conventions
+
+    def test_default_metric_affine_slots_are_present(self):
+        assert NOETHER_DEFAULT_V1.torsion_sign == "+1"
+        assert NOETHER_DEFAULT_V1.nonmetricity_definition == "nabla-g"
+        assert NOETHER_DEFAULT_V1.contortion_sign == "pending-m2"
+        assert NOETHER_DEFAULT_V1.ricci_contraction == "first-third"

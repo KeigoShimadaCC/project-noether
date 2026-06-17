@@ -16,6 +16,7 @@ from evals import (
     eval4_maxwell,
     eval5_gauss_bonnet,
 )
+from noether.npr.conventions import Conventions
 from noether.orchestrator import AmbiguityBlocked, build_plan, ingest_action
 
 
@@ -165,3 +166,24 @@ class TestResolutionUnblocks:
             amb.resolution = amb.options[0]
         plan = build_plan(result.npr)
         assert plan.task_type == "vary"
+
+
+class TestConventionOverrides:
+    def test_custom_conventions_are_threaded_into_npr_and_round_trip(self):
+        custom = Conventions(
+            id="metric-affine-custom",
+            dimension="D",
+            signature="mostly-minus",
+            riemann_sign="-1",
+            torsion_sign="-1",
+            nonmetricity_definition="minus-nabla-g",
+            contortion_sign="+1",
+            ricci_contraction="first-fourth",
+            symmetrization_weight="1",
+        )
+
+        result = ingest_action(r"d^Dx \sqrt{-g}", r"R(\Gamma)", conventions=custom)
+        round_tripped = result.npr.model_validate_json(result.npr.model_dump_json())
+
+        assert result.npr.conventions == custom
+        assert round_tripped.conventions == custom
