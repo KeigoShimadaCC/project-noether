@@ -30,6 +30,7 @@ from noether.npr.schema import NPR
 # the prompt. These are frozen and golden-tested (see tests/test_cadabra_*).
 _EXAMPLE_TEMPLATE: dict[str, str] = {
     "vary-metric": "eval3_scalar_tensor_metric",
+    "vary-metric-palatini": "eval2_palatini_metric",
     "vary-connection": "eval2_palatini_connection",
     "vary-scalar": "eval3_scalar_tensor_scalar",
     "vary-scalar-cubic": "eom_cubic_galileon_scalar",
@@ -153,6 +154,40 @@ Connection variation rules (independent connection, noether-default-v1):
   Do NOT declare R_{\mu\nu}::Symmetric (independent-connection Ricci is not symmetric).
 Output ONLY the script."""
 
+PALATINI_METRIC_CONTRACT = r"""You are a Cadabra2 scripting backend for Noether.
+Your ONLY output is a complete Cadabra2 script. No prose, no markdown fences.
+
+You never assert a field equation from memory. The script must DERIVE the
+equation of motion from the action and let the kernel check it. Specifically:
+
+1. Reproduce the declaration block exactly as in the worked example.
+   CRUCIAL for the Palatini (independent-connection) metric variation:
+   - Do NOT declare R_{\mu\nu}::Symmetric (Ricci of an independent connection
+     is not symmetric; torsion breaks the symmetry).
+   - Do NOT vary R_{\mu\nu} with the metric (the curvature depends on the
+     independent connection Gamma, not on g; there are NO dGamma terms and
+     NO integrate_by_parts steps in the metric variation).
+2. Build the integrand: ex := \int{ <action integrand in sg, g, R> }{x};
+3. Derive delta S / delta(g_{mu nu}) with vary(). For the Palatini metric
+   variation the ONLY things that change are g^{\sigma\nu} -> k^{\sigma\nu}
+   and sg -> -1/2 sg g_{\mu\nu} k^{\mu\nu}. The Ricci tensor R_{\sigma\nu}
+   does NOT vary because the connection is independent. So: no dGamma, no
+   integrate_by_parts, no product_rule needed. Just distribute, eliminate
+   metrics and Kroneckers, canonicalise, and print.
+4. State the candidate as the symmetrized field equation (both R_{mu nu} and
+   R_{nu mu} must appear explicitly):
+   target := - 1/2 sg k^{mu nu} R_{mu nu} - 1/2 sg k^{mu nu} R_{nu mu}
+             + 1/2 sg k^{mu nu} g_{mu nu} g^{alpha beta} R_{alpha beta};
+   then residue-check it. The kernel reports True only when the residue
+   vanishes; that, not your say-so, is what makes the result trusted.
+
+Palatini metric variation rules (independent connection):
+  g^{\sigma\nu} -> k^{\sigma\nu},  sg -> -1/2 sg g_{\mu\nu} k^{\mu\nu},
+  R_{\sigma\nu} stays FIXED (it depends on Gamma, not g).
+  k^{\mu\nu} is symmetric (the metric variation).
+  No integrate_by_parts. No product_rule. No dGamma terms.
+Output ONLY the script."""
+
 PERTURBATION_CONTRACT = r"""You are a Cadabra2 scripting backend for Noether.
 Your ONLY output is a complete Cadabra2 script. No prose, no markdown fences.
 
@@ -226,6 +261,12 @@ def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
     if obj is None:
         return "vary-metric"
     if obj.kind == "metric":
+        # When the connection is independent, the metric variation must NOT
+        # vary the curvature with the metric (the connection is an independent
+        # field). Use the Palatini metric worked example instead of the
+        # standard LC one (VAL-EOM-002).
+        if getattr(npr.geometry.connection, "type", None) == "independent":
+            return "vary-metric-palatini"
         return "vary-metric"
     if obj.kind == "connection":
         return "vary-connection"
@@ -257,6 +298,18 @@ def build_generation_prompt(npr: NPR, wrt: str, kind: str = "eom") -> tuple[str,
         )
         contract = PERTURBATION_CONTRACT
         closing = f"Now write the script for the action above, expanding {wrt} to quadratic order."
+    elif key == "vary-metric-palatini":
+        task = (
+            "Task: derive the metric equation of motion delta S / delta g_{mu nu} = 0 "
+            "for the Palatini action with an INDEPENDENT connection. The curvature "
+            "R_{sigma nu}(Gamma) depends on the independent connection, NOT on g, "
+            "so it does NOT vary with the metric. No dGamma terms, no IBP.\n\n"
+        )
+        contract = PALATINI_METRIC_CONTRACT
+        closing = (
+            "Now write the script for the action above, varying the metric "
+            "ONLY (the Ricci tensor stays fixed because the connection is independent)."
+        )
     else:
         task = (
             f"Task: derive the equation of motion delta S / delta {wrt} = 0 "

@@ -122,12 +122,14 @@ class TestConnectionVariationRouting:
 
     def test_metric_field_never_routes_to_connection_example(self, palatini_npr):
         """VAL-EOM-006: a metric field must never be routed to the
-        connection-variation worked example."""
+        connection-variation worked example. For a Palatini NPR with an
+        independent connection, the metric routes to vary-metric-palatini,
+        not the standard vary-metric."""
         from noether.kernels.cadabra.generate import _variation_key
 
         key = _variation_key(palatini_npr, "g", "eom")
         assert key != "vary-connection"
-        assert key == "vary-metric"
+        assert key == "vary-metric-palatini"
 
     @requires_cadabra
     @pytest.mark.kernel_cadabra

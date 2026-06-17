@@ -399,7 +399,21 @@ perturbative expansion (xPert), Young projection.
    routes to the `vary-connection` worked example (`eval2_palatini_connection`)
    and uses `Capability.INDEPENDENT_CONNECTION` rather than the generic `VARY`,
    so a connection field is never silently routed to the metric worked example.
-   The Cadabra adapter advertises `INDEPENDENT_CONNECTION` in its capabilities.
+   When the connection is independent and the metric is varied, the metric
+   variation routes to the `vary-metric-palatini` worked example
+   (`eval2_palatini_metric`) instead of the standard `vary-metric` one, because
+   the curvature R_{mu nu}(Gamma) depends on the independent connection and
+   must NOT be varied with the metric (no dGamma terms, no integrate_by_parts
+   steps). The Palatini metric variation is algebraic: only g^{sigma nu} and
+   sqrt(-g) vary, and the resulting field equation is the symmetrized
+   R_{(mu nu)}(Gamma) - 1/2 g_{mu nu} Rtilde = 0, with both R_{mu nu} and
+   R_{nu mu} appearing explicitly because the independent-connection Ricci
+   carries no symmetry declaration. The projective mode Gamma = LC(g) +
+   delta^lam_nu A_mu annihilates the connection equation identically, and the
+   Ricci shift R(Gamma + proj) - R(Gamma) is exactly dA (the exterior
+   derivative of A_mu), so the symmetric-part metric equation is
+   projective-invariant for any starting connection. The Cadabra adapter
+   advertises `INDEPENDENT_CONNECTION` in its capabilities.
    The general path is gated by `evals/test_eval_general.py`,
    which checks it reproduces eval 3's two kernel-verified equations of motion
    end to end. The `vary` task also has a compositional path that needs no

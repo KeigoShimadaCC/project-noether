@@ -6,6 +6,10 @@ Supported task payloads (capability COMPONENT_EVAL):
   {"check": "divergence-zero", "expr": <rank-2 down-down Expr dict>, "metric": <spec>}
   {"check": "equal",           "lhs": <Expr dict>, "rhs": <Expr dict>, "metric": <spec>}
   {"check": "palatini-projective-inert", "metric": <spec>, "seed": <int>}
+  {"check": "palatini-ricci-shift-is-dA", "metric": <spec>,
+   "connection_seed": <int>, "covector_seed": <int>}
+  {"check": "palatini-projective-inert-general", "metric": <spec>,
+   "connection_seed": <int>, "covector_seed": <int>}
   {"check": "adm-gr-1p2"}  (no metric spec: builds its own foliated 1+2
                             background and runs every ADM split/constraint
                             check in noether.kernels.sympy_kernel.adm)
@@ -22,10 +26,18 @@ Metric specs:
   {"kind": "random-diagonal", "seed": <int>, "dim": <int>}
   {"kind": "two-sphere"}
 
-The palatini check builds Gamma = LC(g) + delta^lam_nu A_mu with a seeded
-random covector A, computes Ricci(Gamma) from the general affine formula, and
-asserts (a) its symmetric part equals Ricci(g) and (b) the Palatini metric
+The palatini checks build Gamma = LC(g) + delta^lam_nu A_mu with a seeded
+random covector A, compute Ricci(Gamma) from the general affine formula, and
+assert (a) its symmetric part equals Ricci(g) and (b) the Palatini metric
 equation R_{(mu nu)} - 1/2 g_{mu nu} R~ equals the Einstein tensor of g.
+
+The palatini-ricci-shift-is-dA check verifies R(Gamma + projective) - R(Gamma)
+= dA (exterior derivative of A) componentwise on random general-connection
+backgrounds.
+
+The palatini-projective-inert-general check verifies the Palatini metric
+equation is unchanged by the projective shift on random general-connection
+backgrounds (not just Levi-Civita + projective).
 """
 
 import time
@@ -44,8 +56,12 @@ from noether.kernels.base import (
 from noether.kernels.sympy_kernel.adm import adm_sample_1p2
 from noether.kernels.sympy_kernel.evaluator import all_zero, evaluate
 from noether.kernels.sympy_kernel.geometry import (
+    Array,
     ComponentGeometry,
+    _clean,
+    exterior_derivative_of_1form,
     projective_connection,
+    random_affine_connection,
     random_antisymmetric,
     random_covector,
     random_diagonal_metric,
@@ -156,6 +172,18 @@ class SympyKernelAdapter:
                 passed, detail = all_zero(lv - rv if lf else sp.simplify(lv - rv))
         elif check == "palatini-projective-inert":
             passed, detail = _palatini_projective_inert(geom, int(payload.get("seed", 0)))
+        elif check == "palatini-ricci-shift-is-dA":
+            conn_seed = int(payload.get("connection_seed", 7))
+            cov_seed = int(payload.get("covector_seed", 3))
+            passed, detail = _palatini_ricci_shift_is_dA(
+                geom, conn_seed, cov_seed
+            )
+        elif check == "palatini-projective-inert-general":
+            conn_seed = int(payload.get("connection_seed", 7))
+            cov_seed = int(payload.get("covector_seed", 3))
+            passed, detail = _palatini_projective_inert_general(
+                geom, conn_seed, cov_seed
+            )
         else:
             raise ValueError(f"unknown check {check!r}")
 
@@ -221,6 +249,134 @@ def _palatini_projective_inert(geom: ComponentGeometry, seed: int) -> tuple[bool
     if not ok_eom:
         return False, f"Palatini metric equation != Einstein(g): {det_eom}"
     return True, "symmetric Ricci part and metric equation both reduce to the Levi-Civita ones"
+
+
+    return True, "symmetric Ricci part and metric equation both reduce to the Levi-Civita ones"
+
+
+def _palatini_ricci_shift_is_dA(
+    geom: ComponentGeometry, conn_seed: int, cov_seed: int
+) -> tuple[bool, str]:
+    """Verify R(Gamma + projective) - R(Gamma) = dA on a random connection.
+
+    The projective shift is Gamma^lam_{mu nu} -> Gamma^lam_{mu nu} + delta^lam_nu A_mu.
+    Under this shift the Ricci tensor changes by exactly the exterior derivative dA:
+      R_{sigma nu}(Gamma + proj) - R_{sigma nu}(Gamma) = dA_{sigma nu}
+                                                      = partial_sigma A_nu - partial_nu A_sigma
+
+    This identity holds for ANY affine connection Gamma, not just Levi-Civita.
+    It is the reason the Palatini metric equation (which depends only on the
+    symmetric part of Ricci) is projective-invariant.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+    n = geom.dim
+    coords = geom.coords
+    # Random general connection (asymmetric, torsion allowed)
+    gamma = random_affine_connection(conn_seed, coords)
+    # Random covector for the projective shift
+    A = random_covector(cov_seed, coords)
+    # Build the shifted connection: Gamma + delta^lam_nu A_mu
+    gamma_shifted = sp.MutableDenseNDimArray(gamma)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                if lam == nu:
+                    gamma_shifted[lam, mu, nu] = _clean(
+                        gamma_shifted[lam, mu, nu] + A[mu]
+                    )
+    gamma_shifted = Array(gamma_shifted)
+    # Compute Ricci of both connections
+    ric_orig = ricci_of_connection(coords, gamma)
+    ric_shifted = ricci_of_connection(coords, gamma_shifted)
+    # The shift should equal dA = partial_sigma A_nu - partial_nu A_sigma
+    dA = exterior_derivative_of_1form(coords, A)
+    residue = sp.MutableDenseNDimArray(ric_shifted)
+    for sig in range(n):
+        for nu in range(n):
+            residue[sig, nu] = _clean(ric_shifted[sig, nu] - ric_orig[sig, nu] - dA[sig, nu])
+    ok, det = all_zero(Array(residue))
+    if not ok:
+        return False, f"R(Gamma+proj) - R(Gamma) != dA: {det}"
+    return True, (
+        "Ricci shift under projective transformation equals dA "
+        "on random general connection"
+    )
+
+
+def _palatini_projective_inert_general(
+    geom: ComponentGeometry, conn_seed: int, cov_seed: int
+) -> tuple[bool, str]:
+    """Verify the Palatini metric equation is projective-invariant on a
+    random general-connection background.
+
+    The Palatini metric equation is:
+      R_{(mu nu)}(Gamma) - 1/2 g_{mu nu} g^{ab} R_{ab}(Gamma) = 0
+
+    Under the projective shift Gamma -> Gamma + delta^lam_nu A_mu, the Ricci
+    tensor shifts by dA (antisymmetric), so the symmetric part R_{(mu nu)} is
+    unchanged, the scalar R~ is unchanged (g^{ab} contracted with antisymmetric
+    dA vanishes), and hence the entire metric equation is invariant.
+
+    This test verifies the invariance on a random general-connection background
+    (not just Levi-Civita + projective), which is the general statement.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+    n = geom.dim
+    coords = geom.coords
+    g = geom.g
+    g_inv = geom.g_inv
+    # Random general connection
+    gamma = random_affine_connection(conn_seed, coords)
+    # Random covector for the projective shift
+    A = random_covector(cov_seed, coords)
+    # Build the shifted connection
+    gamma_shifted = sp.MutableDenseNDimArray(gamma)
+    for lam in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                if lam == nu:
+                    gamma_shifted[lam, mu, nu] = _clean(
+                        gamma_shifted[lam, mu, nu] + A[mu]
+                    )
+    gamma_shifted = Array(gamma_shifted)
+    # Ricci of both connections
+    ric_orig = ricci_of_connection(coords, gamma)
+    ric_shifted = ricci_of_connection(coords, gamma_shifted)
+    # Palatini metric equation: R_{(mu nu)} - 1/2 g_{mu nu} R~
+    # Original
+    sym_orig = (ric_orig + sp.permutedims(ric_orig, (1, 0))) / 2
+    rtilde_orig = _clean(
+        sum(g_inv[a, b] * ric_orig[a, b] for a in range(n) for b in range(n))
+    )
+    eom_orig = sp.MutableDenseNDimArray(sym_orig)
+    for a in range(n):
+        for b in range(n):
+            eom_orig[a, b] = _clean(sym_orig[a, b] - sp.Rational(1, 2) * g[a, b] * rtilde_orig)
+    # Shifted
+    sym_shifted = (ric_shifted + sp.permutedims(ric_shifted, (1, 0))) / 2
+    rtilde_shifted = _clean(
+        sum(g_inv[a, b] * ric_shifted[a, b] for a in range(n) for b in range(n))
+    )
+    eom_shifted = sp.MutableDenseNDimArray(sym_shifted)
+    for a in range(n):
+        for b in range(n):
+            eom_shifted[a, b] = _clean(
+                sym_shifted[a, b] - sp.Rational(1, 2) * g[a, b] * rtilde_shifted
+            )
+    # The two metric equations must agree componentwise
+    residue = sp.MutableDenseNDimArray(eom_shifted)
+    for a in range(n):
+        for b in range(n):
+            residue[a, b] = _clean(eom_shifted[a, b] - eom_orig[a, b])
+    ok, det = all_zero(Array(residue))
+    if not ok:
+        return False, f"Palatini metric equation changed under projective shift: {det}"
+    return True, (
+        "Palatini metric equation is projective-invariant on random "
+        "general-connection background"
+    )
 
 
 def _reproduction_script(payload: dict[str, Any]) -> str:
