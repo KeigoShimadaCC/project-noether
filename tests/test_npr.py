@@ -176,8 +176,12 @@ class TestSchema:
 
         round_tripped = NPR.model_validate_json(npr.model_dump_json())
 
+        assert round_tripped == npr
         assert round_tripped.geometry == npr.geometry
         assert round_tripped.conventions == npr.conventions
+        assert round_tripped.geometry.connection_name == "Gamma"
+        assert round_tripped.objects == npr.objects
+        assert round_tripped.action.lagrangian == npr.action.lagrangian
 
     def test_default_metric_affine_slots_are_present(self):
         assert NOETHER_DEFAULT_V1.torsion_sign == "+1"
