@@ -35,6 +35,14 @@ HELP = (
     "  quit       save and exit (resume later with: noether resume <id>)"
 )
 
+STRICT_MENU_AMBIGUITIES = {
+    "amb-connection",
+    "amb-torsion",
+    "amb-nonmetricity",
+    "amb-metric-compatibility",
+    "amb-ricci-contraction",
+}
+
 
 class ChatLoop:
     def __init__(
@@ -148,7 +156,11 @@ class ChatLoop:
                 if not answer:
                     if amb.id in self._pending:
                         choice = self._pending.pop(amb.id)
-                        session.resolve(amb.id, choice)
+                        try:
+                            session.confirm_resolutions({amb.id: choice})
+                        except (KeyError, ValueError) as exc:
+                            self._say(f"  {exc}")
+                            continue
                         self.store.save(session)
                         self._say(f"  confirmed: {choice}")
                         resolved_count += 1
@@ -157,9 +169,21 @@ class ChatLoop:
                 if answer.isdigit() and 1 <= int(answer) <= len(amb.options):
                     choice = amb.options[int(answer) - 1]
                 else:
+                    if amb.id in STRICT_MENU_AMBIGUITIES and answer not in amb.options:
+                        self._say(
+                            f"  {answer!r} is not a listed option for {amb.id!r}: {amb.options}"
+                        )
+                        continue
                     choice = answer  # free-form: the human is the authority
                 self._pending.pop(amb.id, None)
-                session.resolve(amb.id, choice)
+                try:
+                    if choice in amb.options:
+                        session.confirm_resolutions({amb.id: choice})
+                    else:
+                        session.resolve(amb.id, choice)
+                except (KeyError, ValueError) as exc:
+                    self._say(f"  {exc}")
+                    continue
                 self.store.save(session)
                 self._say(f"  recorded: {choice}")
                 resolved_count += 1

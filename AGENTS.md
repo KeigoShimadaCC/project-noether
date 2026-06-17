@@ -112,7 +112,9 @@ noether/             Python package
                      surface as tools (incl. noether_derive and
                      noether_results); refusals are tool results, not guesses
   cli/               `noether chat` / `resume` / `sessions` (conversational
-                     loop, chat.py), `noether kernels`, `noether ingest`,
+                     loop, chat.py; numbered geometry answers go through the
+                     same menu-validation path as HTTP resolve before the
+                     session store is updated), `noether kernels`, `noether ingest`,
                      `noether elicit`, `noether serve`, `noether mcp`,
                      `noether eval{1..5}`, `noether eval1s` (ADM of GR),
                      `noether eval3s` (Minkowski spectrum)

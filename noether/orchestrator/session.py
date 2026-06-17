@@ -72,6 +72,26 @@ class Session(BaseModel):
         self.npr_versions.append(updated)
         self._log(SessionState.ELICIT, f"resolved {ambiguity_id}: {resolution}")
 
+    def confirm_resolutions(self, confirmations: dict[str, str]) -> None:
+        """Apply human-confirmed on-menu answers as a new immutable NPR version.
+
+        This funnels menu-based surface answers through the same validation path
+        as the HTTP and CLI elicit surfaces: every confirmation must target an
+        existing ambiguity and use one of its listed options.
+        """
+        from noether.orchestrator.elicit import apply_resolutions
+
+        current = self.npr
+        known = {amb.id for amb in current.ambiguities}
+        missing = [amb_id for amb_id in confirmations if amb_id not in known]
+        if missing:
+            raise KeyError(f"no ambiguity with id {missing[0]!r}")
+
+        updated = apply_resolutions(current, confirmations)
+        self.npr_versions.append(updated)
+        for ambiguity_id, resolution in confirmations.items():
+            self._log(SessionState.ELICIT, f"resolved {ambiguity_id}: {resolution}")
+
     def add_definition(self, symbol: str, definition_tex: str) -> None:
         """Adopt a human-confirmed readability shorthand as a new immutable
         NPR version. A shorthand only names an expression; it adds notation,

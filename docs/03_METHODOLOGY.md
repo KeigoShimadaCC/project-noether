@@ -36,6 +36,10 @@ questions. A term with curvature or an explicit connection opens the geometry
 questionnaire. Connection type, torsion, non-metricity, and metric compatibility
 are asked as menu-bound inferable questions, because the notation constrains the
 space of sensible answers even though the physicist still has to confirm one.
+On the CLI chat and resume loop, those geometry answers stay on the same
+confirmation rail as the HTTP resolve surface: numbered picks and typed on-menu
+answers are applied through the shared menu validator before they land in the
+session store.
 If the physicist confirms an independent connection, elicitation opens one more
 conventional question: which Ricci contraction to use now that `R_{μν}` need not
 be symmetric. A curvature-free scalar action does not open that questionnaire

@@ -50,6 +50,9 @@ terminals and TeX; a CLI proves the four-beat loop with zero frontend investment
 
 - Input: free text and LaTeX, multiline paste supported.
 - Elicitation questions render as numbered options plus free-form answer.
+  Geometry questions stay menu-bound in the chat loop, so numbered picks and
+  typed on-menu answers use the same confirmation path as the HTTP resolve
+  surface before the session store is updated.
 - Results print as LaTeX source (copy-paste ready) and optionally write a rendered
   HTML/PDF artifact per result (`--render`).
 - Every result prints its provenance pointer: path to the bundle directory
@@ -58,7 +61,11 @@ terminals and TeX; a CLI proves the four-beat loop with zero frontend investment
 
 Status: `noether chat` runs the conversational loop (multiline LaTeX paste,
 ingest, questions as numbered options plus free-form answers, plan once well
-posed); `propose` inside the loop asks the detected agent CLI for suggestions
+posed); for the metric-affine questionnaire, connection type, torsion,
+non-metricity, metric compatibility, and the follow-up Ricci-contraction
+choice all resolve through the same on-menu confirmation path used by the HTTP
+surface, so `chat` and `resume` persist the same geometry state before
+planning. `propose` inside the loop asks the detected agent CLI for suggestions
 that take effect only when the human accepts them one by one. `noether
 resume <id>` continues a stored session and `noether sessions` lists them;
 the store is shared with the HTTP and MCP frontends. Arbitrary well-posed

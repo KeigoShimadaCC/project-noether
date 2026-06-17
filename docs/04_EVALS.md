@@ -186,6 +186,10 @@ from the Riemann tensor of `Γ`:
    Ricci-contraction convention as an open on-menu choice before planning can
    continue.
 4. Conventions as default otherwise; ask: equations of motion for both fields.
+5. The conversational CLI loop (`noether chat` / `resume`) must render those
+   geometry questions with numbered options, persist each on-menu answer through
+   the shared session store, and print a plan that includes the
+   `independent-connection` step once the Ricci-contraction choice is confirmed.
 
 Once that geometry is confirmed, the definitions surface may also offer the
 optional readability notation `K(T)`, `L(Q)`, and the `f(Q)` scalar `Q`. These

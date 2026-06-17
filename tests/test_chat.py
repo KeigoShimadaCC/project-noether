@@ -11,6 +11,7 @@ import pytest
 
 from noether.cli.chat import ChatLoop
 from noether.llm import CliLLMAdapter, StubLLMAdapter, stub_reply
+from noether.orchestrator.elicit import apply_resolutions
 from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.store import SessionStore
 
@@ -34,6 +35,31 @@ def make_loop(tmp_path, lines, llm=None):
 
 def question_count():
     return len(ingest_action(r"d^4x \sqrt{-g}", "R").npr.ambiguities)
+
+
+def numbered_answers_for(
+    lagrangian: str, desired: dict[str, str] | None = None
+) -> tuple[list[str], dict[str, int]]:
+    desired = desired or {}
+    npr = ingest_action(r"d^4x \sqrt{-g}", lagrangian).npr
+    confirmations: dict[str, str] = {}
+    lines: list[str] = [lagrangian, ""]
+    answer_positions: dict[str, int] = {}
+    for amb in npr.ambiguities:
+        choice = desired.get(amb.id, amb.options[0])
+        confirmations[amb.id] = choice
+        answer_positions[amb.id] = len(lines)
+        lines.append(str(amb.options.index(choice) + 1))
+    confirmed = apply_resolutions(npr, confirmations)
+    ricci = next(
+        (amb for amb in confirmed.unresolved_ambiguities() if amb.id == "amb-ricci-contraction"),
+        None,
+    )
+    if ricci is not None:
+        choice = desired.get(ricci.id, ricci.options[0])
+        answer_positions[ricci.id] = len(lines)
+        lines.append(str(ricci.options.index(choice) + 1))
+    return lines, answer_positions
 
 
 class TestStart:
@@ -68,6 +94,59 @@ class TestStart:
         assert "planning would be a guess" in out.getvalue()
         (session_id,) = store.list_ids()
         assert not store.get(session_id).npr.is_well_posed()
+
+    def test_palatini_numbered_answers_reach_independent_connection_plan(self, tmp_path):
+        lagrangian = r"g^{\mu\nu} R_{\mu\nu}(\Gamma)"
+        lines, _ = numbered_answers_for(
+            lagrangian,
+            {
+                "amb-connection": "independent",
+                "amb-torsion": "torsion-allowed",
+                "amb-nonmetricity": "nonmetricity-allowed",
+                "amb-metric-compatibility": "not-metric-compatible",
+                "amb-ricci-contraction": "first-fourth",
+            },
+        )
+        loop, store, out = make_loop(tmp_path, lines)
+
+        assert loop.start() == 0
+
+        text = out.getvalue()
+        assert "[amb-connection]" in text
+        assert "[amb-torsion]" in text
+        assert "[amb-nonmetricity]" in text
+        assert "[amb-metric-compatibility]" in text
+        assert "1. independent" in text
+        assert "[independent-connection]" in text
+
+        (session_id,) = store.list_ids()
+        session = store.get(session_id)
+        assert session.npr.geometry.connection.type == "independent"
+        assert session.npr.geometry.connection.torsion is True
+        assert session.npr.geometry.connection.nonmetricity is True
+        assert session.npr.geometry.connection.metric_compatible is False
+
+    def test_off_menu_geometry_answer_is_rejected_before_numbered_retry(self, tmp_path):
+        lagrangian = r"g^{\mu\nu} R_{\mu\nu}(\Gamma)"
+        lines, positions = numbered_answers_for(
+            lagrangian,
+            {
+                "amb-connection": "independent",
+                "amb-torsion": "torsion-allowed",
+                "amb-nonmetricity": "nonmetricity-free",
+                "amb-metric-compatibility": "metric-compatible",
+            },
+        )
+        connection_index = positions["amb-connection"]
+        lines = lines[:connection_index] + ["metric-affine"] + lines[connection_index:]
+
+        loop, store, out = make_loop(tmp_path, lines)
+        assert loop.start() == 0
+
+        text = out.getvalue()
+        assert "not a listed option" in text
+        (session_id,) = store.list_ids()
+        assert store.get(session_id).npr.geometry.connection.type == "independent"
 
 
 class TestResume:

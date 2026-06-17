@@ -156,18 +156,12 @@ def create_app(
     @app.post("/sessions/{session_id}/resolve")
     def resolve(session_id: str, body: ResolveRequest) -> dict[str, Any]:
         session = _get_session(session_id)
-        by_id = {a.id: a for a in session.npr.ambiguities}
-        for amb_id, choice in body.resolutions.items():
-            if amb_id not in by_id:
-                raise HTTPException(status_code=404, detail=f"no ambiguity {amb_id!r}")
-            options = by_id[amb_id].options
-            if options and choice not in options:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"{choice!r} is not a listed option for {amb_id!r}: {options}",
-                )
-        for amb_id, choice in body.resolutions.items():
-            session.resolve(amb_id, choice)
+        try:
+            session.confirm_resolutions(body.resolutions)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         if session.result_ids:
             session.mark_results_stale("assumption resolved after results existed")
         app.state.store.save(session)
