@@ -939,7 +939,10 @@ derivation path. When `derive_field` detects G4(phi,X)R terms in the Lagrangian
 `FieldDerivation` objects for the scalar and metric EOMs. Each derivation
 carries the diagnostic checks and the gated verdict, satisfying VAL-EOM-013:
 if `verified==True` then `residue_zero=="True"`, else `verified==False` with
-a non-empty `detail`.
+a non-empty `detail`. The G4/G5 derivations carry their convention block
+(via `_convention_block(npr)`) just like every other derivation path (EOM,
+perturbation, ADM), so even the gated result identifies the conventions that
+produced the (unverified) expression.
 
 ### 6.2 Vector (Maxwell) EOM on a metric-affine background
 

@@ -34,8 +34,37 @@ from noether.kernels.cadabra.horndeski_g4g5 import (
     assemble_g4_scalar_eom_script,
     attempt_g4g5_closure,
 )
+from noether.npr import (
+    NOETHER_DEFAULT_V1,
+    NPR,
+    Action,
+    ConnectionSpec,
+    Geometry,
+    ObjectDecl,
+    Task,
+)
+from noether.npr.ast import prod, tensor, up
 from noether.npr.parse import parse_lagrangian
 from noether.orchestrator.derive import FieldDerivation, attempt_g4g5_eom
+
+
+def _g4g5_npr() -> NPR:
+    """Build a minimal NPR carrying a G4(phi,X)R Lagrangian for testing
+    ``attempt_g4g5_eom``. The convention block is the repo default."""
+    return NPR(
+        conventions=NOETHER_DEFAULT_V1,
+        geometry=Geometry(connection=ConnectionSpec(type="levi-civita")),
+        objects=[
+            ObjectDecl(name="g", kind="metric", role="background", symmetry="symmetric", rank=2),
+            ObjectDecl(name="phi", kind="scalar-field", role="dynamical"),
+        ],
+        action=Action(
+            measure_tex=r"d^4x \sqrt{-g}",
+            lagrangian=prod(tensor("G", up("mu"), up("nu")), tensor("R", up("mu"), up("nu"))),
+            lagrangian_tex=r"G(\phi, X) R",
+        ),
+        task=Task(type="vary", with_respect_to=["g", "phi"]),
+    )
 
 # ---------------------------------------------------------------------------
 # VAL-GEOM-015: verified-or-gated XOR condition
@@ -241,7 +270,7 @@ class TestG4G5EomXOR:
     @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
     def test_scalar_eom_satisfies_xor(self):
         """The scalar EOM derivation satisfies the VAL-EOM-013 XOR condition."""
-        derivations = attempt_g4g5_eom(CadabraAdapter())
+        derivations = attempt_g4g5_eom(CadabraAdapter(), _g4g5_npr())
         scalar = next(d for d in derivations if d.wrt == "phi")
         assert _eom_xor_condition(scalar), (
             f"Scalar EOM XOR violated: verified={scalar.verified}, "
@@ -253,7 +282,7 @@ class TestG4G5EomXOR:
     @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
     def test_metric_eom_satisfies_xor(self):
         """The metric EOM derivation satisfies the VAL-EOM-013 XOR condition."""
-        derivations = attempt_g4g5_eom(CadabraAdapter())
+        derivations = attempt_g4g5_eom(CadabraAdapter(), _g4g5_npr())
         metric = next(d for d in derivations if d.wrt == "g")
         assert _eom_xor_condition(metric), (
             f"Metric EOM XOR violated: verified={metric.verified}, "
@@ -266,7 +295,7 @@ class TestG4G5EomXOR:
     def test_both_eoms_gated_with_detail(self):
         """Both EOMs are gated (verified==False) with a non-empty detail
         naming the SortCovDs blocker."""
-        derivations = attempt_g4g5_eom(CadabraAdapter())
+        derivations = attempt_g4g5_eom(CadabraAdapter(), _g4g5_npr())
         for d in derivations:
             assert d.verified is False, (
                 f"EOM wrt {d.wrt} should be gated (verified=False); "
@@ -286,7 +315,7 @@ class TestG4G5EomXOR:
         """If verified==True then residue_zero=="True"; this is a structural
         invariant that holds for every derivation regardless of the closure
         outcome."""
-        derivations = attempt_g4g5_eom(CadabraAdapter())
+        derivations = attempt_g4g5_eom(CadabraAdapter(), _g4g5_npr())
         for d in derivations:
             if d.verified:
                 assert d.checks.get("residue_zero") == "True", (
@@ -300,7 +329,7 @@ class TestG4G5EomXOR:
         """The scalar EOM derivation carries the second-order diagnostic
         check, confirming the no-Ostrogradski cancellation works for the
         scalar sector."""
-        derivations = attempt_g4g5_eom(CadabraAdapter())
+        derivations = attempt_g4g5_eom(CadabraAdapter(), _g4g5_npr())
         scalar = next(d for d in derivations if d.wrt == "phi")
         assert "scalar_eom_second_order" in scalar.checks, (
             f"Scalar EOM should carry the scalar_eom_second_order diagnostic; "
@@ -315,7 +344,7 @@ class TestG4G5EomXOR:
     def test_metric_eom_has_diagnostic_checks(self):
         """The metric EOM derivation carries the third-derivative diagnostic
         check, confirming the SortCovDs blocker is real."""
-        derivations = attempt_g4g5_eom(CadabraAdapter())
+        derivations = attempt_g4g5_eom(CadabraAdapter(), _g4g5_npr())
         metric = next(d for d in derivations if d.wrt == "g")
         assert "metric_eom_has_third_derivs" in metric.checks, (
             f"Metric EOM should carry the metric_eom_has_third_derivs "
@@ -330,7 +359,7 @@ class TestG4G5EomXOR:
     def test_derivation_objects_are_field_derivations(self):
         """The result objects are proper FieldDerivation instances with the
         expected fields."""
-        derivations = attempt_g4g5_eom(CadabraAdapter())
+        derivations = attempt_g4g5_eom(CadabraAdapter(), _g4g5_npr())
         assert len(derivations) == 2
         for d in derivations:
             assert isinstance(d, FieldDerivation)
@@ -339,6 +368,32 @@ class TestG4G5EomXOR:
             assert d.kernel_name == "cadabra"
             assert d.script  # non-empty script
             assert d.result_id  # non-empty result_id
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_g4g5_derivations_carry_nonempty_conventions(self):
+        """The G4/G5 best-effort derivations carry a non-empty convention
+        block, matching every other derivation path (EOM, perturbation, ADM).
+        Even gated results carry their named conventions so the consumer can
+        see which conventions produced the (unverified) expression."""
+        derivations = attempt_g4g5_eom(CadabraAdapter(), _g4g5_npr())
+        for d in derivations:
+            assert d.conventions, (
+                f"G4/G5 derivation wrt {d.wrt} must carry a non-empty "
+                f"convention block; got {d.conventions!r}"
+            )
+            assert "signature" in d.conventions, (
+                f"Convention block must include 'signature'; "
+                f"got keys: {sorted(d.conventions.keys())}"
+            )
+            assert "convention_id" in d.conventions, (
+                f"Convention block must include 'convention_id'; "
+                f"got keys: {sorted(d.conventions.keys())}"
+            )
+            assert d.conventions["convention_id"] == "noether-default-v1", (
+                f"Convention ID must be noether-default-v1; "
+                f"got {d.conventions['convention_id']!r}"
+            )
 
     def test_closure_attempt_and_eom_attempt_consistent(self):
         """The ClosureAttempt (M2) and FieldDerivation (M3) results are

@@ -31,6 +31,7 @@ from noether.npr import (
 )
 from noether.npr.ast import down, prod, tensor, up
 from noether.orchestrator.derive import (
+    FieldDerivation,
     _compositional_decomposition,
     _convention_block,
     _result_detail,
@@ -1009,3 +1010,78 @@ class TestConventionBlockKSignFoliationNormal:
         block = _convention_block(npr)
         assert "K_sign" in block
         assert "foliation_normal" in block
+
+
+class TestG4G5ConventionBlock:
+    """The G4/G5 best-effort derivation carries a non-empty convention block,
+    matching every other derivation path (EOM, perturbation, ADM). The
+    convention block is populated by _convention_block(npr), which is the
+    same function used by derive_field and derive_adm.
+
+    This is a unit-level test (no Cadabra dependency) confirming the
+    structural guarantee; the kernel-backed integration test is in
+    test_horndeski_g4g5.py.
+    """
+
+    def test_default_npr_convention_block_is_nonempty(self):
+        """The convention block for a default-configuration NPR is non-empty,
+        ensuring every derivation (including g4g5 best-effort) carries its
+        named convention block."""
+        npr = NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(connection=ConnectionSpec(type="levi-civita")),
+            objects=[
+                ObjectDecl(
+                    name="g", kind="metric", role="background",
+                    symmetry="symmetric", rank=2,
+                ),
+            ],
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=tensor("R", up("mu"), up("nu")),
+                lagrangian_tex=r"R",
+            ),
+            task=Task(type="vary", with_respect_to=["g"]),
+        )
+        block = _convention_block(npr)
+        assert block, "convention block must be non-empty"
+        assert "signature" in block, f"must include 'signature'; got {sorted(block.keys())}"
+        assert "convention_id" in block, f"must include 'convention_id'; got {sorted(block.keys())}"
+        assert block["convention_id"] == "noether-default-v1"
+
+    def test_g4g5_field_derivation_construction_populates_conventions(self):
+        """A FieldDerivation constructed with conventions=_convention_block(npr)
+        carries a non-empty convention dict, verifying that the g4g5 best-effort
+        path (which now populates conventions via _convention_block) will carry
+        its convention block."""
+        npr = NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(connection=ConnectionSpec(type="levi-civita")),
+            objects=[
+                ObjectDecl(
+                    name="g", kind="metric", role="background",
+                    symmetry="symmetric", rank=2,
+                ),
+            ],
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=tensor("R", up("mu"), up("nu")),
+                lagrangian_tex=r"R",
+            ),
+            task=Task(type="vary", with_respect_to=["g"]),
+        )
+        conv = _convention_block(npr)
+        d = FieldDerivation(
+            wrt="phi",
+            kind="eom",
+            capability=Capability.VARY,
+            result_id="g4g5-scalar-test",
+            verified=False,
+            detail="needs SortCovDs normal-ordering",
+            conventions=conv,
+        )
+        assert d.conventions, (
+            f"g4g5 FieldDerivation must carry non-empty conventions; "
+            f"got {d.conventions!r}"
+        )
+        assert d.conventions["signature"] == "mostly-plus"

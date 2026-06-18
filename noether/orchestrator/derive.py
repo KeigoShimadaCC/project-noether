@@ -267,6 +267,7 @@ def _verdict(kind: str, checks: dict[str, str]) -> bool:
 
 def attempt_g4g5_eom(
     cadabra_adapter,
+    npr: NPR,
     *,
     session_id: str = "",
     results_root: Path | None = None,
@@ -335,7 +336,10 @@ def attempt_g4g5_eom(
         else SORTCOVDS_BLOCKER
     )
 
-    # Build FieldDerivation objects.
+    # Build FieldDerivation objects. Even the gated G4/G5 result carries its
+    # named convention block (conventions are always explicit; every other
+    # derivation path already populates this via _convention_block).
+    conv_block = _convention_block(npr)
     scalar_derivation = FieldDerivation(
         wrt="phi",
         kind="eom",
@@ -350,6 +354,7 @@ def attempt_g4g5_eom(
         kernel_version=scalar_computed.kernel_version,
         script=scalar_script,
         detail=detail,
+        conventions=conv_block,
     )
 
     metric_derivation = FieldDerivation(
@@ -366,6 +371,7 @@ def attempt_g4g5_eom(
         kernel_version=metric_computed.kernel_version,
         script=metric_script,
         detail=detail,
+        conventions=conv_block,
     )
 
     return [scalar_derivation, metric_derivation]
@@ -651,6 +657,7 @@ def derive_field(
         # diagnostic checks and return an honest gated result.
         derivations = attempt_g4g5_eom(
             cadabra,
+            npr=npr,
             session_id=session_id,
             results_root=results_root,
         )

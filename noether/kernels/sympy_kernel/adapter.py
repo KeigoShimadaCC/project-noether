@@ -17,6 +17,11 @@ Supported task payloads (capability COMPONENT_EVAL):
                             1+2 background with a general affine connection
                             and runs every metric-affine ADM decomposition
                             check in AffineADMGeometry)
+  {"check": "adm-affine-matter-1p2"}  (no metric spec: builds its own
+                            foliated 1+2 background with a general affine
+                            connection and matter hypermomentum; runs every
+                            metric-affine ADM decomposition check plus the
+                            matter-hypermomentum-constraints check)
   {"check": "spectrum-scalar-tensor-minkowski"}  (no metric spec: runs every
                             linearization/diagonalization check in
                             noether.kernels.sympy_kernel.linearized)
