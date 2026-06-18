@@ -218,7 +218,13 @@ parts), surfaces torsion and non-metricity pieces explicitly, distinguishes
 constraint pieces from evolution pieces, and identifies connection-sector
 primary/secondary constraints (gated when the Dirac chain cannot close); see
 eval adm-affine and section 6.5 of `docs/02_TECH_SPEC.md`. Any well-posed
-action carrying a metric is accepted; one with no metric is refused. The web client renders each derivation as a provenance tree
+action carrying a metric is accepted; one with no metric is refused (HTTP 422 /
+MCP error naming the missing metric object). Each derivation carries its
+convention block (signature, torsion sign, non-metricity definition,
+Ricci-contraction, contortion sign, disformation sign, K-sign, foliation/normal
+convention; for metric-affine NPRs also the field-strength definition) so no
+convention is silently assumed; changing the elicited Ricci-contraction is
+reflected in the result. The web client renders each derivation as a provenance tree
 (action, plan, kernel script, every check the kernel reported, result) and
 exports the kernel-verified results as a publication-LaTeX document; both are
 presentation over data the server already returned, so no physics runs in the

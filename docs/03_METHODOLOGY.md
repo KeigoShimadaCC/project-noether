@@ -204,7 +204,11 @@ eval is registered as the CLI subcommand `noether eval4ma`. The
 the gravitational sector, the Gauss-Codazzi split and the Einstein-tensor
 projections, verified by the SymPy component kernel on an explicit background
 (eval 1s) rather than by a model-written Cadabra script. Any action carrying a
-metric is accepted; one without a metric is refused rather than guessed.
+metric is accepted; one without a metric is refused (HTTP 422 / MCP error
+naming the missing metric object) rather than guessed. Each ADM derivation
+carries its full convention block (signature, torsion sign, non-metricity
+definition, Ricci-contraction, contortion sign, disformation sign, K-sign,
+foliation/normal convention) so no convention is silently assumed.
 
 ## 5. Honesty and failure policy
 

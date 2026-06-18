@@ -589,7 +589,13 @@ perturbative expansion (xPert), Young projection.
    projections, the extrinsic-curvature identity K_ij = nabla_i n_j, and the
    lapse Euler-Lagrange equation) on a nondegenerate 1+2 background (eval 1s);
    `verified` is set from that suite. Any well-posed action carrying a metric is
-   accepted; one with no metric is refused. For a metric-affine NPR
+   accepted; one with no metric is refused (HTTP 422 / MCP error naming the
+   missing metric object). Each ADM derivation carries its active convention
+   block (signature, torsion sign, non-metricity definition, Ricci-contraction,
+   contortion sign, disformation sign, K-sign, foliation/normal convention;
+   for metric-affine NPRs also the field-strength definition), so no convention
+   is silently assumed; changing the elicited Ricci-contraction is reflected in
+   the result. For a metric-affine NPR
    (independent connection), `derive_adm` additionally produces the connection's
    foliation decomposition (Gamma = LC + K(T) + L(Q) projected into normal and
    tangential parts), surfaces torsion and non-metricity pieces, separates
@@ -1158,7 +1164,16 @@ explanatory prose. Each named check must `passed=True` on a background whose
 distortion features are asserted nonzero by the falsifier. Any part that
 cannot be reduced is returned `verified=False` with a `detail` naming the
 blocker; the piece is still surfaced (`result_tex` present), never dropped
-or reported true. Explanatory narration about the connection's constraints
+or reported true. An action with no metric is refused: `derive_adm` raises
+`NotImplementedError` naming the missing metric object (e.g. "this action
+declares no metric object 'g'"), which the server surface translates to HTTP
+422 and the MCP surface returns as an error dict; no ADM derivation is
+produced. The ADM result carries its full convention block on the `conventions`
+field of `FieldDerivation`: signature, torsion sign, non-metricity definition,
+Ricci-contraction, contortion sign, disformation sign, K-sign, foliation/normal
+convention, and the convention id; for metric-affine NPRs the field-strength
+definition is also included. Changing the elicited Ricci-contraction is
+reflected in the result. Explanatory narration about the connection's constraints
 is on the `narrative` field of `FieldDerivation` (teaching/explanatory prose,
 distinct from `detail` which is failure-diagnostic only) and never sets a
 result expression or flips `verified`.

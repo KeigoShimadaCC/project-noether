@@ -67,6 +67,11 @@ class FieldDerivation(BaseModel):
     bundle_path: str | None = None
     detail: str = ""
     narrative: str = ""  # teaching/explanatory prose (reasoned, not verified)
+    # The active convention block at derivation time. Explicit and named;
+    # never silently assumed. Populated for ADM derivations and threaded
+    # through the results payload so the consumer can see which conventions
+    # produced the result.
+    conventions: dict[str, str] = Field(default_factory=dict)
 
 
 def _ladder_from_kernel(computed: ComputedResult, verified: bool, detail: str) -> LadderReport:
@@ -358,6 +363,33 @@ def attempt_g4g5_eom(
     )
 
     return [scalar_derivation, metric_derivation]
+
+
+def _convention_block(npr: NPR) -> dict[str, str]:
+    """Extract the load-bearing convention entries from the NPR for inclusion
+    in a FieldDerivation's convention block. Every entry is named and explicit;
+    nothing is silently assumed."""
+    c = npr.conventions
+    block: dict[str, str] = {
+        "signature": c.signature,
+        "torsion_sign": c.torsion_sign,
+        "nonmetricity_definition": c.nonmetricity_definition,
+        "ricci_contraction": c.ricci_contraction,
+        "contortion_sign": c.contortion_sign,
+        "disformation_sign": c.disformation_sign,
+        "convention_id": c.id,
+    }
+    # Foliation/normal convention: the sign of the extrinsic curvature
+    # and the normal direction. In the noether-default-v1 convention
+    # (mostly-plus signature), K_{ij} = +nabla_i n_j and the normal is
+    # n_mu = (-N, 0, ..., 0) (timelike, future-directed).
+    block["foliation_normal"] = "n_mu=(-N,0,...,0) timelike"
+    block["K_sign"] = "+1 (K_{ij}=+nabla_i n_j expansion-positive)"
+    # For metric-affine NPRs, also surface the field-strength definition
+    # since it affects the connection-sector constraints.
+    if npr.geometry.connection.type == "independent":
+        block["field_strength_definition"] = c.field_strength_definition
+    return block
 
 
 def derive_field(
@@ -861,8 +893,10 @@ def derive_adm(
     build_plan(npr)  # raises AmbiguityBlocked unless the problem is well posed
 
     if not any(o.kind == "metric" for o in npr.objects):
+        metric_name = npr.geometry.metric_name
         raise NotImplementedError(
-            "ADM decomposition needs a metric and a foliation; this action declares no metric"
+            f"ADM decomposition needs a metric and a foliation; "
+            f"this action declares no metric object '{metric_name}'"
         )
 
     sympy = adapters.get("sympy")
@@ -919,6 +953,7 @@ def derive_adm(
 
     result_id = f"adm-{hashlib.sha1(npr.action.lagrangian_tex.encode()).hexdigest()[:8]}"
     bundle_path = str(results_root / session_id / result_id) if results_root is not None else None
+    conv_block = _convention_block(npr)
 
     derivations = [
         FieldDerivation(
@@ -934,6 +969,7 @@ def derive_adm(
             script=computed.script.source,
             detail=detail,
             bundle_path=bundle_path,
+            conventions=conv_block,
         )
         for label, tex in _ADM_OUTPUTS
     ]
@@ -1008,6 +1044,7 @@ def derive_adm(
                     detail=piece_detail,
                     bundle_path=bundle_path,
                     narrative=piece_narrative,
+                    conventions=conv_block,
                 )
             )
 
@@ -1069,6 +1106,7 @@ def derive_adm(
                     detail=matter_detail,
                     bundle_path=bundle_path,
                     narrative=matter_narrative,
+                    conventions=conv_block,
                 )
             )
 

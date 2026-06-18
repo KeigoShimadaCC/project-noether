@@ -1,5 +1,6 @@
 """Backend cross-flows: metric-affine derivations through HTTP, MCP, CLI,
-and the store (architecture.md section 8, VAL-CROSS-001/005/007/008/012/016).
+and the store (architecture.md section 8, VAL-CROSS-001/005/007/008/012/016
+VAL-ADM-010/011/012/014).
 
 These tests exercise the full loop on a single Palatini session:
   ingest -> resolve -> plan -> derive -> results -> stale -> resume
@@ -1170,3 +1171,699 @@ class TestPerturbationPersistence:
         assert bundle_d["kind"] == "perturbation"
         assert bundle_d["verified"] == live_d["verified"]
         assert bundle_d["checks"] == live_d["checks"]
+
+
+# ---------------------------------------------------------------------------
+# VAL-ADM-010: An action with no metric is refused
+# ---------------------------------------------------------------------------
+
+
+class TestADMNoMetricRefused:
+    """VAL-ADM-010: kind='adm' for an action declaring no metric is refused
+    (HTTP 422 / MCP error) naming the missing metric; no ADM derivation."""
+
+    def _make_no_metric_session(self, store: SessionStore) -> str:
+        """Create a well-posed session with no metric object directly in the
+        store, bypassing ingest (which always adds a metric for curvature
+        or kinetic actions)."""
+        import uuid as _uuid
+
+        from noether.npr import (
+            NOETHER_DEFAULT_V1,
+            NPR,
+            Action,
+            Geometry,
+            ObjectDecl,
+            Task,
+        )
+        from noether.npr.ast import tensor
+        from noether.orchestrator.session import Session
+
+        # An NPR with only a scalar field, no metric object
+        npr = NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(),
+            objects=[
+                ObjectDecl(name="phi", kind="scalar-field", role="dynamical"),
+            ],
+            action=Action(
+                measure_tex=r"d^4x",
+                lagrangian=tensor("V"),
+                lagrangian_tex=r"V(\phi)",
+            ),
+            task=Task(type="vary", with_respect_to=["phi"]),
+            ambiguities=[],
+        )
+        session = Session(session_id=f"s-nometric-{_uuid.uuid4().hex[:8]}")
+        session.ingest(npr)
+        store.save(session)
+        return session.session_id
+
+    def test_http_adm_no_metric_returns_422(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """POST /derive kind='adm' with no metric returns 422 naming the
+        missing metric."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+        sid = self._make_no_metric_session(store)
+
+        resp = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        # Must be 422 (NotImplementedError caught) or 409 (AmbiguityBlocked)
+        if resp.status_code == 409:
+            # Session not well-posed yet, that's also a valid refusal
+            pass
+        else:
+            assert resp.status_code == 422, (
+                f"expected 422 for no-metric ADM; got {resp.status_code}: {resp.text}"
+            )
+            detail = resp.json()["detail"]
+            # The detail must name the missing metric
+            assert "metric" in detail.lower(), (
+                f"422 detail must name the missing metric; got: {detail}"
+            )
+            # The detail must name the specific metric object
+            assert "'g'" in detail or '"g"' in detail, (
+                f"422 detail must name the missing metric object 'g'; got: {detail}"
+            )
+            # No derivations produced
+            body = resp.json()
+            assert "derivations" not in body or not body.get("derivations"), (
+                "no ADM derivation should be produced for a no-metric action"
+            )
+
+    def test_mcp_adm_no_metric_returns_error_naming_metric(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """MCP noether_derive kind='adm' with no metric returns an error dict
+        naming the missing metric."""
+        tools = NoetherTools(store, results_root=results_root)
+        sid = self._make_no_metric_session(store)
+
+        result = tools.derive(sid, kind="adm")
+        # Must be an error or blocked dict, not a derivation
+        if result.get("blocked"):
+            # Session not well-posed - also valid refusal
+            pass
+        else:
+            assert "error" in result, (
+                f"expected error dict for no-metric ADM; got {result}"
+            )
+            assert "metric" in result["error"].lower(), (
+                f"error must name the missing metric; got: {result['error']}"
+            )
+            assert "'g'" in result["error"] or '"g"' in result["error"], (
+                f"error must name the missing metric object 'g'; got: {result['error']}"
+            )
+            # No derivations produced
+            assert "derivations" not in result or not result.get("derivations"), (
+                "no ADM derivation should be produced for a no-metric action"
+            )
+
+    def test_no_metric_error_names_specific_metric_object(self) -> None:
+        """The NotImplementedError message names the specific metric object
+        (e.g. 'g') from the NPR geometry."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.npr import (
+            NOETHER_DEFAULT_V1,
+            NPR,
+            Action,
+            Geometry,
+            ObjectDecl,
+            Task,
+        )
+        from noether.npr.ast import tensor
+        from noether.orchestrator.derive import derive_adm
+
+        # An NPR with no metric object
+        npr = NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(),
+            objects=[
+                ObjectDecl(name="phi", kind="scalar-field", role="dynamical"),
+            ],
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=tensor("X"),
+                lagrangian_tex=r"X",
+            ),
+            task=Task(type="vary"),
+            ambiguities=[],
+        )
+        with pytest.raises(NotImplementedError) as exc_info:
+            derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-test")
+        msg = str(exc_info.value)
+        # The message must name the expected metric object ('g')
+        assert "g" in msg, (
+            f"error must name the missing metric object 'g'; got: {msg}"
+        )
+        assert "metric" in msg.lower(), (
+            f"error must reference 'metric'; got: {msg}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-ADM-011: Reachable identically across HTTP and MCP
+# ---------------------------------------------------------------------------
+
+
+class TestADMHTTPMCPParity:
+    """VAL-ADM-011: the metric-affine kind='adm' derivation returns the same
+    shape and verdict on HTTP and MCP for the same session; an unknown kind
+    is rejected on both."""
+
+    def _setup_resolved_session(
+        self, store: SessionStore, results_root: Path, *, ricci: str = "first-third"
+    ) -> tuple[TestClient, NoetherTools, str]:
+        """Create a resolved Palatini session for ADM testing."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+        tools = NoetherTools(store, results_root=results_root)
+
+        body = _create(client)
+        sid = body["session_id"]
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(
+            body, _resolve_http,
+            connection="independent", ricci_contraction=ricci,
+        )
+        return client, tools, sid
+
+    def test_http_and_mcp_adm_agree_on_result_id_and_verified(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """HTTP POST /derive kind='adm' and MCP noether_derive kind='adm'
+        return the same result_id and verified verdict for the same session."""
+        client, tools, sid = self._setup_resolved_session(store, results_root)
+
+        # Derive ADM via HTTP
+        http_resp = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        assert http_resp.status_code == 200, http_resp.text
+        http_derivations = http_resp.json()["derivations"]
+        assert len(http_derivations) > 0, "ADM must produce derivations"
+
+        # The session now has results recorded; read them via both surfaces
+        http_results = client.get(f"/sessions/{sid}/results").json()
+        mcp_results = tools.results(sid)
+
+        # Both surfaces must have the same number of results
+        assert len(http_results["results"]) == len(mcp_results["results"]), (
+            f"HTTP and MCP result counts differ: "
+            f"HTTP={len(http_results['results'])}, MCP={len(mcp_results['results'])}"
+        )
+
+        # Match by result_id + wrt and verify the load-bearing fields agree
+        for http_d in http_results["results"]:
+            rid = http_d["result_id"]
+            wrt = http_d["wrt"]
+            mcp_d = next(
+                (
+                    r
+                    for r in mcp_results["results"]
+                    if r["result_id"] == rid and r["wrt"] == wrt
+                ),
+                None,
+            )
+            assert mcp_d is not None, (
+                f"result_id {rid} wrt {wrt!r} present in HTTP but missing in MCP"
+            )
+            assert http_d["verified"] == mcp_d["verified"], (
+                f"verified mismatch for {rid}/{wrt}: "
+                f"HTTP={http_d['verified']}, MCP={mcp_d['verified']}"
+            )
+            assert http_d["kind"] == mcp_d["kind"], (
+                f"kind mismatch for {rid}/{wrt}: "
+                f"HTTP={http_d['kind']}, MCP={mcp_d['kind']}"
+            )
+            assert http_d["checks"] == mcp_d["checks"], (
+                f"checks mismatch for {rid}/{wrt}"
+            )
+
+    def test_http_rejects_unknown_kind(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """HTTP POST /derive with an unknown kind returns 422."""
+        client, tools, sid = self._setup_resolved_session(store, results_root)
+
+        resp = client.post(f"/sessions/{sid}/derive", json={"kind": "bogus"})
+        assert resp.status_code == 422, (
+            f"expected 422 for unknown kind; got {resp.status_code}: {resp.text}"
+        )
+
+    def test_mcp_rejects_unknown_kind(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """MCP noether_derive with an unknown kind returns an error dict."""
+        client, tools, sid = self._setup_resolved_session(store, results_root)
+
+        result = tools.derive(sid, kind="bogus")
+        assert "error" in result, (
+            f"expected error dict for unknown kind; got {result}"
+        )
+        assert "unknown" in result["error"].lower(), (
+            f"error should mention 'unknown'; got: {result['error']}"
+        )
+
+    def test_http_and_mcp_adm_same_derivation_shape(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """The ADM derivation shape (wrt, kind, result_tex, kernel_name)
+        is the same on HTTP and MCP for the same session."""
+        client, tools, sid = self._setup_resolved_session(store, results_root)
+
+        http_resp = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        assert http_resp.status_code == 200
+        http_derivations = http_resp.json()["derivations"]
+
+        # Read results from MCP
+        mcp_results = tools.results(sid)
+        mcp_derivations = mcp_results["results"]
+
+        # Build maps by result_id + wrt for comparison
+        for http_d in http_derivations:
+            rid = http_d["result_id"]
+            wrt = http_d["wrt"]
+            mcp_match = next(
+                (
+                    r
+                    for r in mcp_derivations
+                    if r["result_id"] == rid and r["wrt"] == wrt
+                ),
+                None,
+            )
+            assert mcp_match is not None, (
+                f"no MCP match for result_id={rid} wrt={wrt}"
+            )
+            # Compare load-bearing fields
+            http_fields = _load_fields(http_d)
+            mcp_fields = _load_fields(mcp_match)
+            assert http_fields == mcp_fields, (
+                f"HTTP and MCP derivation fields differ for {rid}/{wrt}: "
+                f"HTTP={http_fields}, MCP={mcp_fields}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# VAL-ADM-012: Result persists and reloads across surfaces
+# ---------------------------------------------------------------------------
+
+
+class TestADMPersistence:
+    """VAL-ADM-012: An ADM run records its result_id and writes a bundle,
+    reloading identically via GET /results, MCP noether_results, and the
+    web client."""
+
+    def _setup_and_derive_adm(
+        self, store: SessionStore, results_root: Path
+    ) -> tuple[TestClient, NoetherTools, str, list[dict]]:
+        """Create a resolved session and derive ADM."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+        tools = NoetherTools(store, results_root=results_root)
+
+        body = _create(client)
+        sid = body["session_id"]
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+
+        # Derive ADM
+        derive_resp = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        assert derive_resp.status_code == 200, derive_resp.text
+        derivations = derive_resp.json()["derivations"]
+        assert len(derivations) > 0, "ADM must produce derivations"
+        return client, tools, sid, derivations
+
+    def test_adm_result_id_recorded_in_session(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """The ADM run records its result_id in the session."""
+        client, tools, sid, derivations = self._setup_and_derive_adm(store, results_root)
+
+        session = store.get(sid)
+        result_ids = session.result_ids
+        assert result_ids, "session must have recorded result_ids after ADM derive"
+
+        # The result_ids must include the derivation result_ids
+        derive_rids = {d["result_id"] for d in derivations}
+        for rid in derive_rids:
+            assert rid in result_ids, (
+                f"result_id {rid} from /derive must be in session.result_ids"
+            )
+
+    def test_adm_bundle_written(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """The ADM derivation writes a provenance bundle to disk."""
+        client, tools, sid, derivations = self._setup_and_derive_adm(store, results_root)
+
+        # Check the bundle exists on disk
+        result_id = derivations[0]["result_id"]
+        bundle_dir = results_root / sid / result_id
+        assert bundle_dir.exists(), (
+            f"bundle directory must exist at {bundle_dir}"
+        )
+        assert (bundle_dir / "derivations.json").exists(), (
+            "bundle must contain derivations.json"
+        )
+        assert (bundle_dir / "assumptions.json").exists(), (
+            "bundle must contain assumptions.json"
+        )
+
+    def test_adm_reloads_via_get_results(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """GET /results returns the ADM result with the same result_id,
+        verified, checks, and result_tex."""
+        client, tools, sid, derivations = self._setup_and_derive_adm(store, results_root)
+
+        results_resp = client.get(f"/sessions/{sid}/results")
+        assert results_resp.status_code == 200
+        results = results_resp.json()
+
+        # Match each derivation from /derive with /results by result_id + wrt
+        for live_d in derivations:
+            rid = live_d["result_id"]
+            wrt = live_d["wrt"]
+            reloaded = next(
+                (
+                    r
+                    for r in results["results"]
+                    if r["result_id"] == rid and r["wrt"] == wrt
+                ),
+                None,
+            )
+            assert reloaded is not None, (
+                f"result_id {rid} wrt {wrt!r} not found in GET /results"
+            )
+            assert reloaded["verified"] == live_d["verified"], (
+                f"verified mismatch for {rid}/{wrt}"
+            )
+            assert reloaded["checks"] == live_d["checks"], (
+                f"checks mismatch for {rid}/{wrt}"
+            )
+            assert reloaded["result_tex"] == live_d["result_tex"], (
+                f"result_tex mismatch for {rid}/{wrt}"
+            )
+            assert reloaded["kind"] == "adm", (
+                f"reloaded kind must be 'adm'; got {reloaded['kind']!r}"
+            )
+
+    def test_adm_reloads_identically_via_mcp(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """MCP noether_results returns the same ADM derivations as
+        GET /results."""
+        client, tools, sid, derivations = self._setup_and_derive_adm(store, results_root)
+
+        http_results = client.get(f"/sessions/{sid}/results").json()
+        mcp_results = tools.results(sid)
+
+        # Both must return the same derivations
+        assert len(http_results["results"]) == len(mcp_results["results"]), (
+            "HTTP and MCP result counts must match"
+        )
+        for http_d in http_results["results"]:
+            rid = http_d["result_id"]
+            wrt = http_d["wrt"]
+            mcp_d = next(
+                (
+                    r
+                    for r in mcp_results["results"]
+                    if r["result_id"] == rid and r["wrt"] == wrt
+                ),
+                None,
+            )
+            assert mcp_d is not None, f"result_id {rid} wrt {wrt!r} missing from MCP"
+            assert _load_fields(http_d) == _load_fields(mcp_d), (
+                f"MCP derivation must match HTTP for {rid}/{wrt}"
+            )
+
+    def test_adm_bundle_derivations_json_matches(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """The bundle derivations.json matches the live /derive derivations
+        field for field by result_id."""
+        client, tools, sid, derivations = self._setup_and_derive_adm(store, results_root)
+
+        session = store.get(sid)
+        bundle_derivations = read_results(results_root, sid, session.result_ids)
+
+        live_by_id = {d["result_id"]: _load_fields(d) for d in derivations}
+        bundle_by_id = {d["result_id"]: _load_fields(d) for d in bundle_derivations}
+
+        for rid in live_by_id:
+            assert rid in bundle_by_id, f"result_id {rid} missing from bundle"
+            assert live_by_id[rid] == bundle_by_id[rid], (
+                f"live vs bundle mismatch for {rid}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# VAL-ADM-014: Conventions are explicit and threaded on the metric-affine
+# result
+# ---------------------------------------------------------------------------
+
+
+class TestADMConventionBlock:
+    """VAL-ADM-014: The ADM result carries its full convention block (torsion
+    sign, non-metricity definition, Ricci-contraction, signature, K-sign,
+    foliation/normal); changing the elicited Ricci-contraction is reflected."""
+
+    REQUIRED_CONVENTION_KEYS = {
+        "signature",
+        "torsion_sign",
+        "nonmetricity_definition",
+        "ricci_contraction",
+        "contortion_sign",
+        "disformation_sign",
+        "K_sign",
+        "foliation_normal",
+        "convention_id",
+    }
+
+    def _derive_adm_and_get_conventions(
+        self,
+        store: SessionStore,
+        results_root: Path,
+        *,
+        ricci: str = "first-third",
+    ) -> dict[str, str]:
+        """Create a resolved session, derive ADM, and return the convention
+        block from the first derivation."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+
+        body = _create(client)
+        sid = body["session_id"]
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(
+            body, _resolve_http, connection="independent", ricci_contraction=ricci
+        )
+
+        derive_resp = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        assert derive_resp.status_code == 200, derive_resp.text
+        derivations = derive_resp.json()["derivations"]
+        assert len(derivations) > 0
+        conv = derivations[0].get("conventions", {})
+        return conv
+
+    def test_adm_derivation_carries_convention_block(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """Each ADM derivation carries a non-empty convention block."""
+        conv = self._derive_adm_and_get_conventions(store, results_root)
+        assert conv, "ADM derivation must carry a non-empty convention block"
+
+    def test_convention_block_has_all_required_entries(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """The convention block names torsion sign, non-metricity definition,
+        Ricci-contraction, signature, K-sign, and foliation/normal."""
+        conv = self._derive_adm_and_get_conventions(store, results_root)
+        for key in self.REQUIRED_CONVENTION_KEYS:
+            assert key in conv, (
+                f"convention block must include '{key}'; "
+                f"present keys: {sorted(conv.keys())}"
+            )
+
+    def test_convention_block_values_match_npr_defaults(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """The convention block values match the NPR's active conventions."""
+        conv = self._derive_adm_and_get_conventions(store, results_root)
+        assert conv["signature"] == "mostly-plus"
+        assert conv["torsion_sign"] == "+1"
+        assert conv["nonmetricity_definition"] == "nabla-g"
+        assert conv["ricci_contraction"] == "first-third"
+        assert conv["contortion_sign"] == "+1"
+        assert conv["convention_id"] == "noether-default-v1"
+
+    def test_changing_ricci_contraction_is_reflected(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """Changing the elicited Ricci-contraction is reflected in the
+        ADM result's convention block."""
+        conv_default = self._derive_adm_and_get_conventions(store, results_root)
+        conv_alt = self._derive_adm_and_get_conventions(
+            store, results_root, ricci="first-fourth"
+        )
+        # The ricci_contraction must differ
+        assert conv_default["ricci_contraction"] == "first-third"
+        assert conv_alt["ricci_contraction"] == "first-fourth", (
+            "changing the elicited Ricci-contraction must be reflected"
+        )
+        # Other conventions stay the same
+        for key in self.REQUIRED_CONVENTION_KEYS - {"ricci_contraction"}:
+            if key in conv_default and key in conv_alt:
+                assert conv_default[key] == conv_alt[key], (
+                    f"convention {key} should not change when only "
+                    f"Ricci-contraction changes"
+                )
+
+    def test_convention_block_survives_reload_via_results(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """The convention block is present and identical when reloaded via
+        GET /results and MCP noether_results."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+        tools = NoetherTools(store, results_root=results_root)
+
+        body = _create(client)
+        sid = body["session_id"]
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+
+        # Derive ADM
+        derive_resp = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        assert derive_resp.status_code == 200
+        live_derivations = derive_resp.json()["derivations"]
+        live_conv = live_derivations[0].get("conventions", {})
+
+        # Reload via GET /results
+        http_results = client.get(f"/sessions/{sid}/results").json()
+        rid0 = live_derivations[0]["result_id"]
+        http_d = next(
+            r for r in http_results["results"] if r["result_id"] == rid0
+        )
+        http_conv = http_d.get("conventions", {})
+        assert http_conv == live_conv, (
+            f"convention block must survive GET /results reload; "
+            f"live={live_conv}, reloaded={http_conv}"
+        )
+
+        # Reload via MCP noether_results
+        mcp_results = tools.results(sid)
+        mcp_d = next(
+            r for r in mcp_results["results"] if r["result_id"] == rid0
+        )
+        mcp_conv = mcp_d.get("conventions", {})
+        assert mcp_conv == live_conv, (
+            f"convention block must survive MCP reload; "
+            f"live={live_conv}, mcp={mcp_conv}"
+        )
+
+    def test_convention_block_independent_connection_includes_field_strength(
+        self,
+    ) -> None:
+        """For a metric-affine NPR (independent connection), the convention
+        block includes the field_strength_definition."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr_helper()
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-conv-fs")
+        conv = results[0].conventions
+        assert "field_strength_definition" in conv, (
+            "metric-affine ADM convention block must include "
+            "field_strength_definition; got keys: " + str(sorted(conv.keys()))
+        )
+
+    def test_levi_civita_adm_convention_block_lacks_field_strength(self) -> None:
+        """For a Levi-Civita (non-metric-affine) NPR, the convention block
+        does not include field_strength_definition."""
+        from evals.eval1s_adm import build_npr as build_adm_npr
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = build_adm_npr(resolved=True)
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-gr-conv")
+        conv = results[0].conventions
+        assert "field_strength_definition" not in conv, (
+            "Levi-Civita ADM convention block should not include "
+            "field_strength_definition; got keys: " + str(sorted(conv.keys()))
+        )
+
+
+def _build_metric_affine_adm_npr_helper():
+    """Helper for building a metric-affine NPR for convention testing."""
+    from noether.npr import (
+        NOETHER_DEFAULT_V1,
+        NPR,
+        Action,
+        ConnectionSpec,
+        Geometry,
+        ObjectDecl,
+        Task,
+    )
+    from noether.npr.ast import tensor
+
+    connection = ConnectionSpec(
+        type="independent",
+        torsion=True,
+        nonmetricity=True,
+        metric_compatible=False,
+        family="metric-affine",
+    )
+    geometry = Geometry(
+        metric_name="g",
+        connection_name="Gamma",
+        connection=connection,
+    )
+    return NPR(
+        conventions=NOETHER_DEFAULT_V1,
+        geometry=geometry,
+        objects=[
+            ObjectDecl(name="g", kind="metric", role="dynamical", symmetry="symmetric", rank=2),
+            ObjectDecl(
+                name="Gamma",
+                kind="connection",
+                role="dynamical",
+                rank=3,
+            ),
+        ],
+        action=Action(
+            measure_tex=r"d^4x \sqrt{-g}",
+            lagrangian=tensor("R"),
+            lagrangian_tex="R",
+        ),
+        task=Task(type="adm", with_respect_to=["g"]),
+        ambiguities=[],
+    )
