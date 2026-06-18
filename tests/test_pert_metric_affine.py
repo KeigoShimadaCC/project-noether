@@ -817,3 +817,117 @@ class TestMetricAffinePerturbationSymPyCrossCheck:
                 f"Ricci tensor is symmetric on seed {seed}; "
                 "the connection may be symmetric (LC-like)"
             )
+
+
+# ---------------------------------------------------------------------------
+# VAL-PERT-011: CLI eval gate — metric-affine perturbation eval runs end to
+# end as a registered CLI eval subcommand
+# ---------------------------------------------------------------------------
+
+
+class TestCLIPerturbationEval:
+    """VAL-PERT-011: the metric-affine perturbation eval runs end to end
+    as a registered CLI eval subcommand, exercising the same path and
+    checks. The eval must print the perturbation result with its
+    residue_zero and linearized_eom_match verdict."""
+
+    def test_eval4ma_is_registered(self):
+        """eval4ma must be a registered eval key."""
+        from evals.registry import _BUILDERS
+
+        assert "eval4ma" in _BUILDERS, (
+            f"eval4ma must be registered in the eval registry; "
+            f"available: {sorted(_BUILDERS.keys())}"
+        )
+
+    def test_eval4ma_spec_has_perturbation_template(self):
+        """The eval4ma spec must reference the pert_metric_affine_quadratic
+        template."""
+        from evals.registry import get_spec
+
+        spec = get_spec("eval4ma")
+        assert spec.cadabra_runs, "eval4ma must have cadabra_runs"
+        template_names = [run.template for run in spec.cadabra_runs]
+        assert "pert_metric_affine_quadratic" in template_names, (
+            f"eval4ma must use pert_metric_affine_quadratic; got {template_names}"
+        )
+        # The required checks must include both residue_zero and
+        # linearized_eom_match
+        for run in spec.cadabra_runs:
+            if run.template == "pert_metric_affine_quadratic":
+                assert "residue_zero" in run.required_true, (
+                    f"required_true must include residue_zero; got {run.required_true}"
+                )
+                assert "linearized_eom_match" in run.required_true, (
+                    f"required_true must include linearized_eom_match; "
+                    f"got {run.required_true}"
+                )
+
+    def test_eval4ma_is_in_cli_eval_keys(self):
+        """eval4ma must be in the CLI's EVAL_KEYS so it is invokable as
+        `noether eval4ma`."""
+        from noether.cli.main import EVAL_KEYS
+
+        assert "eval4ma" in EVAL_KEYS, (
+            f"eval4ma must be in EVAL_KEYS; got {EVAL_KEYS}"
+        )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_eval4ma_cli_runs_end_to_end(self, tmp_path):
+        """The CLI eval4ma subcommand runs end to end, prints the
+        perturbation result with its residue_zero and
+        linearized_eom_match verdict, and exits 0."""
+        import subprocess
+        import sys
+
+        results_dir = str(tmp_path / "results")
+        venv_python = sys.executable
+        result = subprocess.run(
+            [venv_python, "-m", "noether.cli.main", "eval4ma", "--results", results_dir],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        # The eval must print residue_zero and linearized_eom_match
+        output = result.stdout + result.stderr
+        assert "residue_zero" in output, (
+            f"eval4ma output must mention residue_zero; stdout={result.stdout[:500]}"
+        )
+        assert "linearized_eom_match" in output, (
+            f"eval4ma output must mention linearized_eom_match; "
+            f"stdout={result.stdout[:500]}"
+        )
+        # The eval must exit 0 (both checks True)
+        assert result.returncode == 0, (
+            f"eval4ma must exit 0; got {result.returncode}; "
+            f"stderr={result.stderr[:500]}"
+        )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_eval4ma_verifies_both_checks(self, tmp_path):
+        """The CLI eval4ma reports both residue_zero=True and
+        linearized_eom_match=True when the kernel passes."""
+        import subprocess
+        import sys
+
+        results_dir = str(tmp_path / "results")
+        venv_python = sys.executable
+        result = subprocess.run(
+            [venv_python, "-m", "noether.cli.main", "eval4ma", "--results", results_dir],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        output = result.stdout
+        # The output should show PASS for both checks
+        assert "residue_zero=True" in output, (
+            f"residue_zero should be True; output excerpt: {output[:800]}"
+        )
+        assert "linearized_eom_match=True" in output, (
+            f"linearized_eom_match should be True; output excerpt: {output[:800]}"
+        )
+        assert "Verified: True" in output, (
+            f"eval4ma should report Verified: True; output excerpt: {output[:800]}"
+        )

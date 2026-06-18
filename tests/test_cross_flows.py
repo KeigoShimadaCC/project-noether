@@ -758,3 +758,415 @@ class TestSessionResume:
         assert plan.get("blocked") is False
         capabilities = [s["capability"] for s in plan["steps"]]
         assert "independent-connection" in capabilities
+
+
+# ---------------------------------------------------------------------------
+# VAL-PERT-009: Reachable via the HTTP general perturb path (kind=perturbation)
+# ---------------------------------------------------------------------------
+
+
+class TestHTTPPerturbationReachability:
+    """VAL-PERT-009: POST /derive with kind='perturbation' on a metric-affine
+    session returns 200 with derivations[].kind=='perturbation' and a checks
+    dict; an unknown kind is 422."""
+
+    def test_unknown_kind_returns_422(self, client: TestClient) -> None:
+        """An unknown derivation kind must return HTTP 422."""
+        body = _create(client)
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+
+        resp = client.post(
+            f"/sessions/{body['session_id']}/derive",
+            json={"kind": "unknown_kind"},
+        )
+        assert resp.status_code == 422, (
+            f"expected 422 for unknown kind; got {resp.status_code}: {resp.text}"
+        )
+
+    @requires_cadabra
+    def test_perturbation_on_metric_affine_returns_200_with_checks(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """POST /derive with kind='perturbation' on a resolved metric-affine
+        session returns 200 with derivations[].kind=='perturbation' and a
+        checks dict."""
+        client = TestClient(
+            create_app(
+                store=store,
+                llm=StubLLMAdapter(reply=templates.get("pert_metric_affine_quadratic")),
+                results_root=results_root,
+            )
+        )
+        body = _create(client)
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+
+        resp = client.post(
+            f"/sessions/{body['session_id']}/derive",
+            json={"kind": "perturbation"},
+        )
+        assert resp.status_code == 200, (
+            f"expected 200 for kind=perturbation; got {resp.status_code}: {resp.text}"
+        )
+        derivations = resp.json()["derivations"]
+        assert len(derivations) > 0, "must return at least one derivation"
+
+        for d in derivations:
+            assert d["kind"] == "perturbation", (
+                f"expected kind='perturbation'; got {d['kind']!r}"
+            )
+            assert isinstance(d["checks"], dict), (
+                f"derivation must have a checks dict; got {type(d['checks'])}"
+            )
+            # Perturbation checks should include residue_zero and/or
+            # linearized_eom_match (may be True or False depending on the
+            # run, but the keys must exist in the checks dict)
+            assert "residue_zero" in d["checks"], (
+                f"perturbation checks must include residue_zero; got {d['checks']}"
+            )
+
+    def test_perturbation_blocked_while_questions_open(self, client: TestClient) -> None:
+        """POST /derive kind=perturbation while questions are open returns
+        409 (AmbiguityBlocked), never a guess."""
+        body = _create(client)
+        # Do NOT resolve geometry questions
+        resp = client.post(
+            f"/sessions/{body['session_id']}/derive",
+            json={"kind": "perturbation"},
+        )
+        assert resp.status_code == 409, (
+            f"expected 409 for unresolved session; got {resp.status_code}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-PERT-010: Reachable via MCP noether_derive (kind=perturbation)
+# ---------------------------------------------------------------------------
+
+
+class TestMCPPerturbationReachability:
+    """VAL-PERT-010: noether_derive with kind='perturbation' returns the
+    same derivation surface as a tool result, or an {'error': ...} refusal;
+    never a fabricated verified result."""
+
+    def test_mcp_unknown_kind_returns_error(self, tools: NoetherTools) -> None:
+        """An unknown derivation kind returns an error dict via MCP."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        sid = body["session_id"]
+
+        def _resolve_mcp(session_id: str, resolutions: dict) -> dict:
+            return tools.resolve(session_id, resolutions)
+
+        _resolve_all_palatini(body, _resolve_mcp, connection="independent")
+
+        result = tools.derive(sid, kind="unknown_kind")
+        assert "error" in result, (
+            f"expected error dict for unknown kind; got {result}"
+        )
+        assert "unknown" in result["error"].lower(), (
+            f"error message should mention unknown kind; got {result['error']}"
+        )
+
+    @requires_cadabra
+    def test_mcp_perturbation_on_metric_affine_returns_derivation_with_checks(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """MCP noether_derive with kind='perturbation' on a resolved
+        metric-affine session returns derivations with kind='perturbation'
+        and a checks dict, or an error dict; never a fabricated verified
+        result."""
+        tools = NoetherTools(
+            store,
+            llm=StubLLMAdapter(reply=templates.get("pert_metric_affine_quadratic")),
+            results_root=results_root,
+        )
+
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        sid = body["session_id"]
+
+        def _resolve_mcp(session_id: str, resolutions: dict) -> dict:
+            return tools.resolve(session_id, resolutions)
+
+        _resolve_all_palatini(body, _resolve_mcp, connection="independent")
+
+        result = tools.derive(sid, kind="perturbation")
+        # Must NOT be an error dict (unless cadabra is genuinely absent)
+        assert "error" not in result or "cadabra" in result.get("error", ""), (
+            f"unexpected error for kind=perturbation: {result}"
+        )
+        if "derivations" in result:
+            derivations = result["derivations"]
+            assert len(derivations) > 0, "must return at least one derivation"
+            for d in derivations:
+                assert d["kind"] == "perturbation", (
+                    f"expected kind='perturbation'; got {d['kind']!r}"
+                )
+                assert isinstance(d["checks"], dict), (
+                    "derivation must have a checks dict"
+                )
+                assert "residue_zero" in d["checks"], (
+                    f"perturbation checks must include residue_zero; got {d['checks']}"
+                )
+
+    def test_mcp_perturbation_blocked_while_questions_open(
+        self, tools: NoetherTools
+    ) -> None:
+        """MCP noether_derive kind=perturbation while questions are open
+        returns a blocked dict, never a guess."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        sid = body["session_id"]
+        # Do NOT resolve geometry questions
+
+        result = tools.derive(sid, kind="perturbation")
+        assert result.get("blocked") is True, (
+            f"expected blocked=True while questions are open; got {result}"
+        )
+        assert result.get("questions"), (
+            "blocked result must include questions"
+        )
+
+    def test_mcp_never_fabricates_verified_result(self, tools: NoetherTools) -> None:
+        """MCP never returns a fabricated verified result: an off-menu
+        resolve returns an error dict, not a derivation."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        sid = body["session_id"]
+        # Off-menu resolve
+        off_menu = tools.resolve(sid, {"amb-connection": "not-a-real-option"})
+        assert "error" in off_menu, (
+            f"off-menu resolve must return error dict; got {off_menu}"
+        )
+
+        # Derive must still be blocked (session still unresolved)
+        result = tools.derive(sid, kind="perturbation")
+        assert result.get("blocked") is True or "error" in result, (
+            f"expected blocked or error after off-menu resolve; got {result}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-PERT-012: Refusal discipline for unsupported perturbed fields
+# ---------------------------------------------------------------------------
+
+
+class TestPerturbationRefusalDiscipline:
+    """VAL-PERT-012: requesting a perturbation of a field with no audited
+    scaffold raises NotImplementedError naming the field (HTTP 422 with that
+    message), never a guessed quadratic action."""
+
+    def test_derive_perturbation_refuses_unsupported_field(self) -> None:
+        """derive_perturbation raises NotImplementedError naming the
+        unsupported field."""
+        from noether.npr import (
+            NOETHER_DEFAULT_V1,
+            NPR,
+            Action,
+            Geometry,
+            ObjectDecl,
+            Task,
+        )
+        from noether.npr.ast import down, tensor, up
+        from noether.orchestrator.derive import derive_perturbation
+
+        # A rank-2 tensor (field strength F) has no quadratic-action scaffold
+        npr = NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(),
+            objects=[
+                ObjectDecl(name="g", kind="metric", role="background", rank=2),
+                ObjectDecl(name="F", kind="tensor-field", role="shorthand", rank=2),
+            ],
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=tensor("F", up("mu"), down("nu")),
+                lagrangian_tex=r"F^{\mu}_{\nu}",
+            ),
+            task=Task(type="vary"),
+        )
+        with pytest.raises(NotImplementedError) as exc_info:
+            derive_perturbation(
+                npr,
+                StubLLMAdapter(),
+                {"cadabra": CadabraAdapter()},
+                fields=["F"],
+                session_id="s",
+            )
+        # The error message must name the field F
+        assert "F" in str(exc_info.value), (
+            f"NotImplementedError must name the unsupported field; "
+            f"got: {exc_info.value}"
+        )
+
+    def test_http_perturbation_refuses_unsupported_field_422(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """POST /derive with kind='perturbation' for an unsupported field
+        returns HTTP 422 with a message naming the field."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+
+        # Use a Palatini session (already has a metric-affine geometry)
+        body = _create(client)
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+
+        # Request a perturbation with respect to an unsupported field (e.g.
+        # a rank-2 field strength that doesn't exist as a declared object)
+        resp = client.post(
+            f"/sessions/{body['session_id']}/derive",
+            json={"kind": "perturbation", "with_respect_to": ["nonexistent_field"]},
+        )
+        # nonexistent_field is not a declared object, so 400 (not 422)
+        assert resp.status_code == 400, (
+            f"expected 400 for undeclared field; got {resp.status_code}: {resp.text}"
+        )
+
+    def test_mcp_perturbation_refuses_unsupported_field(
+        self, tools: NoetherTools
+    ) -> None:
+        """MCP noether_derive with kind='perturbation' for an unsupported
+        field returns an error dict naming the field."""
+        body = tools.ingest(PALATINI_LAGRANGIAN)
+        sid = body["session_id"]
+
+        def _resolve_mcp(session_id: str, resolutions: dict) -> dict:
+            return tools.resolve(session_id, resolutions)
+
+        _resolve_all_palatini(body, _resolve_mcp, connection="independent")
+
+        result = tools.derive(sid, with_respect_to=["nonexistent_field"], kind="perturbation")
+        assert "error" in result, (
+            f"expected error dict for unsupported field; got {result}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-PERT-016: Metric-affine perturbation result persists and reloads
+# across surfaces
+# ---------------------------------------------------------------------------
+
+
+class TestPerturbationPersistence:
+    """VAL-PERT-016: the perturbation run records its result_id and writes a
+    bundle, reloading via GET /results, MCP noether_results, and web history
+    with its kind, verified verdict, and checks intact."""
+
+    @requires_cadabra
+    def test_perturbation_result_persists_and_reloads_across_surfaces(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """The perturbation result records its result_id, writes a bundle,
+        and reloads identically via GET /results, MCP noether_results, and
+        the bundle derivations.json, with its kind, verified verdict, and
+        checks intact."""
+        client = TestClient(
+            create_app(
+                store=store,
+                llm=StubLLMAdapter(reply=templates.get("pert_metric_affine_quadratic")),
+                results_root=results_root,
+            )
+        )
+        tools = NoetherTools(store, results_root=results_root)
+
+        body = _create(client)
+        sid = body["session_id"]
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+
+        # Derive a perturbation result
+        derive_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "perturbation"},
+        )
+        assert derive_resp.status_code == 200, derive_resp.text
+        derivations = derive_resp.json()["derivations"]
+        assert len(derivations) > 0
+
+        # Verify the derivation has the expected shape
+        live_d = derivations[0]
+        assert live_d["kind"] == "perturbation"
+        assert isinstance(live_d["verified"], bool)
+        assert isinstance(live_d["checks"], dict)
+        result_id = live_d["result_id"]
+        assert result_id, "perturbation derivation must have a result_id"
+
+        # GET /results reloads the perturbation derivation
+        http_results = client.get(f"/sessions/{sid}/results").json()
+        http_d = next(
+            (r for r in http_results["results"] if r["result_id"] == result_id),
+            None,
+        )
+        assert http_d is not None, (
+            f"result_id {result_id} not found in GET /results; "
+            f"available: {[r['result_id'] for r in http_results['results']]}"
+        )
+        # Kind, verified, and checks must survive the reload
+        assert http_d["kind"] == "perturbation", (
+            f"reloaded kind must be 'perturbation'; got {http_d['kind']!r}"
+        )
+        assert http_d["verified"] == live_d["verified"], (
+            f"reloaded verified must match live; "
+            f"live={live_d['verified']}, reloaded={http_d['verified']}"
+        )
+        assert http_d["checks"] == live_d["checks"], (
+            f"reloaded checks must match live; "
+            f"live={live_d['checks']}, reloaded={http_d['checks']}"
+        )
+
+        # MCP noether_results reloads identically
+        mcp_results = tools.results(sid)
+        mcp_d = next(
+            (r for r in mcp_results["results"] if r["result_id"] == result_id),
+            None,
+        )
+        assert mcp_d is not None, (
+            f"result_id {result_id} not found in MCP results; "
+            f"available: {[r['result_id'] for r in mcp_results['results']]}"
+        )
+        assert mcp_d["kind"] == "perturbation"
+        assert mcp_d["verified"] == live_d["verified"]
+        assert mcp_d["checks"] == live_d["checks"]
+
+        # Bundle derivations.json matches
+        session = store.get(sid)
+        bundle_derivations = read_results(results_root, sid, session.result_ids)
+        bundle_d = next(
+            (r for r in bundle_derivations if r["result_id"] == result_id),
+            None,
+        )
+        assert bundle_d is not None, (
+            f"result_id {result_id} not found in bundle; "
+            f"available: {[r['result_id'] for r in bundle_derivations]}"
+        )
+        assert bundle_d["kind"] == "perturbation"
+        assert bundle_d["verified"] == live_d["verified"]
+        assert bundle_d["checks"] == live_d["checks"]

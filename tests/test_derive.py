@@ -674,3 +674,117 @@ class TestGatedEomDetail:
         assert result.verified is False
         assert result.detail
         assert "quadratic action" in result.detail
+
+
+# ---------------------------------------------------------------------------
+# VAL-PERT-012: NotImplementedError names the field (metric-affine context)
+# ---------------------------------------------------------------------------
+
+
+class TestPerturbationRefusalNamesField:
+    """VAL-PERT-012: derive_perturbation raises NotImplementedError naming
+    the unsupported field; the HTTP surface returns 422 with that message,
+    never a guessed quadratic action. The metric-affine context is tested
+    specifically because the independent connection opens additional field
+    kinds."""
+
+    def test_perturbation_refuses_rank2_field_naming_it(self):
+        """A rank-2 tensor (field strength) has no quadratic-action scaffold;
+        the refusal must name the field."""
+        from noether.npr import (
+            NOETHER_DEFAULT_V1,
+            NPR,
+            Action,
+            Geometry,
+            ObjectDecl,
+            Task,
+        )
+        from noether.npr.ast import down, tensor, up
+
+        npr = NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(),
+            objects=[
+                ObjectDecl(name="g", kind="metric", role="background", rank=2),
+                ObjectDecl(name="B", kind="tensor-field", role="dynamical", rank=2),
+            ],
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=tensor("B", up("mu"), down("nu")),
+                lagrangian_tex=r"B^{\mu}_{\nu}",
+            ),
+            task=Task(type="vary"),
+        )
+        with pytest.raises(NotImplementedError) as exc_info:
+            derive_perturbation(
+                npr,
+                StubLLMAdapter(),
+                {"cadabra": CadabraAdapter()},
+                fields=["B"],
+                session_id="s",
+            )
+        assert "B" in str(exc_info.value), (
+            f"NotImplementedError must name the field 'B'; "
+            f"got: {exc_info.value}"
+        )
+
+    def test_perturbation_refuses_connection_on_levi_civita_naming_it(self):
+        """On a Levi-Civita background, a connection field has no
+        perturbation scaffold; the refusal must name it."""
+        from noether.npr import (
+            NOETHER_DEFAULT_V1,
+            NPR,
+            Action,
+            ConnectionSpec,
+            Geometry,
+            ObjectDecl,
+            Task,
+        )
+        from noether.npr.ast import down, tensor
+
+        npr = NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(connection=ConnectionSpec(type="levi-civita")),
+            objects=[
+                ObjectDecl(name="g", kind="metric", role="background", rank=2),
+                ObjectDecl(name="Gamma", kind="connection", role="background", rank=3),
+            ],
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=tensor("R", down("mu"), down("nu")),
+                lagrangian_tex=r"R_{\mu\nu}",
+            ),
+            task=Task(type="vary"),
+        )
+        with pytest.raises(NotImplementedError) as exc_info:
+            derive_perturbation(
+                npr,
+                StubLLMAdapter(),
+                {"cadabra": CadabraAdapter()},
+                fields=["Gamma"],
+                session_id="s",
+            )
+        assert "Gamma" in str(exc_info.value), (
+            f"NotImplementedError must name the field 'Gamma'; "
+            f"got: {exc_info.value}"
+        )
+
+    def test_perturbation_includes_metric_on_metric_affine(self):
+        """On a metric-affine background, derive_perturbation includes the
+        metric perturbation which carries the connection fluctuation."""
+        from evals.eval2_palatini import build_npr as build_palatini_npr
+
+        npr = build_palatini_npr(resolved=True)
+        # When fields=None, derive_perturbation must auto-include the metric
+        results = derive_perturbation(
+            npr,
+            StubLLMAdapter(reply=templates.get("pert_metric_affine_quadratic")),
+            {"cadabra": CadabraAdapter()},
+            fields=["g"],
+            session_id="s-test-ma-pert",
+        )
+        assert len(results) > 0
+        d = results[0]
+        assert d.wrt == "g"
+        assert d.kind == "perturbation"
+        assert d.capability is Capability.PERTURB

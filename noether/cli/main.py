@@ -22,7 +22,7 @@ from noether.orchestrator.ingest import ingest_action
 from noether.orchestrator.planner import AmbiguityBlocked, build_plan
 from noether.orchestrator.session import Session
 from noether.provenance.bundle import ResultBundle, write_bundle
-from noether.verify.ladder import run_ladder
+from noether.verify.ladder import LadderReport, run_ladder
 
 EVAL_KEYS = (
     "eval1", "eval1s", "eval2", "eval3", "eval3s",
@@ -229,6 +229,13 @@ def run_eval(key: str, results_root: str) -> int:
     cadabra_results = []
     derivation_ok = True
     derivation_notes = []
+    # Determine the capability from the task type: perturbation evals use
+    # PERTURB, everything else uses VARY.
+    run_capability = (
+        Capability.PERTURB
+        if spec.build_npr(True).task.type == "perturb"
+        else Capability.VARY
+    )
     if not spec.cadabra_runs:
         pass
     elif cadabra.available():
@@ -236,7 +243,7 @@ def run_eval(key: str, results_root: str) -> int:
         for run in spec.cadabra_runs:
             result = cadabra.run(
                 KernelTask(
-                    capability=Capability.VARY,
+                    capability=run_capability,
                     description=run.description,
                     payload={"template": run.template},
                 )
@@ -258,6 +265,36 @@ def run_eval(key: str, results_root: str) -> int:
         )
         derivation_notes.append(note)
         print(f"\n{note}")
+
+    # For evals with no presented results (e.g. perturbation evals that only
+    # run cadabra kernel checks), print the derivation verdict and set the
+    # exit code based on derivation_ok alone.
+    if not spec.results and spec.cadabra_runs:
+        verified = derivation_ok
+        print(f"\n  Verified: {verified}")
+        if not verified:
+            return 1
+        # Write a provenance bundle for the kernel-checked result.
+        bundle = ResultBundle(
+            session_id=session.session_id,
+            result_id=f"{spec.key}-kernel",
+            result_tex=cadabra_results[0].expression_tex if cadabra_results else "",
+            npr_snapshot=session.npr,
+            plan=[s.model_dump() for s in plan.steps],
+            computed=cadabra_results,
+            ladder=LadderReport(results=[]),
+            narrative=(
+                f"# {spec.title}\n\n"
+                "Assumptions: see assumptions.json.\n\n"
+                "Derivation:\n"
+                + "".join(f"- {n}\n" for n in derivation_notes)
+                + ("".join(f"- note: {n}\n" for n in spec.notes))
+            ),
+        )
+        path = write_bundle(Path(results_root), bundle)
+        session.record_result(f"{spec.key}-kernel")
+        print(f"  Provenance bundle: {path}")
+        return 0
 
     # VERIFY + PRESENT + provenance bundle, one per presented result.
     exit_code = 0

@@ -561,7 +561,17 @@ perturbative expansion (xPert), Young projection.
    The scaffolds cover dynamical scalar fields (plain and `X`-dependent), the
    metric, the metric-affine metric (with independent connection), and rank-1
    gauge potentials, so `derive_perturbation` refuses other field kinds (the
-   rank-2 field strength, say) rather than guessing. The `adm` task takes a different route: `derive_adm`
+   rank-2 field strength, say) rather than guessing. On a metric-affine
+   background the connection fluctuation `dG` is captured by the metric
+   perturbation scaffold; the connection is not perturbed independently, so
+   it is excluded from the default field list and a request to perturb it
+   raises `NotImplementedError` naming the field (HTTP 422 with that message).
+   The perturbation result persists: each run records its `result_id` into the
+   session and writes a provenance bundle, reloading identically via
+   `GET /results`, MCP `noether_results`, and web history with its `kind`,
+   `verified` verdict, and `checks` intact. The metric-affine perturbation
+   eval is registered as the CLI subcommand `noether eval4ma`, exercising the
+   same path and checks. The `adm` task takes a different route: `derive_adm`
    (`kind="adm"` on the server, MCP, and web clients) writes no model script.
    Its deliverable is the ADM (3+1) decomposition of the gravitational sector,
    the Gauss-Codazzi split `sqrt(-g) R = N sqrt(h)(R3 + K_ij K^ij - K^2) -

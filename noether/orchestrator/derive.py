@@ -631,10 +631,13 @@ def derive_perturbation(
         if o.kind in ("scalar-field", "metric"):
             return True
         # On a metric-affine background the metric perturbation scaffold
-        # includes the connection fluctuation automatically.
-        if o.kind == "connection" and has_independent_connection:
+        # (pert_metric_affine_quadratic) includes the connection fluctuation
+        # dG automatically alongside the metric fluctuation h. The connection
+        # object itself is NOT perturbed independently; there is no separate
+        # connection perturbation scaffold.
+        if o.kind == "tensor-field" and o.rank == 1:
             return True
-        return o.kind == "tensor-field" and o.rank == 1
+        return False
 
     if fields is None:
         fields = [o.name for o in npr.objects if _supported(o) and o.role == "dynamical"]

@@ -508,6 +508,24 @@ metric equation equals the linearized Einstein tensor `G^{(1)}_{μν}` (matching
 the eval 3g operator), the Ricci of the LC connection is symmetric, and torsion
 is zero. The pytest gates are in `tests/test_pert_metric_affine.py`.
 
+**Reachability and persistence (VAL-PERT-009/010/011/012/016).** The
+metric-affine perturbation is reachable via the HTTP general perturb path
+(`POST /derive {kind:'perturbation'}` on a resolved metric-affine session
+returns 200 with `derivations[].kind=='perturbation'` and a `checks` dict;
+an unknown kind returns 422), via MCP `noether_derive` with
+`kind='perturbation'` (returns the same derivation surface or an
+`{error:...}` refusal, never a fabricated verified result), and via the
+registered CLI eval subcommand `noether eval4ma` (exercising the same path
+and checks). Requesting a perturbation of a field with no audited scaffold
+(e.g. a rank-2 tensor or a connection on a Levi-Civita background) raises
+`NotImplementedError` naming the field (HTTP 422 with that message), never
+a guessed quadratic action. On a metric-affine background the connection
+fluctuation `dG` is captured by the metric perturbation scaffold
+(`pert_metric_affine_quadratic`); the connection is not perturbed
+independently. The run records its `result_id` and writes a provenance
+bundle, reloading via `GET /results`, MCP `noether_results`, and web
+history with its `kind`, `verified` verdict, and `checks` intact.
+
 ---
 
 ## Eval 4 — Maxwell field on a fixed curved background

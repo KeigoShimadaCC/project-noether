@@ -196,7 +196,14 @@ called verified. On a metric-affine (independent-connection) background,
 (residue gated due to the Kronecker-delta limitation with mixed-index dG
 objects; SymPy cross-check provides independent verification); the two
 choices differ by torsion-dependent terms (VAL-PERT-017) and the covcurl
-action retains a*dG cross terms (VAL-PERT-018). Other field kinds (the rank-2 field strength, say) are refused
+action retains a*dG cross terms (VAL-PERT-018). The metric perturbation on a
+metric-affine background (`pert_metric_affine_quadratic`, eval 4ma) includes
+the connection fluctuation `dG` alongside the metric fluctuation `h`; the
+connection is not perturbed independently, so it is excluded from the default
+perturbation field list and requesting it raises `NotImplementedError` naming
+the field (HTTP 422). The metric-affine perturbation eval is registered as the
+CLI subcommand `noether eval4ma`, exercising the same path and checks. Other
+field kinds (the rank-2 field strength, say) are refused
 rather than guessed. The `adm` task is reachable the same way:
 `derive_adm` (`kind="adm"` on the server, MCP, and web clients) returns the
 ADM (3+1) decomposition of the gravitational sector, the Gauss-Codazzi split

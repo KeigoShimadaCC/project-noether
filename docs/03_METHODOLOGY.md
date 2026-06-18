@@ -192,8 +192,14 @@ path for scalar fields and the metric: `derive_perturbation` (reachable as
 for the metric (eval 3g), expanding the action to quadratic order (tracking
 fluctuation order through Cadabra weights) and confirming the linearized equation
 of motion both against the documented operator and by an independent route. All
-checks must pass for the result to count as verified. The two scaffolds cover
-dynamical scalars and the metric, so the path refuses other field kinds. The
+checks must pass for the result to count as verified. The scaffolds cover
+dynamical scalars and the metric, so the path refuses other field kinds.
+When the connection is independent, the metric perturbation scaffold
+`pert_metric_affine_quadratic` (eval 4ma) includes the connection fluctuation
+`dG` alongside `h`; the connection is not perturbed independently. The
+metric-affine perturbation result persists across surfaces (HTTP, MCP, store,
+and web), with its `kind`, `verified` verdict, and `checks` intact, and the
+eval is registered as the CLI subcommand `noether eval4ma`. The
 `adm` task (reachable as `kind="adm"`) returns the ADM (3+1) decomposition of
 the gravitational sector, the Gauss-Codazzi split and the Einstein-tensor
 projections, verified by the SymPy component kernel on an explicit background
