@@ -453,13 +453,21 @@ perturbative expansion (xPert), Young projection.
    = F_φ ∂φ couples the scalar sector to the connection sector), and the
    scalar variation gives F_φ R̃(Γ) = 0. The dF source means the projective
    mode does NOT solve the connection equation when F is non-constant (unlike
-   pure EH). The connection-variation IBP boundary-term assumption (δΓ
-   vanishes on the boundary) is recorded explicitly in the Cadabra script and
-   kernel output, not silently dropped. At T=Q=0, the metric-affine metric
-   equation reduces to the Levi-Civita result F × G_{μν} = 0, residue-pinned
-   and SymPy-confirmed. Three Cadabra templates (`palatini_st_metric`,
-   `palatini_st_connection`, `palatini_st_scalar`) are registered in
-   `templates.py` and verified in `tests/test_palatini_scalar_tensor_affine.py`.
+   pure EH). All three templates compute an independent target and assert a
+   genuine NOETHER_CHECK residue-zero sentinel: the metric and scalar targets
+   are the expected EOM expressions; the connection target is the
+   Euler-Lagrange equation in partial-derivative form (not the
+   covariant-derivative form, because the covariant-divergence IBP theorem
+   does not hold for an independent connection). The
+   connection-variation IBP boundary-term assumption (δΓ vanishes on the
+   boundary) is recorded explicitly in the Cadabra script and kernel output,
+   not silently dropped. At T=Q=0, the metric-affine metric equation reduces
+   to the Levi-Civita result F × G_{μν} = 0, residue-pinned and
+   SymPy-confirmed; the connection equation at F=const, Γ=LC vanishes
+   identically (metric compatibility), also SymPy-confirmed componentwise.
+   Three Cadabra templates (`palatini_st_metric`, `palatini_st_connection`,
+   `palatini_st_scalar`) are registered in `templates.py` and verified in
+   `tests/test_palatini_scalar_tensor_affine.py`.
 
    The general path is gated by `evals/test_eval_general.py`,
    which checks it reproduces eval 3's two kernel-verified equations of motion

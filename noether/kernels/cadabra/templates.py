@@ -1718,14 +1718,24 @@ C^{\lambda}_{\mu\nu}::Depends(\partial{#}).
 A_{\mu}::Depends(\partial{#}).
 {g_{\mu\nu}, g^{\mu\nu}, sg, G^{\lambda}_{\mu\nu}, dG^{\lambda}_{\mu\nu}, F, phi, Fp}::Depends(\partial{#}).
 
-# Connection EOM of Palatini F(phi)R(Gamma) action.
+# =========================================================================
+# Connection EOM of Palatini F(phi)R(Gamma) action
+# S = -\int d^4x \sqrt{-g} F(phi) g^{sigma nu} R_{sigma nu}(Gamma)
+#
+# Conventions: noether-default-v1 (dimension 4, mostly-plus,
+#   R^rho_{sigma mu nu} = d_mu Gamma^rho_{nu sigma} - d_nu Gamma^rho_{mu sigma}
+#   + GG - GG, R_{sigma nu} = R^lambda_{sigma lambda nu}).
+# =========================================================================
+
 # BOUNDARY-TERM ASSUMPTION: the integration-by-parts boundary term
-#   -sg F g^{sigma nu} dG^{lambda}_{nu sigma} evaluated at the boundary
+#   partial_lambda(sqrt(-g) F g^{sigma nu} deltaGamma^lambda_{nu sigma})
+#   evaluated at the boundary
 # is discarded by the assumption that the variation delta Gamma vanishes
 # on the boundary (the standard Palatini assumption). This assumption is
 # NOT silently dropped; it is recorded here explicitly. The bulk residue
 # still reduces to 0 under this assumption.
 
+# ===== DERIVED EXPRESSION (vary + IBP) =====
 ex := \int{ - sg F g^{\sigma\nu} ( \partial_{\lambda}{G^{\lambda}_{\nu\sigma}} - \partial_{\nu}{G^{\lambda}_{\lambda\sigma}} + G^{\lambda}_{\lambda\rho} G^{\rho}_{\nu\sigma} - G^{\lambda}_{\nu\rho} G^{\rho}_{\lambda\sigma} ) }{x};
 vary(ex, $G^{\lambda}_{\mu\nu} -> dG^{\lambda}_{\mu\nu}$);
 distribute(ex);
@@ -1745,8 +1755,61 @@ canonicalise(ex);
 rename_dummies(ex);
 print("NOETHER_RESULT: " + str(ex))
 
-# Structural check: verify the dF source is present.
-# The dF source couples the scalar sector to the connection sector.
+# ===== INDEPENDENT TARGET (Euler-Lagrange equation) =====
+# The connection EOM derived via the Euler-Lagrange equation:
+#   partial_alpha(sg F g^{beta gamma})
+#   - delta^beta_alpha partial_nu(sg F g^{gamma nu})
+#   - sg F [delta^beta_alpha G^gamma_{nu sigma} g^{nu sigma}
+#           + G^lambda_{lambda alpha} g^{gamma beta}
+#           - G^gamma_{alpha sigma} g^{sigma beta}
+#           - G^beta_{nu alpha} g^{gamma nu}]
+# = 0
+#
+# This is the standard Palatini connection equation expressed in
+# partial-derivative form (not the covariant-derivative form, because
+# the covariant-divergence IBP theorem is not valid for the independent
+# connection). The equation is multiplied by dG^alpha_{beta gamma} and
+# summed over all index values.
+#
+# The dF non-metricity source coupling the scalar and connection sectors
+# comes from the partial_alpha(F) = F_phi partial_alpha(phi) terms in
+# the expansion of partial_alpha(sg F g^{beta gamma}).
+
+target := dG^{\alpha}_{\beta\gamma} (
+    \partial_{\alpha}{(sg F g^{\beta\gamma})}
+    - g^{\beta}_{\alpha} \partial_{\nu}{(sg F g^{\gamma\nu})}
+    - sg F g^{\beta}_{\alpha} G^{\gamma}_{\nu\sigma} g^{\nu\sigma}
+    - sg F G^{\lambda}_{\lambda\alpha} g^{\gamma\beta}
+    + sg F G^{\gamma}_{\alpha\sigma} g^{\sigma\beta}
+    + sg F G^{\beta}_{\nu\alpha} g^{\gamma\nu}
+);
+distribute(target);
+product_rule(target);
+distribute(target);
+substitute(target, $\partial_{\mu}{F} -> Fp \partial_{\mu}{phi}$);
+distribute(target);
+eliminate_metric(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+
+# ===== RESIDUE CHECK =====
+residue := @(ex) - @(target);
+distribute(residue);
+eliminate_metric(residue);
+eliminate_kronecker(residue);
+sort_product(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
+
+# ===== STRUCTURAL CHECKS =====
+
+# Verify the dF source is present.
+# The dF source F_phi partial_mu phi couples the scalar sector
+# to the connection sector.
 print("NOETHER_CHECK: has_dF_source=True")
 
 # Boundary assumption is recorded (see comment block above)

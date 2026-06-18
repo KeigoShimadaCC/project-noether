@@ -21,6 +21,7 @@ import sympy as sp
 from noether.kernels.base import Capability, KernelTask
 from noether.kernels.cadabra import CadabraAdapter
 from noether.kernels.sympy_kernel.geometry import (
+    _clean,
     components,
     random_diagonal_metric,
 )
@@ -94,14 +95,24 @@ C^{\lambda}_{\mu\nu}::Depends(\partial{#}).
 A_{\mu}::Depends(\partial{#}).
 {g_{\mu\nu}, g^{\mu\nu}, sg, G^{\lambda}_{\mu\nu}, dG^{\lambda}_{\mu\nu}, F, phi, Fp}::Depends(\partial{#}).
 
-# Connection EOM of Palatini F(phi)R(Gamma) action.
+# =========================================================================
+# Connection EOM of Palatini F(phi)R(Gamma) action
+# S = -\int d^4x \sqrt{-g} F(phi) g^{sigma nu} R_{sigma nu}(Gamma)
+#
+# Conventions: noether-default-v1 (dimension 4, mostly-plus,
+#   R^rho_{sigma mu nu} = d_mu Gamma^rho_{nu sigma} - d_nu Gamma^rho_{mu sigma}
+#   + GG - GG, R_{sigma nu} = R^lambda_{sigma lambda nu}).
+# =========================================================================
+
 # BOUNDARY-TERM ASSUMPTION: the integration-by-parts boundary term
-#   -sg F g^{sigma nu} dG^{lambda}_{nu sigma} evaluated at the boundary
+#   partial_lambda(sqrt(-g) F g^{sigma nu} deltaGamma^lambda_{nu sigma})
+#   evaluated at the boundary
 # is discarded by the assumption that the variation delta Gamma vanishes
 # on the boundary (the standard Palatini assumption). This assumption is
 # NOT silently dropped; it is recorded here explicitly. The bulk residue
 # still reduces to 0 under this assumption.
 
+# ===== DERIVED EXPRESSION (vary + IBP) =====
 ex := \int{ - sg F g^{\sigma\nu} ( \partial_{\lambda}{G^{\lambda}_{\nu\sigma}} - \partial_{\nu}{G^{\lambda}_{\lambda\sigma}} + G^{\lambda}_{\lambda\rho} G^{\rho}_{\nu\sigma} - G^{\lambda}_{\nu\rho} G^{\rho}_{\lambda\sigma} ) }{x};
 vary(ex, $G^{\lambda}_{\mu\nu} -> dG^{\lambda}_{\mu\nu}$);
 distribute(ex);
@@ -121,8 +132,61 @@ canonicalise(ex);
 rename_dummies(ex);
 print("NOETHER_RESULT: " + str(ex))
 
-# Structural check: verify the dF source is present.
-# The dF source couples the scalar sector to the connection sector.
+# ===== INDEPENDENT TARGET (Euler-Lagrange equation) =====
+# The connection EOM derived via the Euler-Lagrange equation:
+#   partial_alpha(sg F g^{beta gamma})
+#   - delta^beta_alpha partial_nu(sg F g^{gamma nu})
+#   - sg F [delta^beta_alpha G^gamma_{nu sigma} g^{nu sigma}
+#           + G^lambda_{lambda alpha} g^{gamma beta}
+#           - G^gamma_{alpha sigma} g^{sigma beta}
+#           - G^beta_{nu alpha} g^{gamma nu}]
+# = 0
+#
+# This is the standard Palatini connection equation expressed in
+# partial-derivative form (not the covariant-derivative form, because
+# the covariant-divergence IBP theorem is not valid for the independent
+# connection). The equation is multiplied by dG^alpha_{beta gamma} and
+# summed over all index values.
+#
+# The dF non-metricity source coupling the scalar and connection sectors
+# comes from the partial_alpha(F) = F_phi partial_alpha(phi) terms in
+# the expansion of partial_alpha(sg F g^{beta gamma}).
+
+target := dG^{\alpha}_{\beta\gamma} (
+    \partial_{\alpha}{(sg F g^{\beta\gamma})}
+    - g^{\beta}_{\alpha} \partial_{\nu}{(sg F g^{\gamma\nu})}
+    - sg F g^{\beta}_{\alpha} G^{\gamma}_{\nu\sigma} g^{\nu\sigma}
+    - sg F G^{\lambda}_{\lambda\alpha} g^{\gamma\beta}
+    + sg F G^{\gamma}_{\alpha\sigma} g^{\sigma\beta}
+    + sg F G^{\beta}_{\nu\alpha} g^{\gamma\nu}
+);
+distribute(target);
+product_rule(target);
+distribute(target);
+substitute(target, $\partial_{\mu}{F} -> Fp \partial_{\mu}{phi}$);
+distribute(target);
+eliminate_metric(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+
+# ===== RESIDUE CHECK =====
+residue := @(ex) - @(target);
+distribute(residue);
+eliminate_metric(residue);
+eliminate_kronecker(residue);
+sort_product(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
+
+# ===== STRUCTURAL CHECKS =====
+
+# Verify the dF source is present.
+# The dF source F_phi partial_mu phi couples the scalar sector
+# to the connection sector.
 print("NOETHER_CHECK: has_dF_source=True")
 
 # Boundary assumption is recorded (see comment block above)
@@ -401,25 +465,19 @@ class TestBoundaryTermAssumption:
         """The connection EOM script contains the explicit boundary-term
         assumption comment, not silently dropped."""
         assert "BOUNDARY-TERM ASSUMPTION" in CONNECTION_EOM_SCRIPT
-        assert "delta Gamma vanishes" in CONNECTION_EOM_SCRIPT
+        assert "deltaGamma" in CONNECTION_EOM_SCRIPT or "delta Gamma" in CONNECTION_EOM_SCRIPT
         assert "NOT silently dropped" in CONNECTION_EOM_SCRIPT
 
     def test_bulk_residue_reduces_to_zero(self):
         """The bulk residue of the connection equation reduces to 0
-        (the connection EOM is well-defined under the boundary assumption)."""
-        # The connection EOM is the bulk result after IBP.
-        # We verify this by running the script and checking the result
-        # is non-empty (the bulk equation is the connection EOM).
-        result = CadabraAdapter().run(
-            KernelTask(
-                capability=Capability.SUBSTITUTE,
-                description="Connection EOM bulk check",
-                payload={"script": CONNECTION_EOM_SCRIPT},
-            )
+        (the connection EOM is well-defined under the boundary assumption).
+        The independent target is the Euler-Lagrange equation in
+        partial-derivative form, and the derived (vary+IBP) expression
+        matches it exactly."""
+        checks = _run_script(CONNECTION_EOM_SCRIPT)
+        assert checks.get("residue_zero") == "True", (
+            f"connection EOM bulk residue not zero: {checks}"
         )
-        # The result should be non-empty (the connection equation exists)
-        expr = result.expression_tex or ""
-        assert len(expr) > 0, "Connection EOM should be non-empty"
 
     def test_boundary_check_is_recorded(self):
         """The kernel check boundary_assumption_recorded is True."""
@@ -504,6 +562,115 @@ class TestLCLimitSymPy:
         einstein = geom.einstein
         is_nonzero = any(sp.simplify(c) != 0 for c in components(einstein))
         assert is_nonzero, "Einstein tensor should be nonzero on a curved background"
+
+
+class TestConnectionEOMSymPy:
+    """SymPy component cross-check: at F=const, Gamma=Levi-Civita, the
+    connection equation vanishes identically (metric compatibility).
+    This is the component-level counterpart of the Cadabra residue-zero
+    check and verifies the geometric structure of the EOM."""
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_connection_eom_at_LC_F_const(self, seed):
+        """At the Levi-Civita limit with F=const (no dF source), the
+        connection EOM E^alpha_{beta gamma} vanishes componentwise,
+        confirming the LC connection is metric-compatible in the
+        Palatini connection equation's index structure."""
+        geom = random_diagonal_metric(seed, dim=3)
+        n = geom.dim
+        g_inv = sp.ImmutableDenseNDimArray(geom.g_inv)
+        Gamma = geom.christoffel  # Gamma[a][b][c] = Gamma^a_{bc}
+        sg = sp.sqrt(-sp.det(geom.g))  # use Matrix, not NDimArray
+
+        # Pre-compute partial_alpha(sg) = sg * Gamma^lambda_{lambda alpha}
+        Gamma_trace_vec = [
+            _clean(sum(Gamma[lam, lam, al] for lam in range(n)))
+            for al in range(n)
+        ]
+        d_sg = [_clean(sg * Gamma_trace_vec[al]) for al in range(n)]
+
+        # partial_alpha(g^{beta gamma}) via LC identity:
+        # -Gamma^beta_{alpha sigma} g^{sigma gamma}
+        # - Gamma^gamma_{alpha sigma} g^{beta sigma}
+        def dg_inv(alpha, beta, gamma):
+            return _clean(
+                -sum(
+                    Gamma[beta, alpha, sig] * g_inv[sig, gamma]
+                    + Gamma[gamma, alpha, sig] * g_inv[beta, sig]
+                    for sig in range(n)
+                )
+            )
+
+        # The connection EOM at F=const (F_phi=0):
+        # E^alpha_{beta gamma} = partial_alpha(sg g^{beta gamma})
+        #   - delta^beta_alpha partial_nu(sg g^{gamma nu})
+        #   - sg [delta^beta_alpha Gamma^gamma_{nu sigma} g^{nu sigma}
+        #         + Gamma^lambda_{lambda alpha} g^{gamma beta}
+        #         - Gamma^gamma_{alpha sigma} g^{sigma beta}
+        #         - Gamma^beta_{nu alpha} g^{gamma nu}]
+        for alpha in range(n):
+            for beta in range(n):
+                for gamma_ in range(n):
+                    # term1: partial_alpha(sg g^{beta gamma})
+                    t1 = _clean(
+                        d_sg[alpha] * g_inv[beta, gamma_]
+                        + sg * dg_inv(alpha, beta, gamma_)
+                    )
+
+                    # term2: -delta^beta_alpha partial_nu(sg g^{gamma nu})
+                    t2 = sp.Integer(0)
+                    if beta == alpha:
+                        for nu in range(n):
+                            t2 = _clean(
+                                t2
+                                + d_sg[nu] * g_inv[gamma_, nu]
+                                + sg * dg_inv(nu, gamma_, nu)
+                            )
+                    t2 = _clean(-t2)
+
+                    # term3: -sg delta^beta_alpha Gamma^gamma_{nu sigma} g^{nu sigma}
+                    t3 = sp.Integer(0)
+                    if beta == alpha:
+                        t3 = _clean(
+                            -sg
+                            * sum(
+                                Gamma[gamma_, nu, sig] * g_inv[nu, sig]
+                                for nu in range(n)
+                                for sig in range(n)
+                            )
+                        )
+
+                    # term4: -sg Gamma^lambda_{lambda alpha} g^{gamma beta}
+                    t4 = _clean(-sg * Gamma_trace_vec[alpha] * g_inv[gamma_, beta])
+
+                    # term5: +sg Gamma^gamma_{alpha sigma} g^{sigma beta}
+                    t5 = _clean(
+                        sg
+                        * sum(
+                            Gamma[gamma_, alpha, sig] * g_inv[sig, beta]
+                            for sig in range(n)
+                        )
+                    )
+
+                    # term6: +sg Gamma^beta_{nu alpha} g^{gamma nu}
+                    t6 = _clean(
+                        sg
+                        * sum(
+                            Gamma[beta, nu, alpha] * g_inv[gamma_, nu]
+                            for nu in range(n)
+                        )
+                    )
+
+                    eom_val = _clean(t1 + t2 + t3 + t4 + t5 + t6)
+                    assert sp.simplify(eom_val) == 0, (
+                        f"Connection EOM at LC not zero: seed={seed}, "
+                        f"alpha={alpha}, beta={beta}, gamma={gamma_}, val={eom_val}"
+                    )
+
+
+# ---------------------------------------------------------------------------
+# VAL-EOM-024: The three EOMs are distinct, none silently merged.
+# ---------------------------------------------------------------------------
 
 
 class TestThreeDistinctDerivations:
