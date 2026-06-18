@@ -682,6 +682,13 @@ g^{\mu\nu}::Weight(label=eps, value=0).
 g_{\mu\nu}::Weight(label=eps, value=0).
 {phibar, chi, V, Vp, Vpp, dchi}::Depends(\nabla{#}).
 
+print("NOETHER_CONVENTION: signature=mostly-plus")
+print("NOETHER_CONVENTION: torsion_sign=+1")
+print("NOETHER_CONVENTION: nonmetricity_definition=nabla-g")
+print("NOETHER_CONVENTION: contortion_sign=+1")
+print("NOETHER_CONVENTION: disformation_sign=+1")
+print("NOETHER_CONVENTION: ricci_contraction=first-third")
+
 S2 := - 1/2 sg g^{\alpha\beta} ( \nabla_{\alpha}{phibar} + \nabla_{\alpha}{chi} ) ( \nabla_{\beta}{phibar} + \nabla_{\beta}{chi} ) - sg ( V + Vp chi + 1/2 Vpp chi chi );
 distribute(S2);
 keep_weight(S2, $eps=2$);
@@ -797,6 +804,13 @@ h{#}::Depends(\nabla{#}).
 dh_{\mu\nu}::Symmetric.
 dh{#}::Weight(label=eps, value=1).
 dh{#}::Depends(\nabla{#}).
+
+print("NOETHER_CONVENTION: signature=mostly-plus")
+print("NOETHER_CONVENTION: torsion_sign=+1")
+print("NOETHER_CONVENTION: nonmetricity_definition=nabla-g")
+print("NOETHER_CONVENTION: contortion_sign=+1")
+print("NOETHER_CONVENTION: disformation_sign=+1")
+print("NOETHER_CONVENTION: ricci_contraction=first-third")
 
 def lower_all(e):
     for i in range(6):
@@ -1073,6 +1087,14 @@ g_{\mu\nu}::Weight(label=eps, value=0).
 sg::Weight(label=eps, value=0).
 {Fbar_{\mu\nu}, f_{\mu\nu}, a_{\mu}, da_{\mu}, Abar_{\mu}}::Depends(\nabla{#}).
 
+print("NOETHER_CONVENTION: signature=mostly-plus")
+print("NOETHER_CONVENTION: torsion_sign=+1")
+print("NOETHER_CONVENTION: nonmetricity_definition=nabla-g")
+print("NOETHER_CONVENTION: contortion_sign=+1")
+print("NOETHER_CONVENTION: disformation_sign=+1")
+print("NOETHER_CONVENTION: ricci_contraction=first-third")
+print("NOETHER_CONVENTION: field_strength_definition=exterior-derivative")
+
 S2 := - 1/4 sg g^{\mu\alpha} g^{\nu\beta} ( Fbar_{\mu\nu} + f_{\mu\nu} ) ( Fbar_{\alpha\beta} + f_{\alpha\beta} );
 substitute(S2, $f_{\mu\nu} -> \nabla_{\mu}{a_{\nu}} - \nabla_{\nu}{a_{\mu}}$);
 distribute(S2);
@@ -1207,6 +1229,14 @@ dv_{a \mu}::Weight(label=eps, value=1).
 Abar_{a \mu}::Weight(label=eps, value=0).
 {g_{\mu\nu}, k_{a b}, fc_{a b c}, sg, gc}::Weight(label=eps, value=0).
 {Abar_{a \mu}, v_{a \mu}, dv_{a \mu}}::Depends(\nabla{#}).
+
+print("NOETHER_CONVENTION: signature=mostly-plus")
+print("NOETHER_CONVENTION: torsion_sign=+1")
+print("NOETHER_CONVENTION: nonmetricity_definition=nabla-g")
+print("NOETHER_CONVENTION: contortion_sign=+1")
+print("NOETHER_CONVENTION: disformation_sign=+1")
+print("NOETHER_CONVENTION: ricci_contraction=first-third")
+print("NOETHER_CONVENTION: field_strength_definition=exterior-derivative")
 
 S2 := - 1/4 sg g^{\mu\rho} g^{\nu\sigma} f1_{a \mu\nu} f1_{a \rho\sigma} - 1/2 sg gc g^{\mu\rho} g^{\nu\sigma} Fbar_{a \rho\sigma} fc_{a b c} v_{b \mu} v_{c \nu};
 print("NOETHER_RESULT: " + str(S2))
@@ -1358,6 +1388,13 @@ dchi::Weight(label=eps, value=1).
 g^{\mu\nu}::Weight(label=eps, value=0).
 g_{\mu\nu}::Weight(label=eps, value=0).
 {phibar, chi, dchi, K, Kphi, KX, Kphiphi, KphiX, KXX, KphiphiX, KphiXX}::Depends(\nabla{#}).
+
+print("NOETHER_CONVENTION: signature=mostly-plus")
+print("NOETHER_CONVENTION: torsion_sign=+1")
+print("NOETHER_CONVENTION: nonmetricity_definition=nabla-g")
+print("NOETHER_CONVENTION: contortion_sign=+1")
+print("NOETHER_CONVENTION: disformation_sign=+1")
+print("NOETHER_CONVENTION: ricci_contraction=first-third")
 
 Kexp := K + Kphi chi + KX dX + 1/2 Kphiphi chi chi + KphiX chi dX + 1/2 KXX dX dX;
 substitute(Kexp, $dX -> - g^{\alpha\beta} \nabla_{\alpha}{phibar} \nabla_{\beta}{chi} - 1/2 g^{\alpha\beta} \nabla_{\alpha}{chi} \nabla_{\beta}{chi}$);
@@ -2166,6 +2203,13 @@ dG^{\lambda}_{\mu\nu}::Depends(\partial{#}).
 ddG^{\lambda}_{\mu\nu}::Weight(label=eps, value=1).
 ddG^{\lambda}_{\mu\nu}::Depends(\partial{#}).
 
+print("NOETHER_CONVENTION: signature=mostly-plus")
+print("NOETHER_CONVENTION: torsion_sign=+1")
+print("NOETHER_CONVENTION: nonmetricity_definition=nabla-g")
+print("NOETHER_CONVENTION: contortion_sign=+1")
+print("NOETHER_CONVENTION: disformation_sign=+1")
+print("NOETHER_CONVENTION: ricci_contraction=first-third")
+
 def lower_all(e):
     for i in range(6):
         substitute(e, $\partial^{\mu}{A??} -> eta^{\mu\nu} \partial_{\nu}{A??}$)
@@ -2348,6 +2392,14 @@ g_{\mu\nu}::Weight(label=eps, value=0).
 sg::Weight(label=eps, value=0).
 {Fbar_{\mu\nu}, f_{\mu\nu}, a_{\mu}, da_{\mu}, Abar_{\mu}}::Depends(\nabla{#}).
 
+print("NOETHER_CONVENTION: signature=mostly-plus")
+print("NOETHER_CONVENTION: torsion_sign=+1")
+print("NOETHER_CONVENTION: nonmetricity_definition=nabla-g")
+print("NOETHER_CONVENTION: contortion_sign=+1")
+print("NOETHER_CONVENTION: disformation_sign=+1")
+print("NOETHER_CONVENTION: ricci_contraction=first-third")
+print("NOETHER_CONVENTION: field_strength_definition=exterior-derivative")
+
 S2 := - 1/4 sg g^{\mu\alpha} g^{\nu\beta} ( Fbar_{\mu\nu} + f_{\mu\nu} ) ( Fbar_{\alpha\beta} + f_{\alpha\beta} );
 substitute(S2, $f_{\mu\nu} -> \nabla_{\mu}{a_{\nu}} - \nabla_{\nu}{a_{\mu}}$);
 distribute(S2);
@@ -2463,6 +2515,14 @@ Abar_{\mu}::Weight(label=eps, value=0).
 eta_{\mu\nu}::Weight(label=eps, value=0).
 eta^{\mu\nu}::Weight(label=eps, value=0).
 {a_{\mu}, da_{\mu}}::Depends(\partial{#}).
+
+print("NOETHER_CONVENTION: signature=mostly-plus")
+print("NOETHER_CONVENTION: torsion_sign=+1")
+print("NOETHER_CONVENTION: nonmetricity_definition=nabla-g")
+print("NOETHER_CONVENTION: contortion_sign=+1")
+print("NOETHER_CONVENTION: disformation_sign=+1")
+print("NOETHER_CONVENTION: ricci_contraction=first-third")
+print("NOETHER_CONVENTION: field_strength_definition=covariant-curl")
 
 # F = nabla A (covariant curl) on metric-affine Minkowski background.
 # Abar_mu = const, Fbar = 0.

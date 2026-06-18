@@ -931,3 +931,302 @@ class TestCLIPerturbationEval:
         assert "Verified: True" in output, (
             f"eval4ma should report Verified: True; output excerpt: {output[:800]}"
         )
+
+
+# ---------------------------------------------------------------------------
+# VAL-PERT-015: Convention block is explicit and threaded through the
+# metric-affine perturbation.  The run records its named convention block
+# (signature, torsion sign, non-metricity definition, contortion/disformation
+# sign, Ricci-contraction), with no silently assumed convention.
+# Evidence: provenance/NPR snapshot records the named convention block;
+# the script states the signs.
+# ---------------------------------------------------------------------------
+
+
+class TestConventionBlockExplicit:
+    """VAL-PERT-015: the metric-affine perturbation run records its named
+    convention block with no silently assumed convention, and the script
+    states the signs."""
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_script_states_convention_signs(self):
+        """The metric-affine perturbation template prints all convention
+        signs via NOETHER_CONVENTION sentinels. No convention is silently
+        assumed."""
+        result = CadabraAdapter().run(
+            KernelTask(
+                capability=Capability.PERTURB,
+                description="metric-affine quadratic-action expansion",
+                payload={"template": TEMPLATE},
+            )
+        )
+        conventions = result.value.get("conventions", {})
+
+        # The script must state each convention sign explicitly
+        required_keys = [
+            "signature",
+            "torsion_sign",
+            "nonmetricity_definition",
+            "contortion_sign",
+            "disformation_sign",
+            "ricci_contraction",
+        ]
+        for key in required_keys:
+            assert key in conventions, (
+                f"Convention key {key!r} missing from script output; "
+                f"conventions={conventions}"
+            )
+            assert conventions[key], (
+                f"Convention key {key!r} has empty value; "
+                f"conventions={conventions}"
+            )
+
+        # Verify the values match noether-default-v1 + metric-affine-v1
+        from noether.npr.conventions import NOETHER_DEFAULT_V1
+
+        assert conventions["signature"] == NOETHER_DEFAULT_V1.signature
+        assert conventions["torsion_sign"] == NOETHER_DEFAULT_V1.torsion_sign
+        assert conventions["nonmetricity_definition"] == NOETHER_DEFAULT_V1.nonmetricity_definition
+        assert conventions["contortion_sign"] == NOETHER_DEFAULT_V1.contortion_sign
+        assert conventions["disformation_sign"] == NOETHER_DEFAULT_V1.disformation_sign
+        assert conventions["ricci_contraction"] == NOETHER_DEFAULT_V1.ricci_contraction
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_provenance_npr_records_convention_block(self):
+        """The provenance/NPR snapshot records the named convention block.
+        When write_bundle stores the NPR snapshot, the conventions object
+        survives with all sign fields intact."""
+        import json
+        import tempfile
+        from pathlib import Path
+
+        from noether.npr.ast import down, tensor
+        from noether.npr.conventions import NOETHER_DEFAULT_V1
+        from noether.npr.schema import (
+            NPR,
+            Action,
+            ConnectionSpec,
+            Geometry,
+            ObjectDecl,
+            Task,
+        )
+        from noether.provenance.bundle import ResultBundle, write_bundle
+        from noether.verify.ladder import CheckResult, LadderReport
+
+        # Build a metric-affine NPR (Palatini EH)
+        npr = NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(
+                connection=ConnectionSpec(
+                    type="independent",
+                    torsion=True,
+                    nonmetricity=True,
+                    metric_compatible=False,
+                    family="metric-affine",
+                )
+            ),
+            objects=[
+                ObjectDecl(name="g", kind="metric", role="dynamical"),
+                ObjectDecl(name="Gamma", kind="connection", role="dynamical"),
+            ],
+            action=Action(
+                measure_tex="d^4x",
+                lagrangian=tensor("R", down("sigma"), down("nu")),
+                lagrangian_tex=r"g^{\sigma\nu} R_{\sigma\nu}(\Gamma)",
+            ),
+            task=Task(type="perturb", with_respect_to=["g"]),
+            ambiguities=[],
+        )
+
+        # Write a provenance bundle with this NPR snapshot
+        bundle = ResultBundle(
+            session_id="test-conv-block",
+            result_id="perturb-g-conv",
+            result_tex="test",
+            npr_snapshot=npr,
+            ladder=LadderReport(results=[
+                CheckResult(
+                    name="convention-block-check",
+                    rung="V0",
+                    passed=True,
+                    detail="",
+                    computed_by="pytest",
+                )
+            ]),
+            derivations=[],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            results_root = Path(tmp)
+            write_bundle(results_root, bundle)
+
+            # Read the assumptions.json (NPR snapshot)
+            assumptions_path = (
+                results_root
+                / "test-conv-block"
+                / "perturb-g-conv"
+                / "assumptions.json"
+            )
+            assert assumptions_path.exists(), (
+                f"Provenance bundle missing assumptions.json at {assumptions_path}"
+            )
+            assumptions = json.loads(assumptions_path.read_text())
+
+            # The NPR snapshot must record the full convention block
+            conv = assumptions.get("conventions", {})
+            assert conv.get("id") == "noether-default-v1", (
+                f"Convention block id must be noether-default-v1; got {conv.get('id')}"
+            )
+            required_keys = [
+                "signature",
+                "torsion_sign",
+                "nonmetricity_definition",
+                "contortion_sign",
+                "disformation_sign",
+                "ricci_contraction",
+            ]
+            for key in required_keys:
+                assert key in conv, (
+                    f"Convention key {key!r} missing from NPR snapshot; "
+                    f"conventions={conv}"
+                )
+
+            # Values must match noether-default-v1
+            assert conv["signature"] == NOETHER_DEFAULT_V1.signature
+            assert conv["torsion_sign"] == NOETHER_DEFAULT_V1.torsion_sign
+            assert conv["nonmetricity_definition"] == NOETHER_DEFAULT_V1.nonmetricity_definition
+            assert conv["contortion_sign"] == NOETHER_DEFAULT_V1.contortion_sign
+            assert conv["disformation_sign"] == NOETHER_DEFAULT_V1.disformation_sign
+            assert conv["ricci_contraction"] == NOETHER_DEFAULT_V1.ricci_contraction
+
+            # The geometry must record the independent connection
+            geom = assumptions.get("geometry", {})
+            conn = geom.get("connection", {})
+            assert conn.get("type") == "independent", (
+                f"Connection type must be independent; got {conn.get('type')}"
+            )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_no_silently_assumed_convention(self):
+        """No convention is silently assumed: every convention field that
+        affects the computation (signature, torsion_sign, etc.) is
+        explicitly printed by the script, not just recorded in the NPR.
+        This is the VAL-PERT-015 core claim: the script states the signs."""
+        result = CadabraAdapter().run(
+            KernelTask(
+                capability=Capability.PERTURB,
+                description="metric-affine quadratic-action expansion",
+                payload={"template": TEMPLATE},
+            )
+        )
+        # The script's stdout must contain NOETHER_CONVENTION lines
+        stdout = result.raw.stdout
+        assert "NOETHER_CONVENTION: signature=" in stdout, (
+            "Script must explicitly state the signature convention"
+        )
+        assert "NOETHER_CONVENTION: torsion_sign=" in stdout, (
+            "Script must explicitly state the torsion sign convention"
+        )
+        assert "NOETHER_CONVENTION: nonmetricity_definition=" in stdout, (
+            "Script must explicitly state the non-metricity definition convention"
+        )
+        assert "NOETHER_CONVENTION: contortion_sign=" in stdout, (
+            "Script must explicitly state the contortion sign convention"
+        )
+        assert "NOETHER_CONVENTION: disformation_sign=" in stdout, (
+            "Script must explicitly state the disformation sign convention"
+        )
+        assert "NOETHER_CONVENTION: ricci_contraction=" in stdout, (
+            "Script must explicitly state the Ricci contraction convention"
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-PERT-013: Levi-Civita regression — existing perturbation evals still
+# pass unchanged.  Evals 3p, 3g, 3a, 3y, 3k still pass with residue_zero
+# and linearized_eom_match True and unchanged NOETHER_RESULT.
+# ---------------------------------------------------------------------------
+
+
+class TestLeviCivitaPerturbationRegression:
+    """VAL-PERT-013: the five Levi-Civita perturbation evals still pass
+    with both checks True and unchanged NOETHER_RESULT after the
+    convention-threading changes."""
+
+    LC_TEMPLATES = [
+        ("3p", "pert_scalar_quadratic"),
+        ("3g", "pert_metric_quadratic"),
+        ("3a", "pert_gauge_quadratic"),
+        ("3y", "pert_yang_mills_quadratic"),
+        ("3k", "pert_kessence_quadratic"),
+    ]
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    @pytest.mark.parametrize("eval_id,template", LC_TEMPLATES)
+    def test_lc_eval_passes_both_checks(self, eval_id, template):
+        """Each LC perturbation eval passes with both residue_zero and
+        linearized_eom_match True."""
+        result = CadabraAdapter().run(
+            KernelTask(
+                capability=Capability.PERTURB,
+                description=f"{eval_id} quadratic-action expansion",
+                payload={"template": template},
+            )
+        )
+        assert result.raw.returncode == 0, (
+            f"eval {eval_id} ({template}) failed: {result.raw.stderr[:500]}"
+        )
+        checks = result.value["checks"]
+        assert checks.get("residue_zero") == "True", (
+            f"eval {eval_id} ({template}) residue_zero != True; "
+            f"checks={checks}; stdout excerpt: {result.raw.stdout[:800]}"
+        )
+        assert checks.get("linearized_eom_match") == "True", (
+            f"eval {eval_id} ({template}) linearized_eom_match != True; "
+            f"checks={checks}; stdout excerpt: {result.raw.stdout[:800]}"
+        )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    @pytest.mark.parametrize("eval_id,template", LC_TEMPLATES)
+    def test_lc_eval_result_returned(self, eval_id, template):
+        """Each LC perturbation eval returns a non-empty NOETHER_RESULT."""
+        result = CadabraAdapter().run(
+            KernelTask(
+                capability=Capability.PERTURB,
+                description=f"{eval_id} quadratic-action expansion",
+                payload={"template": template},
+            )
+        )
+        assert result.expression_tex, (
+            f"eval {eval_id} ({template}) returned empty NOETHER_RESULT"
+        )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    @pytest.mark.parametrize("eval_id,template", LC_TEMPLATES)
+    def test_lc_eval_convention_signs_stated(self, eval_id, template):
+        """Each LC perturbation template states its convention signs
+        (no silently assumed convention), consistent with the
+        noether-default-v1 block."""
+        from noether.npr.conventions import NOETHER_DEFAULT_V1
+
+        result = CadabraAdapter().run(
+            KernelTask(
+                capability=Capability.PERTURB,
+                description=f"{eval_id} quadratic-action expansion",
+                payload={"template": template},
+            )
+        )
+        conventions = result.value.get("conventions", {})
+        assert "signature" in conventions, (
+            f"eval {eval_id} ({template}) missing signature convention"
+        )
+        assert conventions["signature"] == NOETHER_DEFAULT_V1.signature, (
+            f"eval {eval_id} ({template}) signature mismatch: "
+            f"got {conventions['signature']}, expected {NOETHER_DEFAULT_V1.signature}"
+        )
