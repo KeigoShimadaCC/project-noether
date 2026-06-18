@@ -566,6 +566,7 @@ def derive_field(
         llm_version=llm_version,
         script=source,
         detail=detail,
+        conventions=_convention_block(npr),
     )
 
     if results_root is not None:

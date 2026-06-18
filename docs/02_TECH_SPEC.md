@@ -1168,12 +1168,15 @@ or reported true. An action with no metric is refused: `derive_adm` raises
 `NotImplementedError` naming the missing metric object (e.g. "this action
 declares no metric object 'g'"), which the server surface translates to HTTP
 422 and the MCP surface returns as an error dict; no ADM derivation is
-produced. The ADM result carries its full convention block on the `conventions`
-field of `FieldDerivation`: signature, torsion sign, non-metricity definition,
-Ricci-contraction, contortion sign, disformation sign, K-sign, foliation/normal
-convention, and the convention id; for metric-affine NPRs the field-strength
-definition is also included. Changing the elicited Ricci-contraction is
-reflected in the result. Explanatory narration about the connection's constraints
+produced. Every derivation (EOM, perturbation, and ADM alike) carries its
+full convention block on the `conventions` field of `FieldDerivation`:
+signature, torsion sign, non-metricity definition, Ricci-contraction,
+contortion sign, disformation sign, K-sign, foliation/normal convention, and
+the convention id; for metric-affine NPRs the field-strength definition is
+also included. A non-default convention chosen at elicitation (for example
+`ricci_contraction=first-fourth`) appears identically in the convention blocks
+of EOM, perturbation, and ADM results within the same session (VAL-CROSS-003).
+Changing the elicited Ricci-contraction is reflected in all results. Explanatory narration about the connection's constraints
 is on the `narrative` field of `FieldDerivation` (teaching/explanatory prose,
 distinct from `detail` which is failure-diagnostic only) and never sets a
 result expression or flips `verified`.

@@ -98,6 +98,7 @@ def _load_fields(derivation: dict) -> dict[str, Any]:
         "kernel_name": derivation.get("kernel_name", ""),
         "kernel_version": derivation.get("kernel_version", ""),
         "script": derivation.get("script", ""),
+        "conventions": derivation.get("conventions", {}),
     }
 
 
@@ -1820,6 +1821,746 @@ class TestADMConventionBlock:
             "Levi-Civita ADM convention block should not include "
             "field_strength_definition; got keys: " + str(sorted(conv.keys()))
         )
+
+
+# ---------------------------------------------------------------------------
+# VAL-CROSS-003: Convention override threads through EOM, perturbation, ADM
+# ---------------------------------------------------------------------------
+
+
+class TestConventionOverrideCrossKind:
+    """VAL-CROSS-003: A non-default convention chosen at elicitation appears
+    identically in the assumptions snapshot of kind=eom, kind=perturbation,
+    and kind=adm results in the same session."""
+
+    @requires_cadabra
+    def test_convention_override_appears_in_all_three_kinds(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """Resolve with a non-default Ricci contraction (first-fourth instead
+        of first-third), then derive eom, perturbation, and adm on the same
+        session. All three bundles' assumptions.json conventions must be
+        identical and must carry the override."""
+        import json
+
+        client = TestClient(
+            create_app(
+                store=store,
+                llm=StubLLMAdapter(reply=templates.get("eval2_palatini_metric")),
+                results_root=results_root,
+            )
+        )
+
+        body = _create(client)
+        sid = body["session_id"]
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        # Resolve with non-default Ricci contraction
+        _resolve_all_palatini(
+            body, _resolve_http,
+            connection="independent", ricci_contraction="first-fourth",
+        )
+
+        # Derive EOM
+        eom_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "eom", "with_respect_to": ["g"]},
+        )
+        assert eom_resp.status_code == 200, eom_resp.text
+        eom_d = eom_resp.json()["derivations"][0]
+        eom_conv = eom_d.get("conventions", {})
+        assert eom_conv.get("ricci_contraction") == "first-fourth", (
+            f"EOM derivation must carry the non-default Ricci contraction; "
+            f"got {eom_conv}"
+        )
+
+        # Derive perturbation
+        pert_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "perturbation"},
+        )
+        assert pert_resp.status_code == 200, pert_resp.text
+        pert_d = pert_resp.json()["derivations"][0]
+        pert_conv = pert_d.get("conventions", {})
+        assert pert_conv.get("ricci_contraction") == "first-fourth", (
+            f"perturbation derivation must carry the non-default Ricci "
+            f"contraction; got {pert_conv}"
+        )
+
+        # Derive ADM
+        adm_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "adm"},
+        )
+        assert adm_resp.status_code == 200, adm_resp.text
+        adm_d = adm_resp.json()["derivations"][0]
+        adm_conv = adm_d.get("conventions", {})
+        assert adm_conv.get("ricci_contraction") == "first-fourth", (
+            f"ADM derivation must carry the non-default Ricci contraction; "
+            f"got {adm_conv}"
+        )
+
+        # All three convention blocks must be identical
+        assert eom_conv == pert_conv == adm_conv, (
+            f"convention blocks must be identical across all three kinds; "
+            f"eom={eom_conv}, pert={pert_conv}, adm={adm_conv}"
+        )
+
+        # Also verify the assumptions.json files on disk match
+        session = store.get(sid)
+        assumptions_list = []
+        for rid in session.result_ids:
+            assumptions_path = results_root / sid / rid / "assumptions.json"
+            if assumptions_path.exists():
+                data = json.loads(assumptions_path.read_text())
+                assumptions_list.append(data.get("conventions", {}))
+
+        if len(assumptions_list) >= 2:
+            first = assumptions_list[0]
+            for a in assumptions_list[1:]:
+                assert a == first, (
+                    f"assumptions.json conventions must be identical; "
+                    f"first={first}, other={a}"
+                )
+            assert first.get("ricci_contraction") == "first-fourth", (
+                f"assumptions.json must carry the override; got "
+                f"{first.get('ricci_contraction')}"
+            )
+
+    def test_convention_block_on_eom_derivation(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """EOM derivations carry a non-empty conventions block (not just ADM)."""
+        client = TestClient(
+            create_app(
+                store=store,
+                llm=StubLLMAdapter(reply=templates.get("eval2_palatini_metric")),
+                results_root=results_root,
+            )
+        )
+        body = _create(client)
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+
+        eom_resp = client.post(
+            f"/sessions/{body['session_id']}/derive",
+            json={"kind": "eom", "with_respect_to": ["g"]},
+        )
+        assert eom_resp.status_code == 200
+        eom_d = eom_resp.json()["derivations"][0]
+        conv = eom_d.get("conventions", {})
+        assert conv, "EOM derivation must carry a non-empty convention block"
+        assert "ricci_contraction" in conv, (
+            f"EOM convention block must include ricci_contraction; got {sorted(conv.keys())}"
+        )
+        assert "signature" in conv, (
+            f"EOM convention block must include signature; got {sorted(conv.keys())}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-CROSS-004: One action, three operations, agreeing geometry in same session
+# ---------------------------------------------------------------------------
+
+
+class TestThreeKindsOneSession:
+    """VAL-CROSS-004: For one metric-affine action, eom then perturbation
+    then adm run in the same session against the same geometry.connection,
+    and all appear in one results payload."""
+
+    @requires_cadabra
+    def test_three_kinds_one_session_agreeing_geometry(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """Run eom, perturbation, and adm on the same session and verify
+        all three appear in /results with identical geometry.connection."""
+        client = TestClient(
+            create_app(
+                store=store,
+                llm=StubLLMAdapter(reply=templates.get("eval2_palatini_metric")),
+                results_root=results_root,
+            )
+        )
+
+        body = _create(client)
+        sid = body["session_id"]
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+
+        # Derive EOM
+        eom_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "eom", "with_respect_to": ["g"]},
+        )
+        assert eom_resp.status_code == 200, eom_resp.text
+        eom_kinds = {d["kind"] for d in eom_resp.json()["derivations"]}
+        assert "eom" in eom_kinds
+
+        # Derive perturbation
+        pert_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "perturbation"},
+        )
+        assert pert_resp.status_code == 200, pert_resp.text
+        pert_kinds = {d["kind"] for d in pert_resp.json()["derivations"]}
+        assert "perturbation" in pert_kinds
+
+        # Derive ADM
+        adm_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "adm"},
+        )
+        assert adm_resp.status_code == 200, adm_resp.text
+        adm_kinds = {d["kind"] for d in adm_resp.json()["derivations"]}
+        assert "adm" in adm_kinds
+
+        # GET /results includes all three kinds
+        results_resp = client.get(f"/sessions/{sid}/results")
+        assert results_resp.status_code == 200
+        results = results_resp.json()
+        result_kinds = {d["kind"] for d in results["results"]}
+        assert {"eom", "perturbation", "adm"} <= result_kinds, (
+            f"/results must include all three kinds; got {result_kinds}"
+        )
+
+        # All result_ids from derivations appear in the session
+        session = store.get(sid)
+        all_result_ids = set(session.result_ids)
+        eom_rids = {d["result_id"] for d in eom_resp.json()["derivations"]}
+        pert_rids = {d["result_id"] for d in pert_resp.json()["derivations"]}
+        adm_rids = {d["result_id"] for d in adm_resp.json()["derivations"]}
+        assert eom_rids <= all_result_ids, (
+            f"EOM result_ids must be in session; missing={eom_rids - all_result_ids}"
+        )
+        assert pert_rids <= all_result_ids, (
+            f"perturbation result_ids must be in session; missing={pert_rids - all_result_ids}"
+        )
+        assert adm_rids <= all_result_ids, (
+            f"ADM result_ids must be in session; missing={adm_rids - all_result_ids}"
+        )
+
+        # Each bundle's geometry.connection is identical
+        # (checked via assumptions.json from the bundles)
+        import json
+
+        connection_specs = []
+        for rid in session.result_ids:
+            assumptions_path = results_root / sid / rid / "assumptions.json"
+            if assumptions_path.exists():
+                data = json.loads(assumptions_path.read_text())
+                geo = data.get("geometry", {}).get("connection", {})
+                connection_specs.append(geo)
+
+        if len(connection_specs) >= 2:
+            first = connection_specs[0]
+            for spec in connection_specs[1:]:
+                assert spec == first, (
+                    f"geometry.connection must be identical across bundles; "
+                    f"first={first}, other={spec}"
+                )
+            assert first.get("type") == "independent", (
+                f"geometry.connection.type must be 'independent'; got {first.get('type')}"
+            )
+
+    def test_adm_only_on_metric_affine_session(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """Even without cadabra, ADM can be derived on a metric-affine
+        session and appears in results alongside any prior results."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+
+        body = _create(client)
+        sid = body["session_id"]
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+
+        # Derive ADM (no cadabra needed)
+        adm_resp = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        assert adm_resp.status_code == 200, adm_resp.text
+        adm_d = adm_resp.json()["derivations"]
+        assert len(adm_d) > 0, "ADM must produce derivations"
+        kinds = {d["kind"] for d in adm_d}
+        assert "adm" in kinds
+
+        # GET /results includes the ADM results
+        results_resp = client.get(f"/sessions/{sid}/results")
+        assert results_resp.status_code == 200
+        results = results_resp.json()
+        result_kinds = {d["kind"] for d in results["results"]}
+        assert "adm" in result_kinds, (
+            f"/results must include ADM kind; got {result_kinds}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-CROSS-009: Levi-Civita regression -- pure-GR session unchanged
+# ---------------------------------------------------------------------------
+
+
+class TestLCRegressionCrossKind:
+    """VAL-CROSS-009: A pure-GR session still walks action -> EOM -> ADM
+    unchanged. eval1 and eval1s exit 0 with checks True; GR plan has no
+    INDEPENDENT_CONNECTION; connection type levi-civita."""
+
+    def test_gr_plan_has_no_independent_connection(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """A pure-GR session plan contains no independent-connection step."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+
+        # Ingest a pure GR action (no Gamma annotation)
+        eh_lagrangian = r"R"
+        resp = client.post("/sessions", json={"lagrangian": eh_lagrangian})
+        assert resp.status_code == 201
+        body = resp.json()
+        sid = body["session_id"]
+
+        # Resolve geometry questions to Levi-Civita
+        resolutions = {}
+        for q in body["questions"]:
+            if q["id"] == "amb-connection":
+                resolutions[q["id"]] = "levi-civita"
+            elif q["id"] == "amb-conventions":
+                resolutions[q["id"]] = "noether-default-v1"
+            elif q["id"] == "amb-vary-wrt":
+                resolutions[q["id"]] = q["options"][0]
+            elif q["id"] == "amb-curvature-free":
+                resolutions[q["id"]] = "curvature-allowed"
+            elif q.get("resolution") is None:
+                resolutions[q["id"]] = q["options"][0]
+
+        if resolutions:
+            resolve_resp = client.post(
+                f"/sessions/{sid}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resolve_resp.status_code == 200
+
+        # Get the plan
+        plan_resp = client.get(f"/sessions/{sid}/plan")
+        assert plan_resp.status_code == 200
+        plan = plan_resp.json()
+        capabilities = [s["capability"] for s in plan["steps"]]
+        assert "independent-connection" not in capabilities, (
+            f"pure-GR plan must not have INDEPENDENT_CONNECTION; got {capabilities}"
+        )
+
+        # Verify connection type is levi-civita
+        session = store.get(sid)
+        assert session.npr.geometry.connection.type == "levi-civita", (
+            f"connection type must be levi-civita; "
+            f"got {session.npr.geometry.connection.type}"
+        )
+
+    def test_eval1s_adm_checks_pass(self) -> None:
+        """The GR ADM eval (eval1s) component checks pass."""
+        from noether.kernels.base import Capability, KernelTask
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+
+        adapter = SympyKernelAdapter()
+        result = adapter.run(
+            KernelTask(
+                capability=Capability.COMPONENT_EVAL,
+                description="ADM GR 1+2 check",
+                payload={"check": "adm-gr-1p2"},
+            )
+        )
+        assert result.value.get("passed"), (
+            f"GR ADM checks must pass; detail: {result.value.get('detail', '')}"
+        )
+
+    def test_eval1_eom_checks_pass(self) -> None:
+        """The GR EOM eval (eval1) structure and component checks pass."""
+        from evals.eval1_eh_trace import MU, NU, build_npr, target_eom
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.planner import build_plan
+        from noether.verify.checks import (
+            DivergenceFreeCheck,
+            SymmetricCheck,
+            WellFormedCheck,
+        )
+        from noether.verify.ladder import run_ladder
+
+        npr = build_npr(resolved=True)
+        plan = build_plan(npr)
+        # GR plan has no INDEPENDENT_CONNECTION
+        caps = [s.capability.value for s in plan.steps]
+        assert "independent-connection" not in caps
+
+        adapters = {"sympy": SympyKernelAdapter()}
+        eom = target_eom()
+        report = run_ladder(
+            eom,
+            [
+                WellFormedCheck(expected_free=[MU, NU]),
+                SymmetricCheck(),
+                DivergenceFreeCheck(),
+            ],
+            adapters,
+        )
+        assert report.all_passed, report.summary()
+
+    def test_gr_session_adm_derivation(self, store: SessionStore, results_root: Path) -> None:
+        """A pure-GR session can derive ADM, and the derivation carries
+        conventions with connection type levi-civita."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+
+        # Ingest pure GR
+        resp = client.post("/sessions", json={"lagrangian": "R"})
+        assert resp.status_code == 201
+        body = resp.json()
+        sid = body["session_id"]
+
+        # Resolve to Levi-Civita
+        resolutions = {}
+        for q in body["questions"]:
+            if q["id"] == "amb-connection":
+                resolutions[q["id"]] = "levi-civita"
+            elif q["id"] == "amb-conventions":
+                resolutions[q["id"]] = "noether-default-v1"
+            elif q["id"] == "amb-vary-wrt":
+                resolutions[q["id"]] = q["options"][0]
+            elif q["id"] == "amb-curvature-free":
+                resolutions[q["id"]] = "curvature-allowed"
+            elif q.get("resolution") is None:
+                resolutions[q["id"]] = q["options"][0]
+        if resolutions:
+            client.post(
+                f"/sessions/{sid}/resolve",
+                json={"resolutions": resolutions},
+            )
+
+        # Derive ADM
+        adm_resp = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        assert adm_resp.status_code == 200, adm_resp.text
+        derivations = adm_resp.json()["derivations"]
+        assert len(derivations) > 0
+
+        # The GR ADM convention block should NOT have field_strength_definition
+        # (that's metric-affine only)
+        conv = derivations[0].get("conventions", {})
+        assert "field_strength_definition" not in conv, (
+            "GR ADM should not have field_strength_definition in convention block"
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-CROSS-013: HTTP reachability -- all three operation kinds
+# ---------------------------------------------------------------------------
+
+
+class TestHTTPOperationKindReachability:
+    """VAL-CROSS-013: On a well-posed metric-affine session, kind=eom,
+    kind=perturbation, kind=adm each return 200 with derivations; an unknown
+    kind returns 422; a with_respect_to naming an undeclared field returns 400.
+    """
+
+    def _setup_resolved_session(
+        self, store: SessionStore, results_root: Path
+    ) -> tuple[TestClient, str]:
+        """Create and resolve a Palatini session for reachability testing."""
+        client = TestClient(create_app(store=store, results_root=results_root))
+        body = _create(client)
+        sid = body["session_id"]
+
+        def _resolve_http(session_id: str, resolutions: dict) -> dict:
+            resp = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        _resolve_all_palatini(body, _resolve_http, connection="independent")
+        return client, sid
+
+    def test_kind_eom_returns_200_with_derivations(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """POST /derive kind=eom returns 200 with derivations on a
+        well-posed metric-affine session."""
+        client, sid = self._setup_resolved_session(store, results_root)
+
+        # Use a stub LLM so the EOM derivation runs without a real agent
+        from noether.llm import StubLLMAdapter
+        client2 = TestClient(
+            create_app(
+                store=store,
+                llm=StubLLMAdapter(reply=templates.get("eval2_palatini_metric")),
+                results_root=results_root,
+            )
+        )
+
+        # Re-resolve for client2 (same session)
+        resp = client2.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "eom", "with_respect_to": ["g"]},
+        )
+        # May be 200 (cadabra available) or 503 (cadabra missing)
+        if CadabraAdapter().available():
+            assert resp.status_code == 200, (
+                f"expected 200 for kind=eom; got {resp.status_code}: {resp.text}"
+            )
+            derivations = resp.json()["derivations"]
+            assert len(derivations) > 0, "must return at least one EOM derivation"
+            assert all(d["kind"] == "eom" for d in derivations), (
+                "all derivations must have kind='eom'"
+            )
+        else:
+            assert resp.status_code == 503, (
+                "without cadabra, eom derive should return 503"
+            )
+
+    def test_kind_perturbation_returns_200_with_checks(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """POST /derive kind=perturbation returns 200 with derivations and
+        a checks dict on a well-posed metric-affine session."""
+        client, sid = self._setup_resolved_session(store, results_root)
+
+        from noether.llm import StubLLMAdapter
+        client2 = TestClient(
+            create_app(
+                store=store,
+                llm=StubLLMAdapter(
+                    reply=templates.get("pert_metric_affine_quadratic")
+                ),
+                results_root=results_root,
+            )
+        )
+
+        resp = client2.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "perturbation"},
+        )
+        if CadabraAdapter().available():
+            assert resp.status_code == 200, (
+                f"expected 200 for kind=perturbation; got {resp.status_code}: {resp.text}"
+            )
+            derivations = resp.json()["derivations"]
+            assert len(derivations) > 0
+            for d in derivations:
+                assert d["kind"] == "perturbation"
+                assert isinstance(d["checks"], dict)
+        else:
+            assert resp.status_code == 503
+
+    def test_kind_adm_returns_200_with_derivations(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """POST /derive kind=adm returns 200 with derivations on a
+        well-posed metric-affine session (no cadabra needed)."""
+        client, sid = self._setup_resolved_session(store, results_root)
+
+        resp = client.post(f"/sessions/{sid}/derive", json={"kind": "adm"})
+        assert resp.status_code == 200, (
+            f"expected 200 for kind=adm; got {resp.status_code}: {resp.text}"
+        )
+        derivations = resp.json()["derivations"]
+        assert len(derivations) > 0, "ADM must produce derivations"
+        for d in derivations:
+            assert d["kind"] == "adm", (
+                f"expected kind='adm'; got {d['kind']!r}"
+            )
+
+    def test_unknown_kind_returns_422(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """POST /derive with an unknown kind returns 422."""
+        client, sid = self._setup_resolved_session(store, results_root)
+
+        resp = client.post(f"/sessions/{sid}/derive", json={"kind": "bogus"})
+        assert resp.status_code == 422, (
+            f"expected 422 for unknown kind; got {resp.status_code}: {resp.text}"
+        )
+
+    def test_bad_wrt_returns_400(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """POST /derive with with_respect_to naming an undeclared field
+        returns 400."""
+        client, sid = self._setup_resolved_session(store, results_root)
+
+        resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "eom", "with_respect_to": ["nonexistent_field"]},
+        )
+        assert resp.status_code == 400, (
+            f"expected 400 for undeclared field; got {resp.status_code}: {resp.text}"
+        )
+        assert "nonexistent_field" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# VAL-CROSS-017: New metric-affine evals registered as CLI subcommands
+# ---------------------------------------------------------------------------
+
+
+class TestMetricAffineEvalSubcommands:
+    """VAL-CROSS-017: The metric-affine acceptance evals (Palatini/EOM,
+    perturbation, ADM) are invokable as noether <evalname> subcommands
+    and exit 0 with their checks True (skipping only if cadabra2 absent)."""
+
+    def test_eval2_registered_in_eval_keys(self) -> None:
+        """eval2 (Palatini/EOM) is in EVAL_KEYS."""
+        from noether.cli.main import EVAL_KEYS
+
+        assert "eval2" in EVAL_KEYS, f"eval2 must be in EVAL_KEYS; got {EVAL_KEYS}"
+
+    def test_eval4ma_registered_in_eval_keys(self) -> None:
+        """eval4ma (metric-affine perturbation) is in EVAL_KEYS."""
+        from noether.cli.main import EVAL_KEYS
+
+        assert "eval4ma" in EVAL_KEYS, (
+            f"eval4ma must be in EVAL_KEYS; got {EVAL_KEYS}"
+        )
+
+    def test_adm_affine_registered_in_eval_keys(self) -> None:
+        """adm-affine (metric-affine ADM) is in EVAL_KEYS."""
+        from noether.cli.main import EVAL_KEYS
+
+        assert "adm-affine" in EVAL_KEYS, (
+            f"adm-affine must be in EVAL_KEYS; got {EVAL_KEYS}"
+        )
+
+    def test_eval2_spec_builds(self) -> None:
+        """The eval2 spec can be built and has the expected structure."""
+        from evals.registry import get_spec
+
+        spec = get_spec("eval2")
+        assert spec.key == "eval2"
+        assert "Palatini" in spec.title
+        npr = spec.build_npr(resolved=True)
+        assert npr.geometry.connection.type == "independent"
+
+    def test_eval4ma_spec_builds(self) -> None:
+        """The eval4ma spec can be built and has the expected structure."""
+        from evals.registry import get_spec
+
+        spec = get_spec("eval4ma")
+        assert spec.key == "eval4ma"
+        npr = spec.build_npr(resolved=True)
+        assert npr.geometry.connection.type == "independent"
+        assert npr.task.type == "perturb"
+
+    def test_adm_affine_spec_builds(self) -> None:
+        """The adm-affine spec can be built and has the expected structure."""
+        from evals.registry import get_spec
+
+        spec = get_spec("adm-affine")
+        assert spec.key == "adm-affine"
+        npr = spec.build_npr(resolved=True)
+        assert npr.geometry.connection.type == "independent"
+        assert npr.task.type == "adm"
+
+    def test_eval2_runs_via_cli(self, tmp_path: Path) -> None:
+        """`noether eval2` runs from the CLI and exits 0 with checks True
+        (or skips if cadabra2 absent)."""
+        import subprocess
+
+        result = subprocess.run(
+            [".venv/bin/python", "-m", "noether.cli.main", "eval2",
+             "--results", str(tmp_path / "results")],
+            capture_output=True,
+            text=True,
+            cwd="/Users/keigoshimada/Documents/project-noether",
+            timeout=120,
+        )
+        if CadabraAdapter().available():
+            assert result.returncode == 0, (
+                f"eval2 must exit 0 when cadabra2 is available; "
+                f"exit={result.returncode}, stdout={result.stdout[:500]}, "
+                f"stderr={result.stderr[:500]}"
+            )
+            assert "PASS" in result.stdout or "Verified: True" in result.stdout, (
+                f"eval2 must report passing checks; stdout={result.stdout[:500]}"
+            )
+        else:
+            # When cadabra is absent, the eval should still run (skipping
+            # the cadabra parts) and exit 0 or skip gracefully
+            assert result.returncode in (0, 2), (
+                f"eval2 must exit 0 or 2 when cadabra2 absent; "
+                f"exit={result.returncode}"
+            )
+
+    def test_adm_affine_runs_via_cli(self, tmp_path: Path) -> None:
+        """`noether adm-affine` runs from the CLI and exits 0 with its
+        checks True (SymPy only, no cadabra needed)."""
+        import subprocess
+
+        result = subprocess.run(
+            [".venv/bin/python", "-m", "noether.cli.main", "adm-affine",
+             "--results", str(tmp_path / "results")],
+            capture_output=True,
+            text=True,
+            cwd="/Users/keigoshimada/Documents/project-noether",
+            timeout=120,
+        )
+        assert result.returncode == 0, (
+            f"adm-affine must exit 0; exit={result.returncode}, "
+            f"stdout={result.stdout[:500]}, stderr={result.stderr[:500]}"
+        )
+        assert "PASS" in result.stdout or "Verified: True" in result.stdout, (
+            f"adm-affine must report passing checks; stdout={result.stdout[:500]}"
+        )
+
+    def test_eval4ma_runs_via_cli(self, tmp_path: Path) -> None:
+        """`noether eval4ma` runs from the CLI and exits 0 with its
+        checks True (or skips if cadabra2 absent)."""
+        import subprocess
+
+        result = subprocess.run(
+            [".venv/bin/python", "-m", "noether.cli.main", "eval4ma",
+             "--results", str(tmp_path / "results")],
+            capture_output=True,
+            text=True,
+            cwd="/Users/keigoshimada/Documents/project-noether",
+            timeout=120,
+        )
+        if CadabraAdapter().available():
+            assert result.returncode == 0, (
+                f"eval4ma must exit 0 when cadabra2 is available; "
+                f"exit={result.returncode}, stdout={result.stdout[:500]}, "
+                f"stderr={result.stderr[:500]}"
+            )
+        else:
+            # Without cadabra, the perturbation eval can't run the
+            # residue check; it should skip gracefully
+            assert result.returncode in (0, 1, 2), (
+                f"eval4ma exit code when cadabra absent: {result.returncode}; "
+                f"stdout={result.stdout[:300]}"
+            )
 
 
 def _build_metric_affine_adm_npr_helper():
