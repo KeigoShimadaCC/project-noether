@@ -190,9 +190,11 @@ for scalars, `pert_kessence_quadratic` (eval 3k) for an `X`-dependent scalar
 marker), expanding the action to quadratic order and
 checking the linearized EOM two ways; all checks must pass before a result is
 called verified. On a metric-affine (independent-connection) background,
-`pert_vector_affine_dA_quadratic` covers the F=dA field-strength choice
-(both checks pass, no connection fluctuation in the result) and
-`pert_vector_affine_covcurl_quadratic` covers the F=nabla A choice
+a metric perturbation routes to `pert_metric_affine_quadratic` (including the
+connection fluctuation dG), and a gauge-field (vector) perturbation routes to
+`pert_vector_affine_dA_quadratic` for the F=dA field-strength choice
+(both checks pass, no connection fluctuation in the result) or
+`pert_vector_affine_covcurl_quadratic` for the F=nabla A choice
 (residue gated due to the Kronecker-delta limitation with mixed-index dG
 objects; SymPy cross-check provides independent verification); the two
 choices differ by torsion-dependent terms (VAL-PERT-017) and the covcurl

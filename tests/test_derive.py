@@ -19,8 +19,17 @@ from noether.kernels.cadabra.generate import (
 )
 from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.llm.base import StubLLMAdapter
-from noether.npr import NOETHER_DEFAULT_V1, NPR, Action, Geometry, ObjectDecl, Task
-from noether.npr.ast import tensor
+from noether.npr import (
+    NOETHER_DEFAULT_V1,
+    NPR,
+    Action,
+    ConnectionSpec,
+    Conventions,
+    Geometry,
+    ObjectDecl,
+    Task,
+)
+from noether.npr.ast import down, prod, tensor, up
 from noether.orchestrator.derive import (
     _compositional_decomposition,
     _result_detail,
@@ -788,3 +797,135 @@ class TestPerturbationRefusalNamesField:
         assert d.wrt == "g"
         assert d.kind == "perturbation"
         assert d.capability is Capability.PERTURB
+
+
+class TestVectorAffinePerturbationRouting:
+    """Verify that _variation_key routes a gauge-field (vector) perturbation
+    on a metric-affine background to the vector-affine template (not the LC
+    pert_gauge_quadratic), selecting dA vs covcurl per the
+    field_strength_definition convention. Levi-Civita gauge perturbations
+    must still route to perturb-gauge."""
+
+    def _build_metric_affine_npr(
+        self, field_strength_definition: str = "exterior-derivative"
+    ) -> NPR:
+        """Build a metric-affine NPR with a gauge field A and the specified
+        field_strength_definition convention."""
+        conventions = Conventions(
+            id="noether-default-v1",
+            dimension=4,
+            signature="mostly-plus",
+            riemann_sign="+1",
+            torsion_sign="+1",
+            nonmetricity_definition="nabla-g",
+            contortion_sign="+1",
+            disformation_sign="+1",
+            ricci_contraction="first-third",
+            field_strength_definition=field_strength_definition,
+            symmetrization_weight="1/n!",
+        )
+        return NPR(
+            conventions=conventions,
+            geometry=Geometry(
+                connection=ConnectionSpec(
+                    type="independent", torsion=True, nonmetricity=True
+                )
+            ),
+            objects=[
+                ObjectDecl(
+                    name="g", kind="metric", role="background",
+                    symmetry="symmetric", rank=2,
+                ),
+                ObjectDecl(
+                    name="Gamma", kind="connection", role="dynamical", rank=3,
+                ),
+                ObjectDecl(
+                    name="A", kind="tensor-field", role="dynamical", rank=1,
+                ),
+            ],
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=prod(
+                    tensor("F", up("mu"), up("nu")),
+                    tensor("F", down("mu"), down("nu")),
+                ),
+                lagrangian_tex=r"F^{\mu\nu} F_{\mu\nu}",
+            ),
+            task=Task(type="perturb", with_respect_to=["A"]),
+        )
+
+    def test_vector_on_independent_connection_routes_to_dA_template(self):
+        """A gauge-field perturbation on a metric-affine background with
+        field_strength_definition=exterior-derivative routes to the dA
+        vector-affine template, not the LC pert_gauge_quadratic."""
+        from noether.kernels.cadabra.generate import _variation_key
+
+        npr = self._build_metric_affine_npr("exterior-derivative")
+        key = _variation_key(npr, "A", "perturbation")
+        assert key == "perturb-vector-affine-dA", (
+            f"expected perturb-vector-affine-dA for vector perturbation on "
+            f"independent-connection background with F=dA, got {key!r}"
+        )
+
+    def test_vector_on_independent_connection_covcurl_routes_to_covcurl(self):
+        """A gauge-field perturbation on a metric-affine background with
+        field_strength_definition=covariant-curl routes to the covcurl
+        vector-affine template."""
+        from noether.kernels.cadabra.generate import _variation_key
+
+        npr = self._build_metric_affine_npr("covariant-curl")
+        key = _variation_key(npr, "A", "perturbation")
+        assert key == "perturb-vector-affine-covcurl", (
+            f"expected perturb-vector-affine-covcurl for vector perturbation on "
+            f"independent-connection background with F=nabla A, got {key!r}"
+        )
+
+    def test_vector_on_levi_civita_still_routes_to_perturb_gauge(self):
+        """Levi-Civita gauge perturbations must still route to
+        perturb-gauge (the LC Maxwell worked example)."""
+        from noether.kernels.cadabra.generate import _variation_key
+
+        npr = NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(),
+            objects=[
+                ObjectDecl(
+                    name="g", kind="metric", role="background",
+                    symmetry="symmetric", rank=2,
+                ),
+                ObjectDecl(
+                    name="A", kind="tensor-field", role="dynamical", rank=1,
+                ),
+            ],
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=tensor("F", up("mu"), up("nu")),
+                lagrangian_tex=r"F^{\mu\nu} F_{\mu\nu}",
+            ),
+            task=Task(type="perturb", with_respect_to=["A"]),
+        )
+        key = _variation_key(npr, "A", "perturbation")
+        assert key == "perturb-gauge", (
+            f"expected perturb-gauge for Levi-Civita gauge perturbation, "
+            f"got {key!r}"
+        )
+
+    def test_dA_prompt_uses_vector_affine_dA_template(self):
+        """The generation prompt for a dA vector perturbation on a
+        metric-affine background uses the pert_vector_affine_dA_quadratic
+        worked example."""
+        npr = self._build_metric_affine_npr("exterior-derivative")
+        _, prompt = build_generation_prompt(npr, "A", "perturbation")
+        assert templates.get("pert_vector_affine_dA_quadratic") in prompt, (
+            "prompt must include the dA vector-affine worked example"
+        )
+
+    def test_covcurl_prompt_uses_vector_affine_covcurl_template(self):
+        """The generation prompt for a covcurl vector perturbation on a
+        metric-affine background uses the pert_vector_affine_covcurl_quadratic
+        worked example."""
+        npr = self._build_metric_affine_npr("covariant-curl")
+        _, prompt = build_generation_prompt(npr, "A", "perturbation")
+        assert templates.get("pert_vector_affine_covcurl_quadratic") in prompt, (
+            "prompt must include the covcurl vector-affine worked example"
+        )

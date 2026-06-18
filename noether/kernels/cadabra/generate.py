@@ -260,6 +260,16 @@ def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
                 return "perturb-metric-affine"
             return "perturb-metric"
         if obj is not None and obj.kind == "tensor-field" and obj.rank == 1:
+            # On a metric-affine (independent-connection) background, the
+            # gauge-field perturbation must use the torsion-aware vector-affine
+            # template, not the Levi-Civita pert_gauge_quadratic. The choice
+            # of dA vs covcurl follows the field_strength_definition convention
+            # (mirroring the metric perturbation routing above).
+            if getattr(npr.geometry.connection, "type", None) == "independent":
+                fsd = getattr(npr.conventions, "field_strength_definition", None)
+                if fsd == "covariant-curl":
+                    return "perturb-vector-affine-covcurl"
+                return "perturb-vector-affine-dA"
             return "perturb-yang-mills" if _is_non_abelian(obj) else "perturb-gauge"
         raise NotImplementedError(
             "perturbation currently has audited scaffolds for scalar fields "

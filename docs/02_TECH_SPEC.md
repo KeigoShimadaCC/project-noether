@@ -508,7 +508,15 @@ perturbative expansion (xPert), Young projection.
    photon's two transverse polarizations, and `pert_yang_mills_quadratic`
    (eval 3y) handles a non-abelian `gauge_group`, adding the
    background-covariant derivative and the gluon self-coupling
-   `g f^{abc} v^b Fbar^c` to that operator. Every scaffold uses Cadabra weights
+   `g f^{abc} v^b Fbar^c` to that operator. On a metric-affine
+   (independent-connection) background, an abelian gauge potential routes to
+   the torsion-aware vector-affine templates instead: `pert_vector_affine_dA_quadratic`
+   when the field-strength definition is `F = dA` (exterior derivative, no Gamma
+   dependence, standard Maxwell fluctuation with no connection terms), or
+   `pert_vector_affine_covcurl_quadratic` when `F = nabla A` (covariant curl,
+   T-dependent terms and a*dG cross-quadratic mixing). The choice follows the
+   `field_strength_definition` convention resolved through elicitation; at
+   `T=0` the two templates agree. Every scaffold uses Cadabra weights
    to track fluctuation order and checks the linearized equation of motion
    twice, against the documented operator and by an independent route
    (linearizing the full nonlinear equation, or rebuilding the linearized
