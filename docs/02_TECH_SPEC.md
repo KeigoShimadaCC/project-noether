@@ -166,9 +166,17 @@ missing on the server. Each derivation records its result id into the session
 and stores the presentation-shaped derivations in its provenance bundle, so
 `GET /sessions/{id}/results` reloads the full history (with `stale_result_ids`
 naming any result a later resolution invalidated) without re-running a kernel;
-the MCP `noether_results` tool returns the same shape. Sessions persist as JSON
+the MCP `noether_results` tool returns the same shape. The cross-surface
+consistency is verified: derivations returned by `POST /derive` equal those
+reloaded by `GET /results`, MCP `noether_results`, and the bundle
+`derivations.json` field for field by `result_id`; a gated result reads
+identically (same `verified`, `detail`, `checks`) across HTTP and MCP; a late
+resolution marks prior results stale on both surfaces; and a metric-affine
+session resumes with geometry, NPR version history, and result ids intact.
+Sessions persist as JSON
 through `noether.orchestrator.store.SessionStore` and are shared by CLI, web,
-and MCP frontends. Tested in `tests/test_server.py` (skips without the extra).
+and MCP frontends. Tested in `tests/test_server.py` and
+`tests/test_cross_flows.py` (both skip without the extra).
 
 ## 3. Orchestrator
 

@@ -58,7 +58,9 @@ and stays on the default Levi-Civita draft.
   roles, symmetries, conventions, ask) in clean LaTeX and waits for confirmation.
   This read-back is stored as the assumption snapshot in the provenance bundle.
 - Mid-session changes are first-class: changing an answer creates a new NPR
-  version and explicitly marks dependent results stale.
+  version and explicitly marks dependent results stale, and this stale state
+  is consistent across all surfaces (HTTP `GET /results`, MCP
+  `noether_results`, and the frontend).
 
 ### 1.3 The ambiguity ledger
 
@@ -226,6 +228,9 @@ metric is accepted; one without a metric is refused rather than guessed.
   golden suite plus eval reproduction before adoption.
 - **Provenance from day one.** The bundle format exists in the walking skeleton,
   not retrofitted. `noether reproduce` works from the first shipped result.
+  Cross-surface consistency is tested: the derivations returned by `POST /derive`
+  equal those reloaded by `GET /results`, MCP `noether_results`, and the bundle
+  `derivations.json` field for field by `result_id`.
 - **Convention discipline.** All development, tests, and docs use
   `noether-default-v1` (AGENTS.md §5) unless explicitly testing convention
   handling, and convention-handling tests must cover at least one non-default

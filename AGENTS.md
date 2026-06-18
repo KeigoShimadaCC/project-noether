@@ -136,7 +136,10 @@ evals/               Executable evals 1-5, 1s, 3s, 3p, 3g, 3a, 3y, 3k, 6 (cubic 
                      8 (nonminimal scalar-tensor by composition, both EOMs)
                      + a general-path eval (test_eval_general) + registry +
                      pytest gates
-tests/               Unit and adapter tests (cadabra golden test included)
+tests/               Unit and adapter tests (cadabra golden test included;
+                     test_cross_flows.py covers metric-affine cross-surface
+                     consistency: HTTP/MCP/bundle round-trip, stale marking,
+                     session resume, and the MCP blocked/refusal path)
 frontend/            Web client (Next.js + KaTeX) over the HTTP session API;
                      /api/* proxied to `noether serve`, no client-side physics
 pyproject.toml       Package, deps, ruff, pytest config
@@ -192,7 +195,15 @@ presentation over data the server already returned, so no physics runs in the
 browser. Derivations persist: each run records its result id into the session
 and writes the presentation-shaped derivations into its provenance bundle, so
 the same history reloads across the server (`GET /sessions/{id}/results`), MCP
-(`noether_results`), and web. A resolution that lands after results already
+(`noether_results`), and web. The cross-flow consistency is tested:
+derivations returned by `POST /derive` equal those reloaded by `GET /results`,
+MCP `noether_results`, and the bundle `derivations.json` field for field by
+`result_id`; a gated result reads identically across HTTP and MCP; a late
+resolution marks prior results stale on both surfaces; the full MCP tool chain
+(ingest->resolve->plan->derive) returns blocked dicts while open and never
+raises on the refusal path; and a metric-affine session resumes with geometry
+resolutions, NPR version history, and result ids intact so a follow-up derive
+needs no re-elicitation. A resolution that lands after results already
 exist marks them stale rather than dropping or silently trusting them. Planned
 next: the xAct cross-check kernel.
 
