@@ -32,6 +32,7 @@ from noether.npr import (
 from noether.npr.ast import down, prod, tensor, up
 from noether.orchestrator.derive import (
     _compositional_decomposition,
+    _convention_block,
     _result_detail,
     derive_adm,
     derive_eom,
@@ -823,6 +824,8 @@ class TestVectorAffinePerturbationRouting:
             ricci_contraction="first-third",
             field_strength_definition=field_strength_definition,
             symmetrization_weight="1/n!",
+            K_sign="+1",
+            foliation_normal="future-directed",
         )
         return NPR(
             conventions=conventions,
@@ -929,3 +932,80 @@ class TestVectorAffinePerturbationRouting:
         assert templates.get("pert_vector_affine_covcurl_quadratic") in prompt, (
             "prompt must include the covcurl vector-affine worked example"
         )
+
+
+class TestConventionBlockKSignFoliationNormal:
+    """K_sign and foliation_normal are derived from the Conventions model,
+    not hardcoded in _convention_block(). An overridden value appears in
+    the emitted convention block."""
+
+    def _make_npr(self, *, K_sign: str = "+1", foliation_normal: str = "future-directed") -> NPR:
+        """Build an NPR with the given K_sign and foliation_normal."""
+        c = Conventions(
+            id="test-override",
+            dimension=4,
+            signature="mostly-plus",
+            riemann_sign="+1",
+            torsion_sign="+1",
+            nonmetricity_definition="nabla-g",
+            contortion_sign="+1",
+            disformation_sign="+1",
+            ricci_contraction="first-third",
+            field_strength_definition="exterior-derivative",
+            symmetrization_weight="1/n!",
+            K_sign=K_sign,
+            foliation_normal=foliation_normal,
+        )
+        return NPR(
+            conventions=c,
+            geometry=Geometry(
+                connection=ConnectionSpec(type="levi-civita"),
+            ),
+            objects=[
+                ObjectDecl(
+                    name="g", kind="metric", role="background",
+                    symmetry="symmetric", rank=2,
+                ),
+            ],
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=tensor("R", up("mu"), up("nu")),
+                lagrangian_tex=r"R",
+            ),
+            task=Task(type="vary", with_respect_to=["g"]),
+        )
+
+    def test_default_convention_block_has_positive_K_sign(self):
+        """The default convention block carries K_sign=+1 (expansion-positive)."""
+        npr = self._make_npr()
+        block = _convention_block(npr)
+        assert block["K_sign"] == "+1 (K_{ij}=+nabla_i n_j expansion-positive)"
+
+    def test_overridden_K_sign_reflected_in_convention_block(self):
+        """An overridden K_sign appears in the emitted convention block."""
+        npr = self._make_npr(K_sign="-1")
+        block = _convention_block(npr)
+        assert block["K_sign"] == "-1 (K_{ij}=-nabla_i n_j expansion-negative)", (
+            "overriding K_sign to -1 must be reflected in the convention block"
+        )
+
+    def test_default_convention_block_has_future_directed_normal(self):
+        """The default convention block carries future-directed foliation normal."""
+        npr = self._make_npr()
+        block = _convention_block(npr)
+        assert block["foliation_normal"] == "n_mu=(-N,0,...,0) timelike"
+
+    def test_overridden_foliation_normal_reflected_in_convention_block(self):
+        """An overridden foliation_normal appears in the emitted convention block."""
+        npr = self._make_npr(foliation_normal="past-directed")
+        block = _convention_block(npr)
+        assert block["foliation_normal"] == "n_mu=(+N,0,...,0) timelike", (
+            "overriding foliation_normal to past-directed must be reflected"
+        )
+
+    def test_convention_block_includes_both_new_keys(self):
+        """The convention block includes both K_sign and foliation_normal."""
+        npr = self._make_npr()
+        block = _convention_block(npr)
+        assert "K_sign" in block
+        assert "foliation_normal" in block

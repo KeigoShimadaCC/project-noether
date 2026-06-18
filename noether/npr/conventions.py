@@ -44,6 +44,18 @@ class Conventions(BaseModel):
     # "covariant-curl": F_{mu nu} = 2 nabla_{[mu} A_{nu]} (full-connection nabla)
     field_strength_definition: Literal["exterior-derivative", "covariant-curl"]
     symmetrization_weight: Literal["1/n!", "1"]
+    # Extrinsic-curvature sign convention.
+    # "+1" means K_{ij} = +nabla_i n_j (expansion-positive; the standard
+    # choice in the mostly-plus-signature community).
+    # "-1" means K_{ij} = -nabla_i n_j (expansion-negative; common in the
+    # mostly-minus-signature and MTW conventions).
+    K_sign: Literal["+1", "-1"]
+    # Foliation-normal direction convention.
+    # "future-directed": n_mu is the future-pointing timelike normal
+    #   (n_mu = (-N, 0, ..., 0) for mostly-plus signature).
+    # "past-directed": n_mu is the past-pointing timelike normal
+    #   (n_mu = (+N, 0, ..., 0) for mostly-plus signature).
+    foliation_normal: Literal["future-directed", "past-directed"]
 
 
 NOETHER_DEFAULT_V1 = Conventions(
@@ -58,4 +70,6 @@ NOETHER_DEFAULT_V1 = Conventions(
     ricci_contraction="first-third",
     field_strength_definition="exterior-derivative",
     symmetrization_weight="1/n!",
+    K_sign="+1",
+    foliation_normal="future-directed",
 )

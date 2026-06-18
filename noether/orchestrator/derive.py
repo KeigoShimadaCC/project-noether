@@ -386,11 +386,22 @@ def _convention_block(npr: NPR) -> dict[str, str]:
         "convention_id": c.id,
     }
     # Foliation/normal convention: the sign of the extrinsic curvature
-    # and the normal direction. In the noether-default-v1 convention
-    # (mostly-plus signature), K_{ij} = +nabla_i n_j and the normal is
-    # n_mu = (-N, 0, ..., 0) (timelike, future-directed).
-    block["foliation_normal"] = "n_mu=(-N,0,...,0) timelike"
-    block["K_sign"] = "+1 (K_{ij}=+nabla_i n_j expansion-positive)"
+    # and the normal direction. These are convention fields on the NPR,
+    # not hardcoded for any signature.
+    if c.foliation_normal == "future-directed":
+        if c.signature == "mostly-plus":
+            block["foliation_normal"] = "n_mu=(-N,0,...,0) timelike"
+        else:
+            block["foliation_normal"] = "n_mu=(+N,0,...,0) timelike"
+    else:  # past-directed
+        if c.signature == "mostly-plus":
+            block["foliation_normal"] = "n_mu=(+N,0,...,0) timelike"
+        else:
+            block["foliation_normal"] = "n_mu=(-N,0,...,0) timelike"
+    if c.K_sign == "+1":
+        block["K_sign"] = "+1 (K_{ij}=+nabla_i n_j expansion-positive)"
+    else:
+        block["K_sign"] = "-1 (K_{ij}=-nabla_i n_j expansion-negative)"
     # For metric-affine NPRs, also surface the field-strength definition
     # since it affects the connection-sector constraints.
     if npr.geometry.connection.type == "independent":

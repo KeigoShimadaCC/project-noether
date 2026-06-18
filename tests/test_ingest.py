@@ -256,6 +256,8 @@ class TestConventionOverrides:
             ricci_contraction="first-fourth",
             field_strength_definition="covariant-curl",
             symmetrization_weight="1",
+            K_sign="-1",
+            foliation_normal="past-directed",
         )
 
         result = ingest_action(r"d^Dx \sqrt{-g}", r"R(\Gamma)", conventions=custom)
