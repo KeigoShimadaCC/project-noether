@@ -1930,6 +1930,66 @@ print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
 )
 
 # ---------------------------------------------------------------------------
+# LC-limit verification (VAL-EOM-026): at T=Q=0 the independent connection
+# becomes Levi-Civita, so R_{mu nu} is symmetric. The Palatini metric EOM
+# F [R_{(mu nu)} - 1/2 g_{mu nu} R_tilde] reduces to
+# F [R_{mu nu} - 1/2 g_{mu nu} R] = F G_{mu nu} = 0 (Einstein tensor).
+# Convention: noether-default-v1.
+# ---------------------------------------------------------------------------
+
+register(
+    "palatini_st_lc_limit",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta}::Integer(range=0..3).
+x::Coordinate.
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+k^{\mu\nu}::Symmetric.
+k_{\mu\nu}::Symmetric.
+R_{\mu\nu}::Symmetric.
+sg::LaTeXForm("\sqrt{-g}").
+
+# LC-limit verification (VAL-EOM-026):
+# At T=Q=0 the independent connection becomes Levi-Civita,
+# so R_{mu nu} is symmetric. The Palatini metric EOM reduces to
+# F(phi) G_{mu nu}(g) = 0 (the Einstein tensor of g times F).
+
+# Start from the Palatini metric EOM with R_{mu nu}::Symmetric
+ex := \int{ - sg F g^{\sigma\nu} R_{\sigma\nu} }{x};
+vary(ex, $g^{\sigma\nu} -> k^{\sigma\nu}, sg -> -1/2 sg g_{\mu\nu} k^{\mu\nu}$);
+substitute(ex, $\int{A??}{x} -> A??$);
+distribute(ex);
+eliminate_metric(ex);
+eliminate_kronecker(ex);
+sort_product(ex);
+canonicalise(ex);
+rename_dummies(ex);
+
+# Target: F (R_{mu nu} - 1/2 g_{mu nu} R) k^{mu nu} sg = F G_{mu nu} k^{mu nu} sg
+target := - sg F k^{\mu\nu} R_{\mu\nu} + 1/2 sg F k^{\mu\nu} g_{\mu\nu} g^{\alpha\beta} R_{\alpha\beta};
+distribute(target);
+eliminate_metric(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+
+residue := @(ex) - @(target);
+distribute(residue);
+eliminate_metric(residue);
+eliminate_kronecker(residue);
+sort_product(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: lc_limit_residue_zero=" + str(str(residue) == "0"))
+""",
+)
+
+# ---------------------------------------------------------------------------
 # Einstein-Cartan connection equation: algebraic torsion-vs-spin relation
 # (VAL-EOM-011).
 #
@@ -2154,6 +2214,76 @@ distribute(ex);
 canonicalise(ex);
 has_dG = "dG" in str(ex);
 print("NOETHER_CHECK: covcurl_hypermomentum_nonzero=" + str(has_dG))
+""",
+)
+
+# ---------------------------------------------------------------------------
+# Hypermomentum decomposition into spin, dilation, and shear pieces
+# (VAL-EOM-022).
+#
+# Three Cadabra checks:
+#   reconstruction_zero  -- Delta = tau + dilation + sigma (algebraic
+#                          reconstruction identity);
+#   spin_trace_zero     -- spin part tau is traceless;
+#   shear_trace_zero    -- shear part sigma is traceless.
+#
+# SymPy cross-check: hypermomentum_reconstruction_residual and friends
+# in geometry.py verify the decomposition on explicit random backgrounds.
+#
+# Convention: noether-default-v1 + metric-affine-v1.
+# ---------------------------------------------------------------------------
+
+register(
+    "hypermomentum_decomp",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma}::Integer(range=0..3).
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+\partial{#}::PartialDerivative.
+Delta^{\lambda}_{\mu\nu}::Depends(\partial{#}).
+
+n := 4;
+
+# Reconstruction: tau + dil + sigma = Delta
+tauterm := 1/2 Delta^{\lambda}_{\mu\nu} - 1/2 g^{\lambda\rho} g_{\mu\sigma} Delta^{\sigma}_{\rho\nu};
+sigmatrm := 1/2 Delta^{\lambda}_{\mu\nu} + 1/2 g^{\lambda\rho} g_{\mu\sigma} Delta^{\sigma}_{\rho\nu} - (1/n) g^{\lambda}_{\mu} Delta^{\kappa}_{\kappa\nu};
+dilatr := (1/n) g^{\lambda}_{\mu} Delta^{\kappa}_{\kappa\nu};
+
+recon := @(tauterm) + @(sigmatrm) + @(dilatr);
+distribute(recon);
+eliminate_metric(recon);
+eliminate_kronecker(recon);
+canonicalise(recon);
+rename_dummies(recon);
+meld(recon);
+
+residue := @(recon) - Delta^{\lambda}_{\mu\nu};
+distribute(residue);
+eliminate_metric(residue);
+eliminate_kronecker(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: reconstruction_zero=" + str(str(residue) == "0"))
+
+# Spin trace: tau^{lam}_{lam nu} = (1/2)(Delta^{lam}_{lam nu} - Delta^{kap}_{kap nu}) = 0
+spntr := (1/2) Delta^{\lambda}_{\lambda\nu} - (1/2) Delta^{\kappa}_{\kappa\nu};
+distribute(spntr);
+canonicalise(spntr);
+rename_dummies(spntr);
+meld(spntr);
+print("NOETHER_CHECK: spin_trace_zero=" + str(str(spntr) == "0"))
+
+# Shear trace: sigma^{lam}_{lam nu} = Delta^{kap}_{kap nu} - Delta^{rho}_{rho nu} = 0
+shtr := (1/2) Delta^{\lambda}_{\lambda\nu} + (1/2) Delta^{\kappa}_{\kappa\nu} - Delta^{\rho}_{\rho\nu};
+distribute(shtr);
+canonicalise(shtr);
+rename_dummies(shtr);
+meld(shtr);
+print("NOETHER_CHECK: shear_trace_zero=" + str(str(shtr) == "0"))
 """,
 )
 

@@ -20,6 +20,7 @@ import sympy as sp
 
 from noether.kernels.base import Capability, KernelTask
 from noether.kernels.cadabra import CadabraAdapter
+from noether.kernels.cadabra.templates import get as get_template
 from noether.kernels.sympy_kernel.geometry import (
     components,
     hypermomentum_dilation_trace,
@@ -36,58 +37,9 @@ from noether.kernels.sympy_kernel.geometry import (
 
 # ---------------------------------------------------------------------------
 # Cadabra residue checks (require cadabra2 installed)
+# The hypermomentum decomposition script is registered in templates.py
+# as "hypermomentum_decomp" and retrieved via templates.get().
 # ---------------------------------------------------------------------------
-
-HYPERMOMENTUM_DECOMP_SCRIPT = r"""
-{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma}::Indices(position=fixed).
-{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma}::Integer(range=0..3).
-g_{\mu\nu}::Metric.
-g^{\mu\nu}::InverseMetric.
-g_{\mu}^{\nu}::KroneckerDelta.
-g^{\mu}_{\nu}::KroneckerDelta.
-\partial{#}::PartialDerivative.
-Delta^{\lambda}_{\mu\nu}::Depends(\partial{#}).
-
-n := 4;
-
-# Reconstruction: tau + dil + sigma = Delta
-tauterm := 1/2 Delta^{\lambda}_{\mu\nu} - 1/2 g^{\lambda\rho} g_{\mu\sigma} Delta^{\sigma}_{\rho\nu};
-sigmatrm := 1/2 Delta^{\lambda}_{\mu\nu} + 1/2 g^{\lambda\rho} g_{\mu\sigma} Delta^{\sigma}_{\rho\nu} - (1/n) g^{\lambda}_{\mu} Delta^{\kappa}_{\kappa\nu};
-dilatr := (1/n) g^{\lambda}_{\mu} Delta^{\kappa}_{\kappa\nu};
-
-recon := @(tauterm) + @(sigmatrm) + @(dilatr);
-distribute(recon);
-eliminate_metric(recon);
-eliminate_kronecker(recon);
-canonicalise(recon);
-rename_dummies(recon);
-meld(recon);
-
-residue := @(recon) - Delta^{\lambda}_{\mu\nu};
-distribute(residue);
-eliminate_metric(residue);
-eliminate_kronecker(residue);
-canonicalise(residue);
-rename_dummies(residue);
-meld(residue);
-print("NOETHER_CHECK: reconstruction_zero=" + str(str(residue) == "0"))
-
-# Spin trace: tau^{lam}_{lam nu} = (1/2)(Delta^{lam}_{lam nu} - Delta^{kap}_{kap nu}) = 0
-spntr := (1/2) Delta^{\lambda}_{\lambda\nu} - (1/2) Delta^{\kappa}_{\kappa\nu};
-distribute(spntr);
-canonicalise(spntr);
-rename_dummies(spntr);
-meld(spntr);
-print("NOETHER_CHECK: spin_trace_zero=" + str(str(spntr) == "0"))
-
-# Shear trace: sigma^{lam}_{lam nu} = Delta^{kap}_{kap nu} - Delta^{rho}_{rho nu} = 0
-shtr := (1/2) Delta^{\lambda}_{\lambda\nu} + (1/2) Delta^{\kappa}_{\kappa\nu} - Delta^{\rho}_{\rho\nu};
-distribute(shtr);
-canonicalise(shtr);
-rename_dummies(shtr);
-meld(shtr);
-print("NOETHER_CHECK: shear_trace_zero=" + str(str(shtr) == "0"))
-"""
 
 
 def _run_hm_script():
@@ -96,7 +48,7 @@ def _run_hm_script():
         KernelTask(
             capability=Capability.SUBSTITUTE,
             description="hypermomentum decomposition check",
-            payload={"script": HYPERMOMENTUM_DECOMP_SCRIPT},
+            payload={"script": get_template("hypermomentum_decomp")},
         )
     )
 
