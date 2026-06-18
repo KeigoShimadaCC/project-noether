@@ -613,22 +613,37 @@ def derive_perturbation(
     dynamical scalar field, metric, or gauge potential (the sectors with an
     audited scaffold today: pert_scalar_quadratic, pert_kessence_quadratic for
     an X-dependent scalar, pert_metric_quadratic, and the gauge scaffolds
-    pert_gauge_quadratic (Maxwell) / pert_yang_mills_quadratic).
+    pert_gauge_quadratic (Maxwell) / pert_yang_mills_quadratic), plus the
+    metric-affine scaffold pert_metric_affine_quadratic when the connection
+    is independent.
 
     Raises NotImplementedError naming any requested field whose kind has no
     quadratic-action example yet, rather than guessing one.
     """
     by_name = {o.name: o for o in npr.objects}
+    has_independent_connection = (
+        getattr(npr.geometry.connection, "type", None) == "independent"
+    )
 
     def _supported(o) -> bool:
         # a gauge potential is rank 1; the field strength (rank 2) is not the
         # perturbed degree of freedom, so it falls through to the refusal.
         if o.kind in ("scalar-field", "metric"):
             return True
+        # On a metric-affine background the metric perturbation scaffold
+        # includes the connection fluctuation automatically.
+        if o.kind == "connection" and has_independent_connection:
+            return True
         return o.kind == "tensor-field" and o.rank == 1
 
     if fields is None:
         fields = [o.name for o in npr.objects if _supported(o) and o.role == "dynamical"]
+        # On a metric-affine background, always include the metric
+        # perturbation which carries the connection fluctuation.
+        if has_independent_connection and "g" not in fields:
+            g_obj = next((o for o in npr.objects if o.kind == "metric"), None)
+            if g_obj and g_obj.name not in fields:
+                fields.append(g_obj.name)
     if not fields:
         raise NotImplementedError(
             "perturbation currently supports dynamical scalar fields, the metric, "

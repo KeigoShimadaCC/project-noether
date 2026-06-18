@@ -527,10 +527,25 @@ perturbative expansion (xPert), Young projection.
    k-essence scaffold expands about a covariantly-constant-gradient background
    (`nabla nabla phibar = 0`, so `nabla Xbar = 0`), the standard setup for the
    sound speed; on it the coupling gradients close under the single chain rule
-   `nabla K_X -> K_phiX nabla phibar` and its kin. The scaffolds cover dynamical
-   scalar fields (plain and `X`-dependent), the metric, and rank-1 gauge
-   potentials, so `derive_perturbation` refuses other field kinds (the rank-2
-   field strength, say) rather than guessing. The `adm` task takes a different route: `derive_adm`
+   `nabla K_X -> K_phiX nabla phibar` and its kin. When the connection is
+   independent, the metric perturbation scaffold gains the connection fluctuation:
+   `pert_metric_affine_quadratic` (eval 4ma) expands the Palatini
+   Einstein-Hilbert action about a flat Minkowski background with `Gamma=0`,
+   perturbing both `g_{mu nu} -> eta_{mu nu} + h_{mu nu}` and
+   `Gamma^lambda_{mu nu} -> dG^lambda_{mu nu}`, so the quadratic action contains
+   cross terms `h * dG` and `dG * dG` in addition to the graviton terms. The
+   connection fluctuation `dG` (distinct from `h`) appears explicitly in the
+   result, capturing the torsion and non-metricity modes. The linearized EOM
+   check targets the linearized Palatini metric equation
+   `R^{(1)}_{(alpha beta)}(dG) - 1/2 eta_{alpha beta} Rtilde^{(1)} = 0`, and
+   the independent linearization route confirms it. The Ricci scalar is built
+   as a fully contracted expression (not as `R_{sigma nu}` with free indices and
+   then contracted) to avoid a Cadabra free-index clash where the derivative
+   index in the second Palatini term conflicts with the contraction index.
+   The scaffolds cover dynamical scalar fields (plain and `X`-dependent), the
+   metric, the metric-affine metric (with independent connection), and rank-1
+   gauge potentials, so `derive_perturbation` refuses other field kinds (the
+   rank-2 field strength, say) rather than guessing. The `adm` task takes a different route: `derive_adm`
    (`kind="adm"` on the server, MCP, and web clients) writes no model script.
    Its deliverable is the ADM (3+1) decomposition of the gravitational sector,
    the Gauss-Codazzi split `sqrt(-g) R = N sqrt(h)(R3 + K_ij K^ij - K^2) -

@@ -460,11 +460,35 @@ nonlinear equation `∇_a(K_X∇^aφ) + K_φ = 0` reproduces it
 (`linearized_eom_match`).
 
 The perturbation scaffolds now cover dynamical scalar fields (plain and
-X-dependent), the metric, and rank-1 gauge potentials, abelian and non-abelian.
+X-dependent), the metric, the metric-affine metric (with independent
+connection), and rank-1 gauge potentials, abelian and non-abelian.
 `derive_perturbation` selects by field kind, reads the `gauge_group` marker to
 tell Maxwell from Yang-Mills and an `X`-dependent coupling to tell k-essence from
-a plain scalar, and refuses other field kinds (the rank-2 field strength, say)
+a plain scalar, and routes to the metric-affine scaffold when the connection is
+independent. It refuses other field kinds (the rank-2 field strength, say)
 rather than guessing.
+
+### Eval 4ma — metric-affine (Palatini EH) quadratic perturbation
+
+**Status: implemented (eval 4ma;
+`evals/eval4ma_metric_affine_perturbation.py`,
+template `pert_metric_affine_quadratic`).** Eval 4ma is the metric-affine
+perturbation. For the Palatini Einstein-Hilbert action
+`S = ∫d⁴x √-g g^{σν} R_{σν}(Γ)` it expands about a flat Minkowski background
+with `Γ=0` in Cartesian coordinates, perturbing both
+`g_{μν} → η_{μν} + h_{μν}` and `Γ^λ_{μν} → dG^λ_{μν}`, so the quadratic action
+contains cross terms `h * dG` and `dG * dG` in addition to the standard graviton
+terms. The connection fluctuation `dG` appears explicitly in the result,
+capturing torsion and non-metricity modes. The linearized Palatini metric
+equation is `R^{(1)}_{(αβ)}(dG) - ½ η_{αβ} R̃^{(1)}(dG) = 0`. Two kernel
+checks, both `noether-default-v1 + metric-affine-v1`: `δS₂/δh` matches the
+documented linearized Palatini metric operator (`residue_zero`), and
+independently linearizing the full Palatini metric equation
+`R_{(μν)} - ½ g_{μν} R̃ = 0` reproduces it (`linearized_eom_match`). The Ricci
+scalar is built as a fully contracted scalar expression (not as `R_{σν}` with
+free indices then contracted) to avoid a Cadabra free-index clash where the
+derivative index in the second Palatini term conflicts with the contraction
+index.
 
 ---
 

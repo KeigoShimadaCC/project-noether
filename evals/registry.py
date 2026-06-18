@@ -465,6 +465,60 @@ def _vector_affine() -> EvalSpec:
     )
 
 
+def _eval4ma() -> EvalSpec:
+    from evals import eval4ma_metric_affine_perturbation as m
+    from noether.npr import NOETHER_DEFAULT_V1, NPR, Action, ConnectionSpec, Geometry, Task
+    from noether.npr.ast import down, prod, tensor, up
+
+    def build_npr(resolved=True):
+        lagrangian = prod(
+            tensor("g", up("mu"), up("nu")),
+            tensor("R", down("mu"), down("nu"), connection="Gamma"),
+        )
+        return NPR(
+            conventions=NOETHER_DEFAULT_V1,
+            geometry=Geometry(
+                connection=ConnectionSpec(
+                    type="independent" if resolved else "levi-civita",
+                    torsion=True,
+                    nonmetricity=True,
+                )
+            ),
+            action=Action(
+                measure_tex=r"d^4x \sqrt{-g}",
+                lagrangian=lagrangian,
+                lagrangian_tex=r"g^{\sigma\nu} R_{\sigma\nu}(\Gamma)",
+            ),
+            task=Task(type="perturb"),
+        )
+
+    return EvalSpec(
+        key="eval4ma",
+        title="Metric-affine (Palatini EH) quadratic perturbation",
+        build_npr=build_npr,
+        answers={},
+        cadabra_runs=(
+            CadabraRun(
+                "Palatini EH metric-affine quadratic action",
+                m.TEMPLATE,
+                ("residue_zero", "linearized_eom_match"),
+            ),
+        ),
+        results=(),
+        notes=(
+            "VAL-PERT-001: the quadratic action S2 is returned with "
+            "kind='perturbation' and non-empty result_tex containing both "
+            "h (metric fluctuation) and dG (connection fluctuation). "
+            "VAL-PERT-002: verified requires both residue_zero and "
+            "linearized_eom_match to be True. VAL-PERT-004: dG is the "
+            "connection-fluctuation symbol distinct from h. "
+            "VAL-PERT-005: keep_weight(eps=2) ensures only the quadratic "
+            "part survives; the flat background has R=0 (eps=0 vanishes) "
+            "and eps=1 is a total derivative.",
+        ),
+    )
+
+
 _BUILDERS: dict[str, Callable[[], EvalSpec]] = {
     "eval1": _eval1,
     "eval1s": _eval1s,
@@ -474,6 +528,7 @@ _BUILDERS: dict[str, Callable[[], EvalSpec]] = {
     "eval4": _eval4,
     "eval5": _eval5,
     "vector-affine": _vector_affine,
+    "eval4ma": _eval4ma,
 }
 
 

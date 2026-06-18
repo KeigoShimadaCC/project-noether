@@ -24,7 +24,10 @@ from noether.orchestrator.session import Session
 from noether.provenance.bundle import ResultBundle, write_bundle
 from noether.verify.ladder import run_ladder
 
-EVAL_KEYS = ("eval1", "eval1s", "eval2", "eval3", "eval3s", "eval4", "eval5", "vector-affine")
+EVAL_KEYS = (
+    "eval1", "eval1s", "eval2", "eval3", "eval3s",
+    "eval4", "eval5", "vector-affine", "eval4ma",
+)
 
 
 def _adapters() -> dict:

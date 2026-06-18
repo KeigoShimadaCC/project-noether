@@ -10,9 +10,11 @@ pert_metric_quadratic added 2026-06-15, eom_cubic_galileon_scalar (eval 6)
 added 2026-06-16, and the gauge perturbation scaffolds pert_gauge_quadratic
 (eval 3a, Maxwell) and pert_yang_mills_quadratic (eval 3y, Yang-Mills) plus the
 k-essence X-expansion scaffold pert_kessence_quadratic (eval 3k) added
-2026-06-17, same kernel; see tests/test_cadabra_adapter.py, evals/test_eval3g.py,
-evals/test_eval3a.py, evals/test_eval3y.py, evals/test_eval3k.py, and
-evals/test_eval6.py).
+2026-06-17, same kernel; the metric-affine perturbation scaffold
+pert_metric_affine_quadratic added 2026-06-18, same kernel; see
+tests/test_cadabra_adapter.py, evals/test_eval3g.py, evals/test_eval3a.py,
+evals/test_eval3y.py, evals/test_eval3k.py, evals/test_eval6.py, and
+tests/test_pert_metric_affine.py).
 """
 
 _TEMPLATES: dict[str, str] = {}
@@ -2112,5 +2114,186 @@ distribute(ex);
 canonicalise(ex);
 has_dG = "dG" in str(ex);
 print("NOETHER_CHECK: covcurl_hypermomentum_nonzero=" + str(has_dG))
+""",
+)
+
+# ---------------------------------------------------------------------------
+# Perturbation, metric-affine (Palatini EH) sector: quadratic-action
+# expansion of S = \int d^4x \sqrt{-g} g^{\sigma\nu} R_{\sigma\nu}(\Gamma)
+# about a flat background g = \eta, \Gamma = 0 (Cartesian Minkowski).
+#
+# The metric fluctuation h_{\mu\nu} and the connection fluctuation
+# dG^{\lambda}_{\mu\nu} both carry weight eps=1. The quadratic Lagrangian
+# S_2 = keep_weight(L, eps=2) contains cross terms h*dG and dG*dG in
+# addition to the standard h*h graviton terms, so the connection
+# fluctuation appears explicitly in the result.
+#
+# We build the Ricci scalar Rtilde = g^{\alpha\beta} R_{\beta\alpha}(\Gamma)
+# as a fully contracted scalar expression (not as R_{\sigma\nu} with free
+# indices and then contracting), to avoid a Cadabra free-index clash:
+# the derivative index \nu in the second Palatini term \partial_\nu
+# conflicts with the contraction index when both carry the same name.
+#
+# Two kernel checks (noether-default-v1 + metric-affine-v1):
+#   residue_zero        -- \delta S_2 / \delta h matches the linearized
+#                          Palatini metric equation R^{(1)}_{(\alpha\beta)}
+#                          - 1/2 \eta_{\alpha\beta} \tilde{R}^{(1)};
+#   linearized_eom_match -- the same operator follows from independently
+#                          linearizing the full Palatini metric equation
+#                          R_{(\mu\nu)} - 1/2 g_{\mu\nu} \tilde{R} = 0.
+# Both must be True before the result is called verified.
+# ---------------------------------------------------------------------------
+
+register(
+    "pert_metric_affine_quadratic",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\delta,\epsilon,\zeta}::Indices(position=independent).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\delta,\epsilon,\zeta}::Integer(range=0..3).
+\partial{#}::PartialDerivative.
+\partial{#}::WeightInherit(label=eps, type=multiplicative).
+eta_{\mu\nu}::Metric.
+eta^{\mu\nu}::InverseMetric.
+h_{\mu\nu}::Symmetric.
+h{#}::Weight(label=eps, value=1).
+h{#}::Depends(\partial{#}).
+dh_{\mu\nu}::Symmetric.
+dh{#}::Weight(label=eps, value=1).
+dG^{\lambda}_{\mu\nu}::Weight(label=eps, value=1).
+dG^{\lambda}_{\mu\nu}::Depends(\partial{#}).
+ddG^{\lambda}_{\mu\nu}::Weight(label=eps, value=1).
+ddG^{\lambda}_{\mu\nu}::Depends(\partial{#}).
+
+def lower_all(e):
+    for i in range(6):
+        substitute(e, $\partial^{\mu}{A??} -> eta^{\mu\nu} \partial_{\nu}{A??}$)
+        distribute(e)
+    substitute(e, $h^{\mu\nu} -> eta^{\mu\alpha} eta^{\nu\beta} h_{\alpha\beta}$)
+    substitute(e, $h^{\mu}_{\nu} -> eta^{\mu\alpha} h_{\alpha\nu}$)
+    substitute(e, $h_{\mu}^{\nu} -> eta^{\nu\alpha} h_{\mu\alpha}$)
+    substitute(e, $h^{\rho}_{\rho} -> eta^{\alpha\beta} h_{\alpha\beta}$)
+    substitute(e, $h_{\rho}^{\rho} -> eta^{\alpha\beta} h_{\alpha\beta}$)
+    substitute(e, $dh^{\mu\nu} -> eta^{\mu\alpha} eta^{\nu\beta} dh_{\alpha\beta}$)
+    substitute(e, $dh^{\mu}_{\nu} -> eta^{\mu\alpha} dh_{\alpha\nu}$)
+    substitute(e, $dh_{\mu}^{\nu} -> eta^{\nu\alpha} dh_{\mu\alpha}$)
+    substitute(e, $dh^{\rho}_{\rho} -> eta^{\alpha\beta} dh_{\alpha\beta}$)
+    substitute(e, $dh_{\rho}^{\rho} -> eta^{\alpha\beta} dh_{\alpha\beta}$)
+    distribute(e)
+    for i in range(6):
+        sort_product(e)
+        canonicalise(e)
+        rename_dummies(e)
+    return e
+
+def reduce(e):
+    for i in range(8):
+        eliminate_metric(e)
+        eliminate_kronecker(e)
+        distribute(e)
+        canonicalise(e)
+        rename_dummies(e)
+    lower_all(e)
+    for i in range(10):
+        canonicalise(e)
+        rename_dummies(e)
+        meld(e)
+    return e
+
+def finalize(e):
+    for i in range(12):
+        sort_product(e)
+        canonicalise(e)
+        rename_dummies(e)
+        meld(e)
+    return e
+
+# Build the Ricci scalar Rtilde = g^{alpha beta} R_{beta alpha}(Gamma)
+# as a fully contracted scalar expression.
+# With Gamma = dG (background Gamma=0 in Cartesian Minkowski):
+ginv := eta^{\alpha\beta} - eta^{\alpha\mu} eta^{\beta\nu} h_{\mu\nu};
+
+Rsc1 := @(ginv) \partial_{\lambda}{dG^{\lambda}_{\beta\alpha}};
+distribute(Rsc1);
+
+Rsc2 := - @(ginv) \partial_{\beta}{dG^{\lambda}_{\lambda\alpha}};
+distribute(Rsc2);
+
+Rsc3 := @(ginv) dG^{\lambda}_{\lambda\rho} dG^{\rho}_{\beta\alpha};
+distribute(Rsc3);
+
+Rsc4 := - @(ginv) dG^{\lambda}_{\beta\rho} dG^{\rho}_{\lambda\alpha};
+distribute(Rsc4);
+
+Rtilde := @(Rsc1) + @(Rsc2) + @(Rsc3) + @(Rsc4);
+distribute(Rtilde);
+
+# Build sqrt(-g) = 1 + 1/2 h + 1/8 h^2 - 1/4 h_{ab} h^{ab}
+htr := eta^{\alpha\beta} h_{\alpha\beta};
+h2tr := eta^{\alpha\gamma} eta^{\beta\delta} h_{\alpha\beta} h_{\gamma\delta};
+sqrth := 1 + 1/2 @(htr) + 1/8 @(htr) * @(htr) - 1/4 @(h2tr);
+
+# Full Lagrangian
+L := @(sqrth) * @(Rtilde);
+distribute(L);
+keep_weight(L, $eps=2$);
+distribute(L);
+canonicalise(L);
+rename_dummies(L);
+lower_all(L);
+for i in range(6):
+    canonicalise(L);
+    rename_dummies(L);
+    meld(L);
+print("NOETHER_RESULT: " + str(L));
+
+# Linearized EOM: vary S2 w.r.t. h_{mu nu}
+ex := \int{ @(L) }{x};
+vary(ex, $h_{\mu\nu} -> dh_{\mu\nu}$);
+distribute(ex);
+substitute(ex, $dh^{\mu\nu} -> eta^{\mu\rho} eta^{\nu\sigma} dh_{\rho\sigma}$);
+distribute(ex);
+substitute(ex, $\int{A??}{x} -> A??$);
+distribute(ex);
+reduce(ex);
+
+# Target: the linearized Palatini metric equation.
+# R^{(1)}_{alpha beta} = d_lambda dG^lambda_{beta alpha} - d_beta dG^lambda_{lambda alpha}
+# R^{(1)}_{(alpha beta)} = 1/2(R^{(1)}_{alpha beta} + R^{(1)}_{beta alpha})
+# Rtilde^{(1)} = eta^{alpha beta} R^{(1)}_{alpha beta}
+R1ab := \partial_{\lambda}{dG^{\lambda}_{\beta\alpha}} - \partial_{\beta}{dG^{\lambda}_{\lambda\alpha}};
+R1ba := \partial_{\lambda}{dG^{\lambda}_{\alpha\beta}} - \partial_{\alpha}{dG^{\lambda}_{\lambda\beta}};
+R1sym := 1/2 ( @(R1ab) + @(R1ba) );
+distribute(R1sym);
+
+R1sc := eta^{\alpha\beta} @(R1ab);
+distribute(R1sc);
+
+target := - ( @(R1sym) - 1/2 eta_{\alpha\beta} @(R1sc) ) dh^{\alpha\beta};
+distribute(target);
+substitute(target, $dh^{\mu\nu} -> eta^{\mu\rho} eta^{\nu\sigma} dh_{\rho\sigma}$);
+distribute(target);
+reduce(target);
+
+residue := @(ex) - @(target);
+distribute(residue);
+finalize(residue);
+print("NOETHER_CHECK: residue=" + str(residue));
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"));
+
+# linearized_eom_match: independently linearize the full Palatini
+# metric equation R_{(mu nu)} - 1/2 g_{mu nu} Rtilde = 0.
+# At linear order: R^{(1)}_{(alpha beta)} - 1/2 eta_{alpha beta} Rtilde^{(1)}
+leom := @(R1sym) - 1/2 eta_{\alpha\beta} @(R1sc);
+distribute(leom);
+
+leomv := - @(leom) dh^{\alpha\beta};
+distribute(leomv);
+substitute(leomv, $dh^{\mu\nu} -> eta^{\mu\rho} eta^{\nu\sigma} dh_{\rho\sigma}$);
+distribute(leomv);
+reduce(leomv);
+
+cross := @(ex) - @(leomv);
+distribute(cross);
+finalize(cross);
+print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
 """,
 )

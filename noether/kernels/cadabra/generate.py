@@ -41,6 +41,7 @@ _EXAMPLE_TEMPLATE: dict[str, str] = {
     "perturb-metric": "pert_metric_quadratic",
     "perturb-gauge": "pert_gauge_quadratic",
     "perturb-yang-mills": "pert_yang_mills_quadratic",
+    "perturb-metric-affine": "pert_metric_affine_quadratic",
 }
 
 _ABELIAN_GROUPS = frozenset({"", "u(1)", "abelian", "none"})
@@ -250,6 +251,11 @@ def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
                 return "perturb-kessence"
             return "perturb-scalar"
         if obj is not None and obj.kind == "metric":
+            # When the connection is independent, the metric perturbation
+            # must include the connection fluctuation dG (metric-affine
+            # path), not just the metric fluctuation h (Levi-Civita path).
+            if getattr(npr.geometry.connection, "type", None) == "independent":
+                return "perturb-metric-affine"
             return "perturb-metric"
         if obj is not None and obj.kind == "tensor-field" and obj.rank == 1:
             return "perturb-yang-mills" if _is_non_abelian(obj) else "perturb-gauge"
