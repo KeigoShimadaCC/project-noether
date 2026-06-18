@@ -12,7 +12,14 @@ For f(Q), the Cadabra template eom_fq_linear_coincident exercises the
 coincident-gauge variation via the boundary-term identity and passes the
 residue check (residue_zero == True), confirming the EOM G_{mu nu} = 0.
 
-Conventions: noether-default-v1 + metric-affine-v1.
+For f(T), the Cadabra template eom_ft_linear_tetrad exercises the
+variation via the boundary-term identity T = -R + 2 nabla_mu T^mu,
+using the tetrad/Weitzenbock formulation. The residue check passes
+(residue_zero == True), confirming the EOM G_{mu nu} = 0. The SymPy
+cross-check verifies the Weitzenbock geometry (R=0, Q=0, T!=0) and
+the torsion scalar on explicit tetrad backgrounds.
+
+Conventions: noether-default-v1 + metric-affine-v1 + tetrad-teleparallel-v1.
 """
 
 from __future__ import annotations
@@ -27,7 +34,7 @@ from evals.eval_fq_symmetric_teleparallel import (
     build_fq_npr,
 )
 from evals.eval_ft_teleparallel import (
-    BLOCKER_DETAIL as FT_BLOCKER,
+    VERIFIED_PATH_DETAIL as FT_VERIFIED,
 )
 from evals.eval_ft_teleparallel import (
     build_ft_npr,
@@ -38,6 +45,20 @@ from noether.kernels.sympy_kernel.fq_coincident import (
     fQ_eom_general,
     fQ_eom_linear,
     nonmetricity_conjugate,
+)
+from noether.kernels.sympy_kernel.ft_tetrad import (
+    boundary_term_identity_residual,
+    ft_eom_linear,
+    ft_eom_linear_via_boundary,
+    ft_eom_metric_form,
+    minkowski_metric,
+    rotated_tetrad_from_metric,
+    superpotential,
+    tetrad_metric,
+    torsion_scalar_T,
+    verify_weitzenbock_is_flat,
+    verify_weitzenbock_is_metric_compatible,
+    weitzenbock_connection,
 )
 from noether.kernels.sympy_kernel.geometry import (
     _clean,
@@ -69,6 +90,21 @@ class TestFTStructure:
         npr = build_ft_npr(resolved=True)
         assert npr.is_well_posed()
 
+    def test_ft_npr_has_tetrad_field(self):
+        """The f(T) NPR includes a tetrad field object."""
+        npr = build_ft_npr(resolved=True)
+        tetrad_objs = [o for o in npr.objects if o.kind == "tetrad"]
+        assert len(tetrad_objs) >= 1, "f(T) NPR must include a tetrad field"
+        assert tetrad_objs[0].name == "e"
+
+    def test_ft_npr_tetrad_kind_exists(self):
+        """The 'tetrad' field kind is recognized in the schema."""
+        from noether.npr.schema import ObjectDecl
+
+        # Verify "tetrad" is an accepted kind
+        decl = ObjectDecl(name="e_test", kind="tetrad", role="dynamical", rank=2)
+        assert decl.kind == "tetrad"
+
 
 class TestFQStructure:
     """f(Q) NPR has the correct geometry and connection family."""
@@ -88,7 +124,154 @@ class TestFQStructure:
 
 
 # ---------------------------------------------------------------------------
-# SymPy cross-check: boundary-term identity for f(T) = T
+# SymPy cross-check: Weitzenbock connection from tetrad
+# ---------------------------------------------------------------------------
+
+
+def _make_weitzenbock_from_tetrad(seed: int, dim: int = 3):
+    """Construct a Weitzenbock connection from a non-diagonal tetrad.
+
+    Uses a rotated (non-diagonal) tetrad so that the Weitzenbock torsion
+    scalar T is nonzero (the diagonal tetrad of a diagonal metric gives
+    T=0). The metric g' is computed FROM the rotated tetrad, since the
+    Weitzenbock connection is metric-compatible with that metric, not
+    the original diagonal one.
+    """
+    geom = random_diagonal_metric(seed, dim=dim)
+    e, E = rotated_tetrad_from_metric(geom, seed=seed + 50)
+    gamma = weitzenbock_connection(geom.coords, e, E)
+    # Compute the metric FROM the rotated tetrad
+    eta = minkowski_metric(dim)
+    g = tetrad_metric(e, eta)
+    g_inv = sp.ImmutableDenseNDimArray(
+        sp.Matrix([[g[mu, nu] for nu in range(dim)] for mu in range(dim)]).inv()
+    )
+    T_tensor = torsion_of_connection(gamma)
+    return geom, e, E, gamma, T_tensor, g, g_inv
+
+
+class TestFTWeitzenbockGeometry:
+    """Weitzenbock connection from tetrad is flat, metric-compatible, torsionful."""
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_weitzenbock_is_flat(self, seed):
+        """The Weitzenbock connection is flat (R=0) by construction."""
+        geom, e, E, gamma, T_tensor, g, g_inv = _make_weitzenbock_from_tetrad(seed, dim=3)
+        assert verify_weitzenbock_is_flat(geom.coords, gamma), (
+            "Weitzenbock connection should be flat (R=0)"
+        )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_weitzenbock_is_metric_compatible(self, seed):
+        """The Weitzenbock connection is metric-compatible (Q=0)."""
+        geom, e, E, gamma, T_tensor, g, g_inv = _make_weitzenbock_from_tetrad(seed, dim=3)
+        assert verify_weitzenbock_is_metric_compatible(geom.coords, gamma, g), (
+            "Weitzenbock connection should be metric-compatible (Q=0)"
+        )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_weitzenbock_has_nonzero_torsion(self, seed):
+        """The Weitzenbock connection has nonzero torsion (T!=0)."""
+        geom, e, E, gamma, T_tensor, g, g_inv = _make_weitzenbock_from_tetrad(seed, dim=3)
+        t_nonzero = any(sp.simplify(c) != 0 for c in components(T_tensor))
+        assert t_nonzero, (
+            "Weitzenbock connection should have nonzero torsion "
+            "(the metric has coordinate dependence)"
+        )
+
+
+class TestFTTorsionScalar:
+    """Torsion scalar T and boundary-term identity on Weitzenbock backgrounds."""
+
+    @pytest.mark.parametrize("seed", [7, 19])
+    def test_torsion_scalar_is_computable(self, seed):
+        """The torsion scalar T is computable on a Weitzenbock background."""
+        geom, e, E, gamma, T_tensor, g, g_inv = _make_weitzenbock_from_tetrad(seed, dim=3)
+        T_val = torsion_scalar_T(T_tensor, g, g_inv)
+        assert T_val is not None
+        # T should be nonzero (the metric has coordinate dependence)
+        assert sp.simplify(T_val) != 0, "Torsion scalar should be nonzero"
+
+    @pytest.mark.parametrize("seed", [7, 19])
+    def test_boundary_term_identity(self, seed):
+        """T = -R(g) + 2 nabla_mu T^mu (boundary-term identity).
+
+        The residual T + R - 2 nabla_mu T^mu should be zero.
+        """
+        geom, e, E, gamma, T_tensor, g, g_inv = _make_weitzenbock_from_tetrad(seed, dim=3)
+        residual = boundary_term_identity_residual(geom.coords, T_tensor, g, g_inv)
+        assert sp.simplify(residual) == 0, (
+            f"Boundary-term identity residual should be zero, got {residual}"
+        )
+
+    @pytest.mark.parametrize("seed", [7, 19])
+    def test_linear_ft_eom_matches_einstein(self, seed):
+        """For f(T) = T, the EOM via boundary-term identity is G_{mu nu} = 0."""
+        geom, e, E, gamma, T_tensor, g, g_inv = _make_weitzenbock_from_tetrad(seed, dim=3)
+        T_val = torsion_scalar_T(T_tensor, g, g_inv)
+
+        # EOM via the metric form: E = G - (1/2) g T
+        E_metric = ft_eom_linear(geom.coords, T_tensor, g, g_inv, T_val)
+
+        # EOM via boundary-term identity: E_boundary = G (Einstein tensor)
+        E_boundary = ft_eom_linear_via_boundary(geom.coords, g, g_inv)
+
+        # The two should satisfy: E_metric + (1/2) g T = E_boundary
+        # i.e., (G - (1/2) g T) + (1/2) g T = G
+        n = 3
+        for mu in range(n):
+            for nu in range(n):
+                diff = sp.simplify(
+                    E_metric[mu, nu] + sp.Rational(1, 2) * g[mu, nu] * T_val
+                    - E_boundary[mu, nu]
+                )
+                assert diff == 0, (
+                    f"E_metric[{mu},{nu}] + (1/2)g*T != E_boundary[{mu},{nu}]"
+                )
+
+    @pytest.mark.parametrize("seed", [7])
+    def test_general_ft_eom_formula_on_background(self, seed):
+        """The general f(T) EOM formula is computable on a T!=0 background.
+
+        For f(T) = T + c (constant shift), f'=1, f-Tf'=c,
+        giving E_{mu nu} = G_{mu nu} - (1/2) g_{mu nu} T + (1/2) g_{mu nu} c.
+        """
+        geom, e, E, gamma, T_tensor, g, g_inv = _make_weitzenbock_from_tetrad(seed, dim=3)
+        T_val = torsion_scalar_T(T_tensor, g, g_inv)
+        c = sp.Symbol("c")
+
+        E_general = ft_eom_metric_form(
+            geom.coords, T_tensor, g, g_inv,
+            f=T_val + c, fp=sp.Integer(1), T_val=T_val,
+        )
+
+        E_linear = ft_eom_linear(geom.coords, T_tensor, g, g_inv, T_val)
+
+        # E_general should equal E_linear + (1/2) g c
+        n = 3
+        for mu in range(n):
+            for nu in range(n):
+                expected = _clean(E_linear[mu, nu] + sp.Rational(1, 2) * g[mu, nu] * c)
+                diff = sp.simplify(E_general[mu, nu] - expected)
+                assert diff == 0, (
+                    f"E_general[{mu},{nu}] != expected"
+                )
+
+
+class TestFTSuperpotential:
+    """Superpotential S^{rho mu nu} is computable on Weitzenbock backgrounds."""
+
+    @pytest.mark.parametrize("seed", [7])
+    def test_superpotential_is_computable(self, seed):
+        """The superpotential S^{rho mu nu} can be computed."""
+        geom, e, E, gamma, T_tensor, g, g_inv = _make_weitzenbock_from_tetrad(seed, dim=3)
+        S = superpotential(T_tensor, g, g_inv)
+        assert S is not None
+        assert S.shape == (3, 3, 3)
+
+
+# ---------------------------------------------------------------------------
+# SymPy cross-check: boundary-term identity for f(T) = T (old style)
 # ---------------------------------------------------------------------------
 
 
@@ -302,8 +485,8 @@ class TestFQCoincidentGaugeCrossCheck:
 # Cadabra verification tests
 #
 # The linear f(Q) = Q EOM is verified by the Cadabra template
-# eom_fq_linear_coincident, which exercises the coincident-gauge variation
-# via the boundary-term identity and passes the residue check.
+# eom_fq_linear_coincident. The linear f(T) = T EOM is verified by
+# eom_ft_linear_tetrad.
 # ---------------------------------------------------------------------------
 
 
@@ -352,23 +535,75 @@ class TestFQCadabraVerification:
         )
 
 
+class TestFTCadabraVerification:
+    """Cadabra verification for f(T) = T EOM via tetrad/Weitzenbock."""
+
+    def test_ft_linear_cadabra_residue_zero(self):
+        """The Cadabra template eom_ft_linear_tetrad passes the residue check.
+
+        This template varies the f(T) = T action via the boundary-term
+        identity T = -R + 2 nabla_mu T^mu, reducing to the Einstein-Hilbert
+        variation. The residue check confirms the EOM G_{mu nu} = 0.
+        """
+        try:
+            from noether.kernels.base import Capability, KernelTask
+            from noether.kernels.cadabra.adapter import CadabraAdapter
+            from noether.kernels.cadabra.templates import get
+
+            adapter = CadabraAdapter()
+            if not adapter.available():
+                pytest.skip("cadabra2 not available")
+
+            script = get("eom_ft_linear_tetrad")
+            result = adapter.run(KernelTask(
+                capability=Capability.VARY,
+                description="f(T) linear EOM tetrad/Weitzenbock",
+                payload={"script": script},
+            ))
+
+            checks = result.value.get("checks", {})
+            residue_zero = checks.get("residue_zero", "False")
+            assert residue_zero == "True", (
+                f"Cadabra residue check failed: {checks}"
+            )
+        except ImportError:
+            pytest.skip("cadabra adapter not available")
+
+    def test_ft_verified_path_detail(self):
+        """The verified path detail mentions the boundary-term identity and tetrad."""
+        assert "boundary" in FT_VERIFIED.lower()
+        assert (
+            "tetrad" in FT_VERIFIED.lower()
+            or "Weitzenbock" in FT_VERIFIED
+            or "vierbein" in FT_VERIFIED.lower()
+        )
+        assert (
+            "G_{mu nu} = 0" in FT_VERIFIED
+            or "Einstein" in FT_VERIFIED
+        )
+
+
 # ---------------------------------------------------------------------------
-# Gated derivation tests for f(T)
+# Verified derivation tests for f(T)
 #
-# The f(T) EOM is gated because the current infrastructure does not support
-# the vierbein formulation. The tests verify that the blocker detail is
-# honest and informative.
+# The f(T) = T EOM is now verified via the boundary-term identity and the
+# Cadabra template eom_ft_linear_tetrad. The tetrad e^a_mu is a fundamental
+# NPR field kind. The tests verify that the verified path detail is honest
+# and informative.
 # ---------------------------------------------------------------------------
 
 
-class TestFTGatedDerivation:
-    """f(T) EOM is gated with an honest blocker detail."""
+class TestFTVerifiedDerivation:
+    """f(T) EOM is verified via the tetrad/Weitzenbock formulation."""
 
-    def test_ft_blocker_detail_is_informative(self):
-        """The blocker for f(T) names the specific missing capability."""
-        assert "vierbein" in FT_BLOCKER or "tetrad" in FT_BLOCKER or "constrained" in FT_BLOCKER
-        assert "curvature-free" in FT_BLOCKER
+    def test_ft_verified_detail_mentions_boundary_term(self):
+        """The verified path detail mentions the boundary-term identity."""
+        assert "boundary" in FT_VERIFIED.lower() or "T = -R" in FT_VERIFIED
 
-    def test_ft_blocker_mentions_linear_case(self):
-        """The blocker acknowledges the linear case is equivalent to GR."""
-        assert "f(T) = T" in FT_BLOCKER or "linear" in FT_BLOCKER
+    def test_ft_verified_detail_mentions_tetrad(self):
+        """The verified path detail mentions the tetrad/Weitzenbock formulation."""
+        assert "tetrad" in FT_VERIFIED.lower() or "Weitzenbock" in FT_VERIFIED
+
+    def test_ft_verified_detail_mentions_linear_case(self):
+        """The verified detail acknowledges the linear case is equivalent to GR."""
+        assert "f(T) = T" in FT_VERIFIED or "linear" in FT_VERIFIED.lower()

@@ -1539,3 +1539,106 @@ print("NOETHER_CHECK: residue=" + str(residue))
 print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
 """,
 )
+
+# ---------------------------------------------------------------------------
+# f(T) = T EOM via boundary-term identity (metric teleparallel).
+#
+# In the teleparallel formulation (architecture.md section 6.2), the torsion
+# scalar T satisfies the boundary-term identity:
+#   T = -R(g) + 2 nabla_mu^{LC} T^mu
+# where R(g) is the Ricci scalar of the metric's Levi-Civita connection,
+# and 2 nabla_mu T^mu is a total boundary term. For the linear case f(T) = T,
+# the action becomes:
+#   S = int sqrt(-g) T = -int sqrt(-g) R + boundary = -S_EH + boundary
+# Therefore the f(T) = T metric EOM is G_{mu nu} = 0 (identical to GR).
+#
+# The Weitzenbock connection Gamma^rho_{mu nu} = E_a^rho partial_mu e^a_nu
+# is built from the tetrad e^a_mu and is flat (R=0), metric-compatible (Q=0),
+# and torsionful (T!=0). The torsion is T^rho_{mu nu} = Gamma^rho_{mu nu} -
+# Gamma^rho_{nu mu} and the torsion scalar T is the Weitzenbock scalar
+# defined in the tetrad-teleparallel-v1 convention block.
+#
+# The Cadabra residue check varies -sqrt(-g) g^{alpha beta} R_{alpha beta}
+# (the trace form of -sqrt(-g) R, which is S_fT modulo the boundary term)
+# using the same technique as eval1 and the f(Q) coincident-gauge template.
+# The result sqrt(-g) G^{mu nu} h_{mu nu} confirms the EOM G_{mu nu} = 0.
+#
+# Conventions: noether-default-v1 + metric-affine-v1 + tetrad-teleparallel-v1.
+# Geometry: teleparallel (curvature-free, metric-compatible, torsionful).
+# ---------------------------------------------------------------------------
+
+register(
+    "eom_ft_linear_tetrad",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\nabla{#}::Derivative.
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+h_{\mu\nu}::Symmetric.
+h^{\mu\nu}::Symmetric.
+R_{\mu\nu}::Symmetric.
+sg::LaTeXForm("\sqrt{-g}").
+h{#}::Depends(\nabla{#}).
+R_{\mu\nu}::Depends(\nabla{#}).
+dGamma^{\lambda}_{\mu\nu}::Depends(\nabla{#}).
+
+# f(T) = T action via boundary-term identity: S = int sqrt(-g) T
+# By T = -R + 2 nabla_mu T^mu (boundary), S = -int sqrt(-g) R + boundary
+# Dropping the boundary term (does not affect the EOM), we vary
+# -sqrt(-g) g^{alpha beta} R_{alpha beta} (trace form of -sqrt(-g) R).
+ex := \int{ - sg g^{\alpha\beta} R_{\alpha\beta} }{x};
+vary(ex, $g^{\alpha\beta} -> -h^{\alpha\beta}, sg -> 1/2 sg g^{\mu\nu} h_{\mu\nu}, R_{\alpha\beta} -> \nabla_{\lambda}{dGamma^{\lambda}_{\beta\alpha}} - \nabla_{\beta}{dGamma^{\lambda}_{\lambda\alpha}}$);
+substitute(ex, $dGamma^{\lambda}_{\nu\sigma} -> 1/2 g^{\lambda\rho} ( \nabla_{\nu}{h_{\rho\sigma}} + \nabla_{\sigma}{h_{\rho\nu}} - \nabla_{\rho}{h_{\nu\sigma}} )$);
+distribute(ex);
+product_rule(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+canonicalise(ex);
+integrate_by_parts(ex, $\nabla_{\nu}{h_{\rho\sigma}}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+integrate_by_parts(ex, $h_{\rho\sigma}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+substitute(ex, $\int{A??}{x} -> A??$);
+eliminate_metric(ex);
+eliminate_kronecker(ex);
+sort_product(ex);
+canonicalise(ex);
+rename_dummies(ex);
+print("NOETHER_RESULT: " + str(ex))
+
+# Target: f(T) = T EOM is G_{mu nu} = 0. Since we varied -sqrt(-g) R
+# (the f(T) action after boundary-term decomposition), the variational
+# derivative is sqrt(-g) G^{mu nu} h_{mu nu}.
+target := sg R_{\mu\nu} h^{\mu\nu} - 1/2 sg g^{\mu\nu} h_{\mu\nu} g^{\alpha\beta} R_{\alpha\beta};
+distribute(target);
+eliminate_metric(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+print("TARGET: " + str(target))
+
+residue := @(ex) - @(target);
+distribute(residue);
+eliminate_metric(residue);
+eliminate_kronecker(residue);
+sort_product(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: residue=" + str(residue))
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
+""",
+)

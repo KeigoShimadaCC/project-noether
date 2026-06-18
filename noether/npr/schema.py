@@ -18,7 +18,9 @@ SymmetryKind = Literal["none", "symmetric", "antisymmetric"]
 
 class ObjectDecl(BaseModel):
     name: str
-    kind: Literal["metric", "tensor-field", "scalar-field", "connection", "function", "shorthand"]
+    kind: Literal[
+        "metric", "tensor-field", "scalar-field", "connection", "tetrad", "function", "shorthand"
+    ]
     role: Role
     symmetry: SymmetryKind = "none"
     rank: int = 0

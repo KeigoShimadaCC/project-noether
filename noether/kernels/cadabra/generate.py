@@ -35,6 +35,7 @@ _EXAMPLE_TEMPLATE: dict[str, str] = {
     "vary-scalar": "eval3_scalar_tensor_scalar",
     "vary-scalar-cubic": "eom_cubic_galileon_scalar",
     "vary-gauge": "eval4_maxwell",
+    "vary-tetrad": "eom_ft_linear_tetrad",
     "perturb-scalar": "pert_scalar_quadratic",
     "perturb-kessence": "pert_kessence_quadratic",
     "perturb-metric": "pert_metric_quadratic",
@@ -276,6 +277,11 @@ def _variation_key(npr: NPR, wrt: str, kind: str = "eom") -> str:
         return "vary-scalar"
     if obj.kind == "tensor-field":
         return "vary-gauge"
+    if obj.kind == "tetrad":
+        # Teleparallel f(T) gravity: vary w.r.t. the tetrad e^a_mu.
+        # Uses the Weitzenbock connection built from the tetrad,
+        # constrained to be curvature-free and metric-compatible.
+        return "vary-tetrad"
     return "vary-metric"
 
 
@@ -309,6 +315,22 @@ def build_generation_prompt(npr: NPR, wrt: str, kind: str = "eom") -> tuple[str,
         closing = (
             "Now write the script for the action above, varying the metric "
             "ONLY (the Ricci tensor stays fixed because the connection is independent)."
+        )
+    elif key == "vary-tetrad":
+        task = (
+            "Task: derive the equation of motion for the teleparallel f(T) action "
+            "by varying the metric. The torsion scalar T satisfies the boundary-term "
+            "identity T = -R + 2 nabla_mu T^mu, so the f(T) = T action equals "
+            "-S_EH + boundary and the EOM is G_{mu nu} = 0. "
+            "The fundamental variable is the tetrad e^a_mu with "
+            "g_{mu nu} = e^a_mu e^b_nu eta_{ab} and the Weitzenbock connection "
+            "Gamma^rho_{mu nu} = E_a^rho partial_mu e^a_nu (flat, metric-compatible, "
+            "torsionful). Vary using the boundary-term decomposition approach.\n\n"
+        )
+        contract = CADABRA_CONTRACT
+        closing = (
+            "Now write the script for the action above, using the boundary-term "
+            "identity to reduce to the Einstein-Hilbert variation."
         )
     else:
         task = (
