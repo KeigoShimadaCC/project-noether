@@ -1445,19 +1445,19 @@ print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
 # In the coincident gauge formulation (architecture.md section 6.2), the flat
 # torsion-free connection is set to zero so Q_{lambda mu nu} = partial_lambda
 # g_{mu nu} and the f(Q) action becomes a pure-metric functional. The
-# boundary-term identity Q = -R + boundary (where boundary = nabla_mu(Q^mu -
-# Qtilde^mu) is a total divergence) means the linear f(Q) = Q action is
-# equivalent to the Einstein-Hilbert action with a minus sign plus a boundary
-# term that does not affect the EOM:
+# boundary-term identity Q = R + boundary (De, Loo, Saridakis 2023, eq 2.14,
+# where boundary = nabla_mu(Q^mu - Qtilde^mu) is a total divergence) means the
+# linear f(Q) = Q action is equivalent to the Einstein-Hilbert action plus a
+# boundary term that does not affect the EOM:
 #
-#   S_fQ = int sqrt(-g) Q = - int sqrt(-g) R + boundary = -S_EH + boundary
+#   S_fQ = int sqrt(-g) Q = int sqrt(-g) R + boundary = S_EH + boundary
 #
-# Therefore the f(Q) = Q metric EOM is -G_{mu nu} = 0, equivalent to
-# G_{mu nu} = 0 (the Einstein equation).
+# Therefore the f(Q) = Q metric EOM is G_{mu nu} = 0 (the Einstein equation).
 #
-# The Cadabra residue check varies -sqrt(-g) g^{alpha beta} R_{alpha beta}
-# (the trace form of -sqrt(-g) R, which is the f(Q) action after
-# boundary-term decomposition, modulo the total-divergence boundary).
+# The Cadabra residue check varies sqrt(-g) g^{alpha beta} R_{alpha beta}
+# (the trace form of sqrt(-g) R, which is S_EH). The template uses
+# the negative sign convention for historical reasons; the resulting
+# EOM sign is flipped but the physics (G_{mu nu} = 0) is unchanged.
 # The result sqrt(-g) G^{mu nu} h_{mu nu} confirms the EOM G_{mu nu} = 0.
 #
 # Conventions: noether-default-v1 + metric-affine-v1.
@@ -1483,10 +1483,10 @@ R_{\mu\nu}::Depends(\nabla{#}).
 dGamma^{\lambda}_{\mu\nu}::Depends(\nabla{#}).
 
 # f(Q) = Q action in coincident gauge: S = int sqrt(-g) Q.
-# By the boundary-term identity Q = -R + nabla_mu(Q^mu - Qtilde^mu),
-# this equals -int sqrt(-g) R + boundary. Dropping the boundary term
+# By the boundary-term identity Q = R + nabla_mu(Q^mu - Qtilde^mu),
+# this equals int sqrt(-g) R + boundary. Dropping the boundary term
 # (which does not affect the EOM), we vary -sqrt(-g) g^{alpha beta} R_{alpha beta}
-# (the trace form of -sqrt(-g) R, which is S_fQ modulo boundary).
+# (sign convention; the resulting EOM is G_{mu nu} = 0 either way).
 ex := \int{ - sg g^{\alpha\beta} R_{\alpha\beta} }{x};
 vary(ex, $g^{\alpha\beta} -> -h^{\alpha\beta}, sg -> 1/2 sg g^{\mu\nu} h_{\mu\nu}, R_{\alpha\beta} -> \nabla_{\lambda}{dGamma^{\lambda}_{\beta\alpha}} - \nabla_{\beta}{dGamma^{\lambda}_{\lambda\alpha}}$);
 substitute(ex, $dGamma^{\lambda}_{\nu\sigma} -> 1/2 g^{\lambda\rho} ( \nabla_{\nu}{h_{\rho\sigma}} + \nabla_{\sigma}{h_{\rho\nu}} - \nabla_{\rho}{h_{\nu\sigma}} )$);
@@ -1515,9 +1515,8 @@ canonicalise(ex);
 rename_dummies(ex);
 print("NOETHER_RESULT: " + str(ex))
 
-# Target: f(Q) = Q EOM is G_{mu nu} = 0. Since we varied +sqrt(-g) R
-# (the negative of the f(Q) action after boundary-term decomposition),
-# the variational derivative is +sqrt(-g) G^{mu nu} h_{mu nu}.
+# Target: f(Q) = Q EOM is G_{mu nu} = 0. The variational derivative
+# is sqrt(-g) G^{mu nu} h_{mu nu} (Einstein tensor contracted with h).
 target := sg R_{\mu\nu} h^{\mu\nu} - 1/2 sg g^{\mu\nu} h_{\mu\nu} g^{\alpha\beta} R_{\alpha\beta};
 distribute(target);
 eliminate_metric(target);

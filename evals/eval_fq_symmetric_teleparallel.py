@@ -4,8 +4,9 @@ Input action: S = \\int d^4x \\sqrt{-g} f(Q)
 with a curvature-free, torsion-free, non-metric connection (symmetric teleparallel).
 
 The non-metricity scalar Q (the symmetric teleparallel equivalent of the Ricci
-scalar) satisfies the identity Q = -R + boundary, where boundary is a total
-divergence. For the linear case f(Q) = Q, this means the f(Q) EOM is the
+scalar) satisfies the identity Q = R + boundary (De, Loo, Saridakis 2023,
+eq 2.14), where boundary = nabla_mu(Q^mu - Qtilde^mu) is a total divergence.
+For the linear case f(Q) = Q, this means the f(Q) EOM is the
 Einstein equation G_{mu nu} = 0, identical to GR up to a boundary term.
 
 Conventions: noether-default-v1 + metric-affine-v1.
@@ -28,7 +29,7 @@ COINCIDENT GAUGE FORMULATION (architecture.md section 6.2):
 In coincident gauge the flat torsion-free connection is set to zero
 (Gamma=0), so Q_{lambda mu nu} = partial_lambda g_{mu nu} and the
 f(Q) action becomes a pure-metric functional. By the boundary-term
-identity Q = -R + boundary, the f(Q) = Q action equals -S_EH + boundary,
+identity Q = R + boundary, the f(Q) = Q action equals S_EH + boundary,
 so the metric EOM is G_{mu nu} = 0 (verified by the Cadabra template
 eom_fq_linear_coincident, which exercises the same variation as eval1
 and passes the residue check).
@@ -195,7 +196,7 @@ def build_fq_npr(resolved: bool = True) -> NPR:
 
 
 # The f(Q) field equation for the linear case f(Q) = Q.
-# Since Q = -R + boundary, this reduces to G_{mu nu} = 0.
+# Since Q = R + boundary, this reduces to G_{mu nu} = 0.
 LINEAR_FQ_EOM_TEX = r"G_{\mu\nu} = 0"
 
 # The f(Q) field equation for general f(Q).
@@ -206,15 +207,17 @@ GENERAL_FQ_EOM_TEX = (
 )
 
 # Verified derivation path: the linear f(Q) = Q EOM is derived in coincident
-# gauge via the boundary-term identity Q = -R + boundary, which reduces the
-# variation to the Einstein-Hilbert path (already verified by eval1). The
-# Cadabra template eom_fq_linear_coincident exercises this path and passes
-# the residue check (residue_zero == True).
+# gauge via the boundary-term identity Q = R + boundary (De, Loo, Saridakis
+# 2023, eq 2.14), which reduces the variation to the Einstein-Hilbert path
+# (already verified by eval1). The Cadabra template eom_fq_linear_coincident
+# exercises this path and passes the residue check (residue_zero == True).
 VERIFIED_PATH_DETAIL = (
     "f(Q) = Q EOM derived in coincident gauge: the boundary-term identity "
-    "Q = -R + boundary reduces the variation to the Einstein-Hilbert path "
+    "Q = R + boundary (De, Loo, Saridakis 2023, eq 2.14) reduces the "
+    "variation to the Einstein-Hilbert path "
     "(already verified by eval1). The Cadabra template "
     "eom_fq_linear_coincident passes the residue check. The SymPy "
     "componentwise cross-check confirms the EOM formula on a Q!=0 "
-    "coincident-gauge background."
+    "coincident-gauge background. The boundary-term identity is verified "
+    "numerically by boundary_term_identity_residual in fq_coincident.py."
 )

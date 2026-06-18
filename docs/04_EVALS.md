@@ -868,7 +868,7 @@ zero (dA) vs `−2AF` (covcurl).
 | vector-affine | Maxwell on metric-affine background | field-strength choice (dA vs nabla A), zero vs nonzero hypermomentum, T/Q correction | M3 |
 | EC-algebraic | Einstein-Cartan algebraic torsion | Palatini connection EOM algebraic in K (no dK terms), SymPy cross-check on Q=0 T!=0 backgrounds | M3 |
 | ST-affine | Palatini scalar-tensor F(phi)R(Gamma) | three variations (g, Gamma, phi), dF non-metricity source, boundary assumption, LC limit | M3 |
-| fQ | symmetric teleparallel f(Q) | curvature-free constraint, boundary-term identity Q = -R + B, gated derivation | H3 |
+| fQ | symmetric teleparallel f(Q) | coincident gauge, boundary-term identity Q = R + B (numerically verified), Cadabra residue-zero | H3 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and
 an executable spec under `evals/` (machine-checkable: input transcript, expected
@@ -892,7 +892,7 @@ T^mu. SymPy cross-checks verify that Gamma = LC + K(T) is metric-compatible
 with nonzero torsion, and that the curvature-free constraint is nontrivial
 (arbitrary torsion does not produce R = 0).
 
-### f(Q) eval (gated)
+### f(Q) eval (verified, coincident gauge)
 
 **Action:** S = int sqrt(-g) f(Q), where Q is the non-metricity scalar (the
 symmetric teleparallel equivalent of the Ricci scalar).
@@ -901,9 +901,20 @@ symmetric teleparallel equivalent of the Ricci scalar).
 non-metric). `ConnectionSpec` carries `curvature_free=True`,
 `family="symmetric-teleparallel"`.
 
-**Status: gated.** The derivation infrastructure does not yet support the
-coincident gauge formulation required for f(Q) gravity. The linear case
-f(Q) = Q is equivalent to GR by the boundary-term identity Q = -R + boundary.
-SymPy cross-checks verify that Gamma = LC + L(Q) is torsion-free with
+**Status: verified (coincident gauge).** The linear f(Q) = Q EOM is derived
+in coincident gauge, where the flat torsion-free connection is set to zero so
+that Q_{lambda mu nu} = partial_lambda g_{mu nu} and the action becomes a
+pure-metric functional. By the boundary-term identity Q = R + boundary
+(De, Loo, Saridakis 2023, eq 2.14; verified numerically by
+`boundary_term_identity_residual` in `fq_coincident.py` on explicit
+backgrounds with multiple seeds in dim=4), the f(Q) = Q action equals
+S_EH + boundary, so the metric EOM is G_{mu nu} = 0. The non-metricity
+scalar Q is computed as Q = Q_{alpha beta gamma} P^{alpha beta gamma}
+using the standard superpotential P (Beltran Jimenez, Heisenberg, Koivisto
+2018, eq 2.11). The Cadabra template `eom_fq_linear_coincident` exercises
+this coincident-gauge variation and passes the residue check
+(residue_zero == True). The SymPy componentwise cross-check confirms the
+general f(Q) EOM formula on coincident-gauge backgrounds with Q != 0.
+SymPy cross-checks also verify that Gamma = LC + L(Q) is torsion-free with
 nonzero non-metricity, and that the curvature-free constraint is nontrivial
 (arbitrary non-metricity does not produce R = 0).

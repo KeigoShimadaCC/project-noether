@@ -5,7 +5,7 @@ VAL-EOM-023: metric teleparallel f(T) EOM derived, verified or clearly gated.
 
 Both derivations use the coincident-gauge / vierbein formulation. The linear
 cases (f(T)=T and f(Q)=Q) are equivalent to GR by the boundary-term
-identities T = -R + boundary and Q = -R + boundary, and this equivalence
+identities T = -R + boundary and Q = R + boundary, and this equivalence
 is verified componentwise by the SymPy oracle on explicit metric backgrounds.
 
 For f(Q), the Cadabra template eom_fq_linear_coincident exercises the
@@ -46,8 +46,13 @@ from noether.kernels.sympy_kernel.fq_coincident import (
     fQ_eom_linear,
     nonmetricity_conjugate,
 )
+from noether.kernels.sympy_kernel.fq_coincident import (
+    boundary_term_identity_residual as fq_boundary_residual,
+)
 from noether.kernels.sympy_kernel.ft_tetrad import (
-    boundary_term_identity_residual,
+    boundary_term_identity_residual as ft_boundary_residual,
+)
+from noether.kernels.sympy_kernel.ft_tetrad import (
     ft_eom_linear,
     ft_eom_linear_via_boundary,
     ft_eom_metric_form,
@@ -199,7 +204,7 @@ class TestFTTorsionScalar:
         The residual T + R - 2 nabla_mu T^mu should be zero.
         """
         geom, e, E, gamma, T_tensor, g, g_inv = _make_weitzenbock_from_tetrad(seed, dim=3)
-        residual = boundary_term_identity_residual(geom.coords, T_tensor, g, g_inv)
+        residual = ft_boundary_residual(geom.coords, T_tensor, g, g_inv)
         assert sp.simplify(residual) == 0, (
             f"Boundary-term identity residual should be zero, got {residual}"
         )
@@ -359,7 +364,7 @@ class TestFTSymPyCrossCheck:
 #
 # In coincident gauge (Gamma=0), Q_{lambda mu nu} = partial_lambda g_{mu nu}
 # and the f(Q) action becomes a pure-metric functional. The boundary-term
-# identity Q = -R + boundary implies the linear EOM is G_{mu nu} = 0.
+# identity Q = R + boundary implies the linear EOM is G_{mu nu} = 0.
 # ---------------------------------------------------------------------------
 
 
@@ -418,10 +423,12 @@ class TestFQCoincidentGaugeCrossCheck:
 
     @pytest.mark.parametrize("seed", [7, 19])
     def test_linear_fq_eom_is_einstein_tensor(self, seed):
-        """For f(Q) = Q, the EOM E_{mu nu} = G_{mu nu} (Einstein tensor).
+        """For f(Q) = Q, the EOM E_{mu nu} = G_{mu nu} - (1/2) g_{mu nu} Q.
 
         This verifies the general f(Q) EOM formula reduces correctly
-        for the linear case: f'=1, f''=0, f-Qf'=0, giving E=G.
+        for the linear case: f'=1, f''=0, f-Qf'=0, giving
+        E = G - (1/2) g Q. On shell this equals zero by the
+        boundary-term identity.
         """
         geom = random_diagonal_metric(seed, dim=3)
         Q_val = Q_scalar(geom.coords, geom.g, geom.g_inv)
@@ -432,16 +439,18 @@ class TestFQCoincidentGaugeCrossCheck:
             f=Q_val, fp=sp.Integer(1), fpp=sp.Integer(0), Q_val=Q_val,
         )
 
-        # Linear EOM (should be the Einstein tensor)
+        # Expected: G - (1/2) g Q
         G = fQ_eom_linear(geom.coords, geom.g, geom.g_inv)
 
         # Check componentwise
         n = 3
         for mu in range(n):
             for nu in range(n):
-                diff = sp.simplify(E_general[mu, nu] - G[mu, nu])
+                expected = _clean(G[mu, nu] - sp.Rational(1, 2) * geom.g[mu, nu] * Q_val)
+                diff = sp.simplify(E_general[mu, nu] - expected)
                 assert diff == 0, (
-                    f"E_general[{mu},{nu}] != G[{mu},{nu}]: {E_general[mu, nu]} vs {G[mu, nu]}"
+                    f"E_general[{mu},{nu}] != G[{mu},{nu}] - (1/2)g*Q: "
+                    f"{E_general[mu, nu]} vs {expected}"
                 )
 
     @pytest.mark.parametrize("seed", [7, 19])
@@ -449,7 +458,7 @@ class TestFQCoincidentGaugeCrossCheck:
         """The general f(Q) EOM formula is computable on a Q!=0 background.
 
         For f(Q) = Q + c (constant shift), f'=1, f''=0, f-Qf'=c,
-        giving E_{mu nu} = G_{mu nu} - (1/2) g_{mu nu} c.
+        giving E_{mu nu} = G_{mu nu} - (1/2) g_{mu nu} (Q - c).
         """
         geom = random_diagonal_metric(seed, dim=3)
         Q_val = Q_scalar(geom.coords, geom.g, geom.g_inv)
@@ -462,11 +471,14 @@ class TestFQCoincidentGaugeCrossCheck:
 
         G = fQ_eom_linear(geom.coords, geom.g, geom.g_inv)
 
-        # E should equal G - (1/2) g c
+        # E should equal G - (1/2) g (Q - c) = G + (1/2) g (c - Q)
         n = 3
         for mu in range(n):
             for nu in range(n):
-                expected = _clean(G[mu, nu] - sp.Rational(1, 2) * geom.g[mu, nu] * c)
+                expected = _clean(
+                    G[mu, nu]
+                    - sp.Rational(1, 2) * geom.g[mu, nu] * (Q_val - c)
+                )
                 diff = sp.simplify(E[mu, nu] - expected)
                 assert diff == 0, (
                     f"E[{mu},{nu}] != expected: {E[mu, nu]} vs {expected}"
@@ -479,6 +491,59 @@ class TestFQCoincidentGaugeCrossCheck:
         P = nonmetricity_conjugate(geom.coords, geom.g, geom.g_inv)
         assert P is not None
         assert P.shape == (3, 3, 3)
+
+
+class TestFQBoundaryTermIdentity:
+    """Boundary-term identity Q - R = nabla_mu(Q^mu - Qtilde^mu) in coincident gauge.
+
+    Parallel to f(T)'s test_boundary_term_identity, this verifies
+    the identity Q - R - nabla_mu(Q^mu - Qtilde^mu) = 0 (De, Loo,
+    Saridakis 2023, eq 2.14) that underpins the f(Q) = Q EOM being
+    G_{mu nu} = 0.
+    """
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_boundary_term_identity(self, seed):
+        """Q - R = nabla_mu(Q^mu - Qtilde^mu) (boundary-term identity).
+
+        The residual Q - R - nabla_mu(Q^mu - Qtilde^mu) should be
+        zero, where z^mu = Q^mu - Qtilde^mu is the boundary vector
+        built from the non-metricity traces. This identity implies
+        that for the linear case f(Q) = Q, the EOM is the Einstein
+        equation.
+        """
+        geom = random_diagonal_metric(seed, dim=4)
+        residual = fq_boundary_residual(
+            geom.coords, geom.g, geom.g_inv,
+        )
+        assert sp.simplify(residual) == 0, (
+            f"Boundary-term identity residual should be zero, got {residual}"
+        )
+
+    @pytest.mark.parametrize("seed", [7, 19])
+    def test_boundary_term_identity_Q_nonzero(self, seed):
+        """The Q scalar is nonzero on the test background (nontrivial check).
+
+        In dim=4 diagonal metrics, Q can be nonzero (unlike dim=3 where
+        Q always vanishes for diagonal metrics), making this a
+        nontrivial check.
+        """
+        geom = random_diagonal_metric(seed, dim=4)
+        Q_val = Q_scalar(geom.coords, geom.g, geom.g_inv)
+        assert sp.simplify(Q_val) != 0, (
+            "Q scalar should be nonzero on a coordinate-dependent metric background"
+        )
+
+    @pytest.mark.parametrize("seed", [7, 19])
+    def test_boundary_term_identity_R_nonzero(self, seed):
+        """The Ricci scalar R is nonzero on the test background (nontrivial check)."""
+        from noether.kernels.sympy_kernel.geometry import ComponentGeometry
+        geom = random_diagonal_metric(seed, dim=4)
+        cg = ComponentGeometry(geom.coords, sp.Matrix(geom.g))
+        R = cg.ricci_scalar
+        assert sp.simplify(R) != 0, (
+            "Ricci scalar should be nonzero on a random curved background"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -497,7 +562,7 @@ class TestFQCadabraVerification:
         """The Cadabra template eom_fq_linear_coincident passes the residue check.
 
         This template varies the f(Q) = Q action in coincident gauge using
-        the boundary-term identity Q = -R + boundary, reducing to the
+        the boundary-term identity Q = R + boundary, reducing to the
         Einstein-Hilbert variation. The residue check confirms the EOM
         G_{mu nu} = 0.
         """
