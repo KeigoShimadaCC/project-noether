@@ -699,6 +699,46 @@ _ADM_OUTPUTS: list[tuple[str, str]] = [
     ("momentum (normal-tangential) projection", _ADM_MOMENTUM_TEX),
 ]
 
+# Metric-affine ADM: connection foliation decomposition and constraints.
+_ADM_CONNECTION_FOLIATION_TEX = (
+    r"\Gamma^{\lambda}_{\mu\nu}"
+    r" = \{^{\lambda}_{\mu\nu}\}_g"
+    r" + K^{\lambda}_{\mu\nu}(T)"
+    r" + L^{\lambda}_{\mu\nu}(Q)"
+)
+_ADM_TORSION_FOLIATION_TEX = (
+    r"T^{\lambda}_{\mu\nu}:\;"
+    r"T^{i}_{jk}\;\text{(spatial)},\;"
+    r"T^{n}_{jk}\;\text{(normal-upper)},\;"
+    r"T^{i}_{nk}\;\text{(mixed)}"
+)
+_ADM_NONMETRICITY_FOLIATION_TEX = (
+    r"Q_{\lambda\mu\nu}:\;"
+    r"Q_{ijk}\;\text{(spatial)},\;"
+    r"Q_{nij}\;\text{(normal-first)},\;"
+    r"Q_{inj}\;\text{(mixed)}"
+)
+_ADM_K_SIGN_TEX = (
+    r"K_{ij} = +\nabla_i n_j\;\text{(expansion-positive, }n_\mu = (-N,0,\ldots,0)\text{)}"
+)
+_ADM_CONNECTION_CONSTRAINTS_TEX = (
+    r"\text{Primary: }\delta S/\delta\Gamma\;\text{algebraic}"
+    r"\;\Rightarrow\;\Gamma\;\text{non-dynamical}"
+    r";\;\text{Secondary: Dirac chain gated}"
+)
+_ADM_CONNECTION_CONSTRAINTS_Q_TEX = (
+    r"\text{Primary: }\delta S/\delta\Gamma\;\text{involves }K(T),L(Q)"
+    r";\;\text{Dirac chain closure requires action-specific analysis}"
+)
+
+_ADM_AFFINE_OUTPUTS: list[tuple[str, str]] = [
+    ("connection foliation decomposition", _ADM_CONNECTION_FOLIATION_TEX),
+    ("torsion foliation pieces", _ADM_TORSION_FOLIATION_TEX),
+    ("non-metricity foliation pieces", _ADM_NONMETRICITY_FOLIATION_TEX),
+    ("extrinsic curvature convention", _ADM_K_SIGN_TEX),
+    ("connection-sector constraints", _ADM_CONNECTION_CONSTRAINTS_TEX),
+]
+
 
 def _ladder_from_components(computed: ComputedResult, verified: bool, detail: str) -> LadderReport:
     """Represent the SymPy component-eval suite as a one-rung ladder. Each
@@ -733,6 +773,15 @@ def derive_adm(
     Einstein tensor, universal foliation geometry that the kernel confirms on
     an explicit background. Any well-posed action carrying a metric is
     accepted; an action with no metric is refused rather than guessed.
+
+    For a metric-affine NPR (independent connection with torsion and/or
+    non-metricity), the result additionally exposes the connection's own
+    degrees of freedom decomposed along the foliation (the Gamma = LC + K(T)
+    + L(Q) split projected into normal/tangential parts), surfaces torsion
+    and non-metricity pieces explicitly, distinguishes constraint pieces from
+    evolution pieces, and identifies connection-sector primary/secondary
+    constraints. If the Dirac chain cannot be closed, the constraint piece
+    carries verified=false with a detail naming the blocker.
     """
     build_plan(npr)  # raises AmbiguityBlocked unless the problem is well posed
 
@@ -745,6 +794,11 @@ def derive_adm(
     if sympy is None or not sympy.available():
         raise RuntimeError("sympy kernel unavailable; cannot verify the ADM split")
 
+    has_independent_connection = (
+        getattr(npr.geometry.connection, "type", None) == "independent"
+    )
+
+    # --- Metric-sector checks (GR ADM, always run) ---
     computed = sympy.run(
         KernelTask(
             capability=Capability.COMPONENT_EVAL,
@@ -761,6 +815,32 @@ def derive_adm(
         if verified
         else "kernel did not confirm the ADM split; surfaced as unverified"
     )
+
+    # --- Connection-sector checks (metric-affine ADM) ---
+    if has_independent_connection:
+        affine_computed = sympy.run(
+            KernelTask(
+                capability=Capability.COMPONENT_EVAL,
+                description="ADM 3+1 metric-affine connection decomposition",
+                payload={"check": "adm-affine-1p2"},
+            )
+        )
+        affine_checks = affine_computed.value.get("checks", {})
+        affine_verified = bool(affine_computed.value.get("passed"))
+        affine_detail = (
+            "kernel confirmed the post-Riemannian decomposition on the "
+            "foliated background, the torsion and non-metricity foliation "
+            "projections, and the distortion spatial projections on an "
+            "explicit 1+2 metric-affine background"
+            if affine_verified
+            else "kernel did not confirm the metric-affine ADM decomposition; "
+            "surfaced as unverified"
+        )
+    else:
+        affine_computed = None
+        affine_checks = {}
+        affine_verified = False
+        affine_detail = ""
 
     result_id = f"adm-{hashlib.sha1(npr.action.lagrangian_tex.encode()).hexdigest()[:8]}"
     bundle_path = str(results_root / session_id / result_id) if results_root is not None else None
@@ -783,23 +863,103 @@ def derive_adm(
         for label, tex in _ADM_OUTPUTS
     ]
 
+    # Add metric-affine pieces when the connection is independent.
+    if has_independent_connection:
+        # Determine whether the Dirac chain can close based on the
+        # algebraic nature of the connection EOM.
+        has_nonmetricity = npr.geometry.connection.nonmetricity
+        # When Q != 0, the Dirac chain cannot be closed in general
+        # (the disformation L(Q) introduces additional structure that
+        # requires action-specific analysis). Gate the constraint piece.
+        dirac_closeable = not has_nonmetricity
+
+        for label, tex in _ADM_AFFINE_OUTPUTS:
+            piece_verified = affine_verified
+            piece_detail = affine_detail
+            piece_checks = affine_checks
+
+            # The connection-sector constraints piece carries a more
+            # specific verdict depending on the Dirac chain closure.
+            if label == "connection-sector constraints":
+                if not dirac_closeable:
+                    piece_verified = False
+                    piece_detail = (
+                        "Dirac chain cannot be closed for the general "
+                        "metric-affine case with non-metricity (Q != 0): "
+                        "the disformation L(Q) introduces additional "
+                        "structure that requires action-specific analysis. "
+                        "Primary constraints from the algebraic connection "
+                        "EOM are identified, but secondary constraints "
+                        "and their consistency require further treatment. "
+                        "Gated with a stated reason."
+                    )
+                else:
+                    piece_detail = (
+                        "On a metric-compatible (Q=0) torsionful background, "
+                        "the connection EOM is algebraic in K (no "
+                        "derivative-of-K terms). Primary constraints: the "
+                        "algebraic EOM constrains all Gamma components "
+                        "without time derivatives. Secondary constraints: "
+                        "for pure Palatini EH the projective gauge freedom "
+                        "generates first-class constraints. "
+                        + affine_detail
+                    )
+
+            derivations.append(
+                FieldDerivation(
+                    wrt=label,
+                    kind="adm",
+                    capability=Capability.ADM,
+                    result_id=result_id,
+                    result_tex=tex,
+                    verified=piece_verified,
+                    checks=piece_checks,
+                    kernel_name=(
+                        affine_computed.kernel_name
+                        if affine_computed
+                        else computed.kernel_name
+                    ),
+                    kernel_version=(
+                        affine_computed.kernel_version
+                        if affine_computed
+                        else computed.kernel_version
+                    ),
+                    script=(
+                        affine_computed.script.source
+                        if affine_computed
+                        else computed.script.source
+                    ),
+                    detail=piece_detail,
+                    bundle_path=bundle_path,
+                )
+            )
+
     if results_root is not None:
         ladder = _ladder_from_components(computed, verified, detail)
+        all_computed = [computed]
+        if affine_computed is not None:
+            all_computed.append(affine_computed)
+        narrative = (
+            "ADM (3+1) decomposition of the gravitational sector. The split "
+            f"and projections were verified by {computed.kernel_name} "
+            f"{computed.kernel_version} on a nondegenerate 1+2 background; "
+            f"K_{{ij}} = nabla_i n_j and the lapse Euler-Lagrange equation are "
+            f"part of the same suite. verified={verified}."
+        )
+        if has_independent_connection:
+            narrative += (
+                f" Connection-sector decomposition verified={affine_verified} "
+                f"on a metric-affine background with torsion and non-metricity."
+            )
         bundle = ResultBundle(
             session_id=session_id,
             result_id=result_id,
             result_tex=_ADM_SPLIT_TEX,
             npr_snapshot=npr,
             plan=[],
-            computed=[computed],
+            computed=all_computed,
             ladder=ladder,
-            narrative=(
-                "ADM (3+1) decomposition of the gravitational sector. The split "
-                f"and projections were verified by {computed.kernel_name} "
-                f"{computed.kernel_version} on a nondegenerate 1+2 background; "
-                f"K_{{ij}} = nabla_i n_j and the lapse Euler-Lagrange equation are "
-                f"part of the same suite. verified={verified}."
-            ),
+            narrative=narrative,
             derivations=[d.model_dump(mode="json") for d in derivations],
         )
         write_bundle(results_root, bundle)

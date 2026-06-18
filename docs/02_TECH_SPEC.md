@@ -589,7 +589,13 @@ perturbative expansion (xPert), Young projection.
    projections, the extrinsic-curvature identity K_ij = nabla_i n_j, and the
    lapse Euler-Lagrange equation) on a nondegenerate 1+2 background (eval 1s);
    `verified` is set from that suite. Any well-posed action carrying a metric is
-   accepted; one with no metric is refused.
+   accepted; one with no metric is refused. For a metric-affine NPR
+   (independent connection), `derive_adm` additionally produces the connection's
+   foliation decomposition (Gamma = LC + K(T) + L(Q) projected into normal and
+   tangential parts), surfaces torsion and non-metricity pieces, separates
+   constraint pieces from evolution, and identifies connection-sector primary
+   and secondary constraints (gated when the Dirac chain cannot close); see
+   section 6.5.
 
 ### 6.1 Representation boundaries (Horndeski as the worked stress case)
 
@@ -1059,6 +1065,68 @@ Tests: `tests/test_pert_vector_affine.py` (22 tests: 9 Cadabra
 structural checks, 11 SymPy cross-checks on 3 random affine backgrounds,
 2 XOR gate checks).  Routing: `perturb-vector-affine-dA` and
 `perturb-vector-affine-covcurl` in `generate.py`.
+
+### 6.5 Metric-affine ADM (3+1) decomposition (VAL-ADM-001 through VAL-ADM-005)
+
+The existing `derive_adm` path (section 6, item 8) produces the GR ADM split
+(lapse, shift, induced metric, extrinsic curvature K_{ij}, Hamiltonian and
+momentum constraints) verified by the SymPy component kernel on a
+nondegenerate 1+2 background. For a metric-affine NPR
+(`geometry.connection.type == "independent"`), `derive_adm` now additionally
+produces connection-sector decomposition pieces.
+
+**Connection foliation decomposition.** The post-Riemannian decomposition
+`Gamma^lambda_{mu nu} = LC^lambda_{mu nu}(g) + K^lambda_{mu nu}(T) +
+L^lambda_{mu nu}(Q)` (pinned in M2) is projected along the foliation into
+normal and tangential parts using the normal `n_mu = (-N, 0, ..., 0)` and the
+tangential projector `h_{mu nu} = g_{mu nu} + n_mu n_nu`. The result exposes
+the spatial, normal-upper, and mixed components of the contortion K(T) and the
+disformation L(Q). Torsion and non-metricity are decomposed similarly:
+spatial torsion `T^i_{jk}`, normal-upper torsion `T^n_{jk}`, mixed torsion
+`T^i_{nk}`; spatial non-metricity `Q_{ijk}`, normal-first non-metricity
+`Q_{nij}`, mixed non-metricity `Q_{inj}`. For a Levi-Civita connection
+(T=Q=0), these pieces are absent (the decomposition reduces to the GR ADM
+with no connection-sector output).
+
+**Constraint/evolution separation.** The metric-sector constraints
+(Hamiltonian `R^{(3)} + K^2 - K_{ab}K^{ab}`, momentum
+`D_a(K^a_b - h^a_b K)`) are already labeled as constraints in the GR ADM
+output (they are first-order in time derivatives and constrain initial data).
+The connection-sector constraints are surfaced distinctly: the connection EOM
+(variation of the action with respect to Gamma) is algebraic (no time
+derivatives of Gamma), making all connection components non-dynamical and
+generating primary constraints. For metric-compatible (Q=0) torsionful
+theories, the Dirac constraint chain can be closed: the algebraic EOM
+constrains the contortion K, and the projective gauge freedom (for pure
+Palatini EH) generates first-class constraints. For non-metric-compatible
+(Q!=0) theories, the Dirac chain cannot be closed in general and is gated
+with a stated reason: the disformation L(Q) introduces additional structure
+that requires action-specific analysis.
+
+**Verification.** The `AffineADMGeometry` class in
+`noether/kernels/sympy_kernel/adm.py` runs six checks on a nondegenerate
+1+2 background with a general affine connection carrying both torsion and
+non-metricity: (F) the post-Riemannian decomposition `Gamma = LC + K(T) +
+L(Q)` holds componentwise on the foliated background; (G) the torsion and
+non-metricity foliation pieces are correctly extracted from the full tensors;
+(H) the connection EOM is algebraic on a metric-compatible background; (I)
+the connection-sector primary constraints are identified; plus
+distortion-spatial-projections consistency and background nondegeneracy with
+all distortion features switched on. The metric-sector GR checks (A-E) are
+inherited from `ADMGeometry`. The adapter exposes the suite as the
+`adm-affine-1p2` component-eval check. The derive path runs both
+`adm-gr-1p2` (metric sector) and `adm-affine-1p2` (connection sector) when
+the connection is independent, producing eight `FieldDerivation` objects:
+three GR pieces plus five connection-sector pieces. The connection-sector
+constraints piece carries `verified=False` with a detail when the Dirac chain
+cannot close (Q!=0), and `verified=True` with a positive detail when the chain
+closes (Q=0).
+
+Tests: `tests/test_adm_affine.py` (34 tests: reachability, metric-sector
+split, connection foliation decomposition, constraint/evolution separation,
+connection-sector constraints, GR regression, adapter integration).
+Eval: `evals/test_eval_adm_affine.py` (10 tests: elicitation gate, metric
+and connection sector checks, adapter check). CLI: `noether adm-affine`.
 
 ## 7. Provenance bundles
 

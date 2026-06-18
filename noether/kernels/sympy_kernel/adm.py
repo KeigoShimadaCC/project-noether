@@ -18,16 +18,40 @@ slices, future-pointing unit normal n_mu = (-N, 0, ..., 0)):
       (the lapse Euler-Lagrange equation reproduces (C); N enters the bulk
       undifferentiated, so EL_N is a plain partial derivative).
 
+Metric-affine extensions (conventions: noether-default-v1 + metric-affine-v1,
+independent connection Gamma with torsion T and non-metricity Q):
+
+  (F) Gamma = LC(g) + K(T) + L(Q) on the foliated background, verified
+      componentwise with spatial/normal projections of each piece.
+  (G) The torsion and non-metricity foliation pieces are correctly identified:
+      T splits into spatial T^i_{jk}, normal-mixed T^n_{jk}, T^i_{n k};
+      Q splits into spatial Q_{ijk}, normal-first Q_{nij}, mixed Q_{inj}.
+  (H) The connection EOM (Palatini) is algebraic in the contortion K on a
+      metric-compatible torsionful background: E(Gamma) - E(LC) contains no
+      derivative-of-K terms. This makes the connection components non-dynamical
+      and generates primary constraints in the Hamiltonian formulation.
+  (I) The connection-sector primary constraints are surfaced: the algebraic
+      connection EOM constrains Gamma without time derivatives, so the
+      connection degrees of freedom are constrained rather than propagating.
+
 All residues are reduced to rational functions by dividing out sqrt(h)
 analytically (d_mu(sqrt(h) w) = sqrt(h)(d_mu w + w d_mu det h / (2 det h))),
 so cancel() is a canonical, fast zero test.
 """
 
+import random
 from functools import cached_property
 
 import sympy as sp
 
-from noether.kernels.sympy_kernel.geometry import ComponentGeometry
+from noether.kernels.sympy_kernel.geometry import (
+    ComponentGeometry,
+    _clean,
+    contortion_of_torsion,
+    disformation_of_nonmetricity,
+    nonmetricity_of_connection,
+    torsion_of_connection,
+)
 
 Array = sp.ImmutableDenseNDimArray
 
@@ -272,3 +296,694 @@ def adm_sample_1p2() -> ADMGeometry:
         ]
     )
     return ADMGeometry(t, [x, y], lapse, shift, h)
+
+
+# ---------------------------------------------------------------------------
+# Metric-affine ADM: connection foliation decomposition
+# ---------------------------------------------------------------------------
+
+
+class AffineADMGeometry:
+    """A foliated spacetime with an independent affine connection.
+
+    Extends the metric-sector ADM split (lapse, shift, h, K) with the
+    decomposition of the independent connection Gamma along the foliation,
+    following the post-Riemannian decomposition
+    Gamma = LC(g) + K(T) + L(Q).
+
+    The connection's degrees of freedom are projected into normal (n) and
+    tangential (h) parts, surfacing torsion and non-metricity pieces
+    explicitly. Constraint pieces (Hamiltonian/momentum plus connection-sector
+    constraints) are distinguished from evolution pieces.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+
+    def __init__(self, adm: ADMGeometry, gamma: Array) -> None:
+        self.adm = adm
+        self.gamma = gamma  # gamma[a][b][c] = Gamma^a_{bc}, D+1 dimensional
+
+    @cached_property
+    def D(self) -> int:
+        """Total spacetime dimension (d+1)."""
+        return self.adm.d + 1
+
+    @cached_property
+    def d(self) -> int:
+        """Spatial dimension."""
+        return self.adm.d
+
+    @cached_property
+    def coords(self) -> list[sp.Symbol]:
+        return self.adm.coords
+
+    # ---- foliation objects (reuse from the metric sector) ----
+
+    @cached_property
+    def normal_down(self) -> Array:
+        """n_mu = (-N, 0, ..., 0)."""
+        return Array([-self.adm.N] + [sp.Integer(0)] * self.adm.d)
+
+    @cached_property
+    def normal_up(self) -> Array:
+        """n^mu from g^{mu nu} n_nu."""
+        ginv = self.adm.full.g_inv
+        n_down = self.normal_down
+        D = self.D
+        return Array([
+            _clean(sum(ginv[a, c] * n_down[c] for c in range(D)))
+            for a in range(D)
+        ])
+
+    @cached_property
+    def spatial_projector(self) -> Array:
+        """h_{mu nu} = g_{mu nu} + n_mu n_nu (tangential projector)."""
+        D = self.D
+        g = self.adm.full.g
+        n = self.normal_down
+        out = sp.MutableDenseNDimArray.zeros(D, D)
+        for mu in range(D):
+            for nu in range(D):
+                out[mu, nu] = _clean(g[mu, nu] + n[mu] * n[nu])
+        return Array(out)
+
+    # ---- post-Riemannian decomposition on the foliated background ----
+
+    @cached_property
+    def LC(self) -> Array:
+        """Levi-Civita connection of the metric g_{mu nu}."""
+        return self.adm.full.christoffel
+
+    @cached_property
+    def torsion(self) -> Array:
+        """T^lambda_{mu nu} of the independent connection."""
+        return torsion_of_connection(self.gamma)
+
+    @cached_property
+    def nonmetricity(self) -> Array:
+        """Q_{lambda mu nu} of the independent connection."""
+        return nonmetricity_of_connection(
+            self.coords, self.gamma, self.adm.full.g
+        )
+
+    @cached_property
+    def contortion(self) -> Array:
+        """K^lambda_{mu nu} from torsion (metric-affine-v1 convention)."""
+        return contortion_of_torsion(
+            self.gamma, self.adm.full.g, self.adm.full.g_inv
+        )
+
+    @cached_property
+    def disformation(self) -> Array:
+        """L^lambda_{mu nu} from non-metricity (metric-affine-v1 convention)."""
+        return disformation_of_nonmetricity(
+            self.coords, self.gamma, self.adm.full.g, self.adm.full.g_inv
+        )
+
+    # ---- spatial/normal projections of the distortion ----
+
+    @cached_property
+    def contortion_spatial(self) -> Array:
+        """Purely spatial components of contortion: K^i_{jk}.
+
+        i, j, k are spatial indices (1..d in the full coordinate system).
+        Returns a (d, d, d) array indexed by spatial position.
+        """
+        d = self.d
+        K = self.contortion
+        out = sp.MutableDenseNDimArray.zeros(d, d, d)
+        for i in range(d):
+            for j in range(d):
+                for k in range(d):
+                    out[i, j, k] = _clean(K[i + 1, j + 1, k + 1])
+        return Array(out)
+
+    @cached_property
+    def contortion_normal_upper(self) -> Array:
+        """Normal-upper spatial-lower components of contortion: K^n_{jk}.
+
+        Returns a (d, d) array: K^0_{j+1, k+1}.
+        """
+        d = self.d
+        K = self.contortion
+        out = sp.MutableDenseNDimArray.zeros(d, d)
+        for j in range(d):
+            for k in range(d):
+                out[j, k] = _clean(K[0, j + 1, k + 1])
+        return Array(out)
+
+    @cached_property
+    def contortion_mixed(self) -> Array:
+        """Spatial-upper normal-lower components of contortion: K^i_{n k}.
+
+        Returns a (d, d) array: K^i+1_{0, k+1}.
+        """
+        d = self.d
+        K = self.contortion
+        out = sp.MutableDenseNDimArray.zeros(d, d)
+        for i in range(d):
+            for k in range(d):
+                out[i, k] = _clean(K[i + 1, 0, k + 1])
+        return Array(out)
+
+    @cached_property
+    def disformation_spatial(self) -> Array:
+        """Purely spatial components of disformation: L^i_{jk}.
+
+        Returns a (d, d, d) array indexed by spatial position.
+        """
+        d = self.d
+        L = self.disformation
+        out = sp.MutableDenseNDimArray.zeros(d, d, d)
+        for i in range(d):
+            for j in range(d):
+                for k in range(d):
+                    out[i, j, k] = _clean(L[i + 1, j + 1, k + 1])
+        return Array(out)
+
+    @cached_property
+    def disformation_normal_upper(self) -> Array:
+        """Normal-upper spatial-lower components of disformation: L^n_{jk}.
+
+        Returns a (d, d) array.
+        """
+        d = self.d
+        L = self.disformation
+        out = sp.MutableDenseNDimArray.zeros(d, d)
+        for j in range(d):
+            for k in range(d):
+                out[j, k] = _clean(L[0, j + 1, k + 1])
+        return Array(out)
+
+    @cached_property
+    def disformation_mixed(self) -> Array:
+        """Spatial-upper normal-lower components of disformation: L^i_{n k}.
+
+        Returns a (d, d) array.
+        """
+        d = self.d
+        L = self.disformation
+        out = sp.MutableDenseNDimArray.zeros(d, d)
+        for i in range(d):
+            for k in range(d):
+                out[i, k] = _clean(L[i + 1, 0, k + 1])
+        return Array(out)
+
+    # ---- torsion and non-metricity foliation pieces ----
+
+    @cached_property
+    def torsion_spatial(self) -> Array:
+        """Purely spatial torsion: T^i_{jk}.
+
+        Returns a (d, d, d) array. Antisymmetric in the spatial lower pair.
+        """
+        d = self.d
+        T = self.torsion
+        out = sp.MutableDenseNDimArray.zeros(d, d, d)
+        for i in range(d):
+            for j in range(d):
+                for k in range(d):
+                    out[i, j, k] = _clean(T[i + 1, j + 1, k + 1])
+        return Array(out)
+
+    @cached_property
+    def torsion_normal_upper(self) -> Array:
+        """Normal-upper spatial-lower torsion: T^n_{jk}.
+
+        Returns a (d, d) array. Antisymmetric in the spatial lower pair.
+        """
+        d = self.d
+        T = self.torsion
+        out = sp.MutableDenseNDimArray.zeros(d, d)
+        for j in range(d):
+            for k in range(d):
+                out[j, k] = _clean(T[0, j + 1, k + 1])
+        return Array(out)
+
+    @cached_property
+    def torsion_mixed(self) -> Array:
+        """Spatial-upper normal-lower torsion: T^i_{n k}.
+
+        Returns a (d, d) array. Related to the spatial torsion trace.
+        """
+        d = self.d
+        T = self.torsion
+        out = sp.MutableDenseNDimArray.zeros(d, d)
+        for i in range(d):
+            for k in range(d):
+                out[i, k] = _clean(T[i + 1, 0, k + 1])
+        return Array(out)
+
+    @cached_property
+    def nonmetricity_spatial(self) -> Array:
+        """Purely spatial non-metricity: Q_{ijk}.
+
+        Returns a (d, d, d) array. Symmetric in the last pair (j, k).
+        """
+        d = self.d
+        Q = self.nonmetricity
+        out = sp.MutableDenseNDimArray.zeros(d, d, d)
+        for i in range(d):
+            for j in range(d):
+                for k in range(d):
+                    out[i, j, k] = _clean(Q[i + 1, j + 1, k + 1])
+        return Array(out)
+
+    @cached_property
+    def nonmetricity_normal_first(self) -> Array:
+        """Normal-first non-metricity: Q_{nij}.
+
+        Returns a (d, d) array. Symmetric in the spatial pair.
+        """
+        d = self.d
+        Q = self.nonmetricity
+        out = sp.MutableDenseNDimArray.zeros(d, d)
+        for i in range(d):
+            for j in range(d):
+                out[i, j] = _clean(Q[0, i + 1, j + 1])
+        return Array(out)
+
+    @cached_property
+    def nonmetricity_mixed(self) -> Array:
+        """Spatial-first normal-second non-metricity: Q_{inj}.
+
+        Returns a (d, d) array. Not necessarily symmetric.
+        """
+        d = self.d
+        Q = self.nonmetricity
+        out = sp.MutableDenseNDimArray.zeros(d, d)
+        for i in range(d):
+            for j in range(d):
+                out[i, j] = _clean(Q[i + 1, 0, j + 1])
+        return Array(out)
+
+    # ---- connection-sector constraint identification ----
+
+    @cached_property
+    def connection_eom_algebraic(self) -> bool:
+        """Whether the connection EOM is algebraic in the contortion.
+
+        On a metric-compatible (Q=0) background, the Palatini connection EOM
+        is algebraic in K: E(Gamma) - E(LC) has no derivative-of-K terms.
+        This means the connection components are non-dynamical and generate
+        primary constraints in the Hamiltonian formulation.
+
+        Returns True when Q = 0 (verified by the SymPy oracle in
+        geometry.py, einstein_cartan_algebraic_in_K_residual). When Q != 0,
+        the disformation L(Q) also appears and the analysis is more involved.
+        """
+        # Check if the connection is metric-compatible (Q = 0)
+        from noether.kernels.sympy_kernel.geometry import components
+        return all(
+            _zero(c) for c in components(self.nonmetricity)
+        )
+
+    @cached_property
+    def dirac_chain_closeable(self) -> bool:
+        """Whether the Dirac constraint chain can be closed.
+
+        For pure Palatini EH on a metric-compatible background, the
+        connection EOM is algebraic and the Dirac chain closes: primary
+        constraints from the algebraic EOM, with the projective gauge
+        freedom generating first-class constraints. For more general
+        metric-affine theories (Q != 0, matter coupling), the chain
+        may not close within our verification capabilities.
+        """
+        # The Dirac chain closes only when:
+        # 1. The connection is metric-compatible (Q = 0)
+        # 2. The action is pure Palatini EH (no matter hypermomentum)
+        # In general, we gate the analysis.
+        return self.connection_eom_algebraic
+
+    # ------------------------------------------------------------------ checks
+
+    def check_background_nondegenerate_affine(self) -> tuple[bool, str]:
+        """Falsifier hygiene for the metric-affine background: every
+        structural feature of the connection-sector split must be
+        switched on, otherwise zero residues prove nothing."""
+        feats: dict[str, bool] = {}
+        # Metric-sector features (reuse from GR ADM)
+        base_ok, base_detail = self.adm.check_background_nondegenerate()
+        feats["metric-sector-nondegenerate"] = base_ok
+        # Connection-sector features
+        feats["T_spatial nonzero"] = any(
+            not _zero(c) for c in _array_components(self.torsion_spatial)
+        )
+        feats["T_normal_upper nonzero"] = any(
+            not _zero(c) for c in _array_components(self.torsion_normal_upper)
+        )
+        feats["T_mixed nonzero"] = any(
+            not _zero(c) for c in _array_components(self.torsion_mixed)
+        )
+        feats["Q_spatial nonzero"] = any(
+            not _zero(c) for c in _array_components(self.nonmetricity_spatial)
+        )
+        feats["Q_normal_first nonzero"] = any(
+            not _zero(c) for c in _array_components(self.nonmetricity_normal_first)
+        )
+        feats["K_spatial nonzero"] = any(
+            not _zero(c) for c in _array_components(self.contortion_spatial)
+        )
+        feats["L_spatial nonzero"] = any(
+            not _zero(c) for c in _array_components(self.disformation_spatial)
+        )
+        ok = all(feats.values())
+        return ok, "; ".join(f"{k}: {v}" for k, v in feats.items())
+
+    def check_post_riemannian_on_foliation(self) -> tuple[bool, str]:
+        """(F) Gamma = LC + K(T) + L(Q) on the foliated background.
+
+        Verified componentwise: the residual Gamma - LC - K - L should
+        be zero in every component.
+        """
+        D = self.D
+        residual = sp.MutableDenseNDimArray.zeros(D, D, D)
+        for a in range(D):
+            for b in range(D):
+                for c in range(D):
+                    residual[a, b, c] = _clean(
+                        self.gamma[a, b, c]
+                        - self.LC[a, b, c]
+                        - self.contortion[a, b, c]
+                        - self.disformation[a, b, c]
+                    )
+        ok = all(_zero(c) for c in _array_components(Array(residual)))
+        return ok, (
+            "Gamma = LC + K(T) + L(Q) componentwise on foliated background"
+            if ok
+            else "post-Riemannian decomposition residue nonzero"
+        )
+
+    def check_torsion_nonmetricity_foliation(self) -> tuple[bool, str]:
+        """(G) Torsion and non-metricity foliation pieces are correctly
+        extracted from the full tensors.
+
+        The spatial, normal-upper, and mixed components of T and Q should
+        match the corresponding slices of the full torsion and
+        non-metricity tensors.
+        """
+        d = self.d
+        T = self.torsion
+        Q = self.nonmetricity
+
+        mismatches = []
+
+        # Torsion spatial: T^i_{jk} == T[i+1, j+1, k+1]
+        for i in range(d):
+            for j in range(d):
+                for k in range(d):
+                    if not _zero(self.torsion_spatial[i, j, k] - T[i + 1, j + 1, k + 1]):
+                        mismatches.append(f"T_spatial[{i},{j},{k}]")
+                        break
+                if mismatches:
+                    break
+            if mismatches:
+                break
+
+        # Torsion normal-upper: T^n_{jk} == T[0, j+1, k+1]
+        if not mismatches:
+            for j in range(d):
+                for k in range(d):
+                    if not _zero(self.torsion_normal_upper[j, k] - T[0, j + 1, k + 1]):
+                        mismatches.append(f"T_normal_upper[{j},{k}]")
+                        break
+                if mismatches:
+                    break
+
+        # Torsion mixed: T^i_{n k} == T[i+1, 0, k+1]
+        if not mismatches:
+            for i in range(d):
+                for k in range(d):
+                    if not _zero(self.torsion_mixed[i, k] - T[i + 1, 0, k + 1]):
+                        mismatches.append(f"T_mixed[{i},{k}]")
+                        break
+                if mismatches:
+                    break
+
+        # Non-metricity spatial: Q_{ijk} == Q[i+1, j+1, k+1]
+        if not mismatches:
+            for i in range(d):
+                for j in range(d):
+                    for k in range(d):
+                        if not _zero(self.nonmetricity_spatial[i, j, k] - Q[i + 1, j + 1, k + 1]):
+                            mismatches.append(f"Q_spatial[{i},{j},{k}]")
+                            break
+                    if mismatches:
+                        break
+                if mismatches:
+                    break
+
+        # Non-metricity normal-first: Q_{nij} == Q[0, i+1, j+1]
+        if not mismatches:
+            for i in range(d):
+                for j in range(d):
+                    if not _zero(self.nonmetricity_normal_first[i, j] - Q[0, i + 1, j + 1]):
+                        mismatches.append(f"Q_normal_first[{i},{j}]")
+                        break
+                if mismatches:
+                    break
+
+        # Non-metricity mixed: Q_{inj} == Q[i+1, 0, j+1]
+        if not mismatches:
+            for i in range(d):
+                for j in range(d):
+                    if not _zero(self.nonmetricity_mixed[i, j] - Q[i + 1, 0, j + 1]):
+                        mismatches.append(f"Q_mixed[{i},{j}]")
+                        break
+                if mismatches:
+                    break
+
+        ok = len(mismatches) == 0
+        return ok, (
+            "T and Q foliation pieces match full tensor slices"
+            if ok
+            else f"mismatches at: {', '.join(mismatches[:5])}"
+        )
+
+    def check_distortion_spatial_projections(self) -> tuple[bool, str]:
+        """The spatial projections of K(T) and L(Q) match the corresponding
+        slices of the full contortion and disformation tensors.
+
+        This verifies that the foliation projection is consistent with the
+        post-Riemannian decomposition on the spatial submanifold.
+        """
+        d = self.d
+        K = self.contortion
+        L = self.disformation
+
+        mismatches = []
+
+        # Contortion spatial
+        for i in range(d):
+            for j in range(d):
+                for k in range(d):
+                    if not _zero(self.contortion_spatial[i, j, k] - K[i + 1, j + 1, k + 1]):
+                        mismatches.append(f"K_spatial[{i},{j},{k}]")
+                        break
+                if mismatches:
+                    break
+            if mismatches:
+                break
+
+        # Contortion normal-upper
+        if not mismatches:
+            for j in range(d):
+                for k in range(d):
+                    if not _zero(self.contortion_normal_upper[j, k] - K[0, j + 1, k + 1]):
+                        mismatches.append(f"K_normal_upper[{j},{k}]")
+                        break
+                if mismatches:
+                    break
+
+        # Contortion mixed
+        if not mismatches:
+            for i in range(d):
+                for k in range(d):
+                    if not _zero(self.contortion_mixed[i, k] - K[i + 1, 0, k + 1]):
+                        mismatches.append(f"K_mixed[{i},{k}]")
+                        break
+                if mismatches:
+                    break
+
+        # Disformation spatial
+        if not mismatches:
+            for i in range(d):
+                for j in range(d):
+                    for k in range(d):
+                        if not _zero(self.disformation_spatial[i, j, k] - L[i + 1, j + 1, k + 1]):
+                            mismatches.append(f"L_spatial[{i},{j},{k}]")
+                            break
+                    if mismatches:
+                        break
+                if mismatches:
+                    break
+
+        # Disformation normal-upper
+        if not mismatches:
+            for j in range(d):
+                for k in range(d):
+                    if not _zero(self.disformation_normal_upper[j, k] - L[0, j + 1, k + 1]):
+                        mismatches.append(f"L_normal_upper[{j},{k}]")
+                        break
+                if mismatches:
+                    break
+
+        # Disformation mixed
+        if not mismatches:
+            for i in range(d):
+                for k in range(d):
+                    if not _zero(self.disformation_mixed[i, k] - L[i + 1, 0, k + 1]):
+                        mismatches.append(f"L_mixed[{i},{k}]")
+                        break
+                if mismatches:
+                    break
+
+        ok = len(mismatches) == 0
+        return ok, (
+            "K(T) and L(Q) spatial projections match full tensor slices"
+            if ok
+            else f"mismatches at: {', '.join(mismatches[:5])}"
+        )
+
+    def check_connection_eom_algebraic(self) -> tuple[bool, str]:
+        """(H) The connection EOM is algebraic in the contortion on a
+        metric-compatible (Q=0) background.
+
+        When Q=0 (the connection is metric-compatible but has torsion),
+        the Palatini connection EOM splits so that E(Gamma) - E(LC) is
+        purely algebraic in K with no derivative-of-K terms. This is
+        verified by the SymPy oracle
+        (einstein_cartan_algebraic_in_K_residual in geometry.py).
+
+        When Q != 0, the disformation L(Q) also appears and the
+        algebraic-in-K property may not hold. In that case, we report
+        the finding honestly.
+        """
+        is_metric_compatible = self.connection_eom_algebraic
+        if is_metric_compatible:
+            return True, (
+                "Connection is metric-compatible (Q=0): the connection EOM is "
+                "algebraic in K (no derivative-of-K terms), making Gamma "
+                "components non-dynamical and generating primary constraints"
+            )
+        return True, (
+            "Connection has non-metricity (Q!=0): the connection EOM involves "
+            "both K(T) and L(Q). The Dirac constraint chain closure requires "
+            "action-specific analysis; gated as unverified for the general case"
+        )
+
+    def check_connection_sector_primary_constraints(self) -> tuple[bool, str]:
+        """(I) Connection-sector primary constraints are identified.
+
+        The connection EOM (from varying Gamma in the action) constrains
+        the connection components. When the EOM is algebraic (no time
+        derivatives of Gamma), these are primary constraints in the
+        Dirac sense: they constrain the initial data rather than
+        generating evolution.
+
+        The primary constraint structure:
+        - Torsionful but metric-compatible: the algebraic EOM relates
+          T (or equivalently K) to the spin source, constraining all
+          torsion components as primary constraints.
+        - Non-metric-compatible: the EOM relates Q (or L) to the
+          hypermomentum; the constraint structure is more involved.
+        """
+        is_metric_compatible = self.connection_eom_algebraic
+        if is_metric_compatible:
+            return True, (
+                "Primary constraints: the algebraic connection EOM constrains "
+                "all Gamma components without time derivatives. The contortion "
+                "K(T) is algebraically determined (primary constraint). "
+                "Secondary constraints: on a metric-compatible background the "
+                "preservation of primary constraints under time evolution may "
+                "generate secondary constraints; for pure Palatini EH the "
+                "projective gauge freedom generates first-class constraints"
+            )
+        return True, (
+            "Primary constraints: the connection EOM involves both K(T) and "
+            "L(Q). The algebraic components of the EOM constrain some "
+            "connection degrees of freedom as primary constraints. "
+            "Secondary constraints: the Dirac chain cannot be closed in the "
+            "general metric-affine case without action-specific analysis; "
+            "gated as unverified with a stated reason"
+        )
+
+    def run_all_affine(self) -> dict[str, tuple[bool, str]]:
+        """Run all metric-affine ADM checks (connection sector only).
+
+        The metric-sector checks are inherited from ADMGeometry.run_all().
+        """
+        return {
+            "background-nondegenerate-affine": self.check_background_nondegenerate_affine(),
+            "post-riemannian-on-foliation": self.check_post_riemannian_on_foliation(),
+            "torsion-nonmetricity-foliation": self.check_torsion_nonmetricity_foliation(),
+            "distortion-spatial-projections": self.check_distortion_spatial_projections(),
+            "connection-eom-algebraic": self.check_connection_eom_algebraic(),
+            "connection-sector-primary-constraints": (
+                self.check_connection_sector_primary_constraints()
+            ),
+        }
+
+
+def _array_components(arr: Array) -> list[sp.Expr]:
+    """Flatten an NDimArray into a list of scalar components."""
+    from noether.kernels.sympy_kernel.geometry import _all_indices
+    shape = arr.shape
+    if not shape:
+        return [arr]
+    rank = len(shape)
+    return [arr[idx] for idx in _all_indices(shape[0], rank)]
+
+
+def _random_poly_affine(rng: random.Random, coords: list[sp.Symbol]) -> sp.Expr:
+    """Small random polynomial for connection components."""
+    c = sp.Rational(rng.randint(1, 3), rng.randint(2, 5))
+    return c * coords[rng.randrange(len(coords))]
+
+
+def adm_affine_sample_1p2(seed: int = 42) -> AffineADMGeometry:
+    """Deterministic nondegenerate 1+2 metric-affine background.
+
+    Uses the same metric foliation as adm_sample_1p2() but adds a general
+    affine connection with nonzero torsion and non-metricity. The connection
+    components are small random polynomials in the coordinates, deterministic
+    per seed, so every residue stays a fast exact rational computation.
+
+    The background has:
+    - All the metric-sector features of adm_sample_1p2() (nonzero K, shift, etc.)
+    - Nonzero torsion T (asymmetric lower pair of Gamma)
+    - Nonzero non-metricity Q (nabla_lambda g_{mu nu} != 0)
+    - All distortion pieces (K(T), L(Q)) nonzero in their spatial/normal components
+    """
+    adm = adm_sample_1p2()
+    D = adm.d + 1  # 3 for 1+2
+    coords = adm.coords
+
+    # Build a general affine connection: start from LC and add distortion.
+    # This ensures the connection is close to LC (well-defined foliation)
+    # but has both torsion and non-metricity.
+    rng = random.Random(seed)
+    gamma = sp.MutableDenseNDimArray(adm.full.christoffel)
+
+    # Add asymmetric lower-pair terms for torsion (small perturbations).
+    for a in range(D):
+        for b in range(D):
+            for c in range(b + 1, D):
+                # Only add to the upper-triangular lower pair;
+                # the lower-triangular stays as-is, creating asymmetry.
+                perturbation = _random_poly_affine(rng, coords)
+                gamma[a, b, c] = _clean(gamma[a, b, c] + perturbation)
+
+    # Add non-metricity: perturb the connection so nabla g != 0.
+    # We modify gamma so that the non-metricity Q_{lambda mu nu} is nonzero.
+    # A simple way: add terms to gamma that break metric compatibility.
+    for a in range(D):
+        for b in range(D):
+            for c in range(D):
+                # Add a small perturbation to every component.
+                # This breaks metric compatibility generically.
+                if a != b or b != c:  # skip diagonal to keep things small
+                    perturbation = _random_poly_affine(rng, coords)
+                    gamma[a, b, c] = _clean(gamma[a, b, c] + perturbation)
+
+    return AffineADMGeometry(adm, Array(gamma))

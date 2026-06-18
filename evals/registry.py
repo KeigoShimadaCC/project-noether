@@ -532,6 +532,72 @@ _BUILDERS: dict[str, Callable[[], EvalSpec]] = {
 }
 
 
+def _eval_adm_affine() -> EvalSpec:
+    from evals import eval_adm_affine as m
+    from noether.npr.ast import add, down, tensor, up
+    from noether.verify.checks import WellFormedCheck
+
+    def _connection_foliation_expr():
+        """Gamma = LC(g) + K(T) + L(Q): the post-Riemannian decomposition."""
+        return add(
+            tensor("LC", up("lambda"), down("mu"), down("nu")),
+            tensor("K", up("lambda"), down("mu"), down("nu")),
+            tensor("L", up("lambda"), down("mu"), down("nu")),
+        )
+
+    return EvalSpec(
+        key="adm-affine",
+        title=(
+            "Metric-affine ADM (3+1) decomposition: connection foliation "
+            "decomposition, torsion/non-metricity pieces, constraint/evolution "
+            "separation, and connection-sector primary/secondary constraints"
+        ),
+        build_npr=m.build_npr,
+        answers=m.ELICITATION_ANSWERS,
+        cadabra_runs=(),
+        results=(
+            PresentedResult(
+                result_id="adm-affine-split",
+                expr=_connection_foliation_expr,
+                tex_suffix=(
+                    r",\;\text{projected into }n\text{ and }h\text{ parts}"
+                ),
+                ladder=lambda: [WellFormedCheck(
+                    expected_free=[up("lambda"), down("mu"), down("nu")]
+                )],
+                component_tasks=(
+                    (
+                        "ADM metric-sector split + constraint projections + lapse EL, "
+                        "verified on a nondegenerate 1+2 component background",
+                        {"check": "adm-gr-1p2"},
+                    ),
+                    (
+                        "ADM connection-sector decomposition (Gamma=LC+K(T)+L(Q), "
+                        "torsion/non-metricity foliation, distortion projections, "
+                        "constraint identification), verified on a nondegenerate "
+                        "1+2 metric-affine background",
+                        {"check": "adm-affine-1p2"},
+                    ),
+                ),
+            ),
+        ),
+        notes=(
+            "metric-affine extension of the GR ADM (eval 1s): the post-Riemannian "
+            "decomposition Gamma = LC + K(T) + L(Q) is projected along the "
+            "foliation into normal and tangential parts, surfacing torsion "
+            "(T^i_{jk}, T^n_{jk}, T^i_{nk}) and non-metricity (Q_{ijk}, Q_{nij}, "
+            "Q_{inj}) pieces explicitly. Constraint pieces (Hamiltonian/momentum "
+            "plus connection-sector constraints) are distinguished from evolution "
+            "pieces. The connection EOM is algebraic (primary constraints on "
+            "Gamma); secondary constraints require Dirac chain analysis, gated "
+            "when the chain cannot close (e.g. Q != 0).",
+        ),
+    )
+
+
+_BUILDERS["adm-affine"] = _eval_adm_affine
+
+
 def get_spec(key: str) -> EvalSpec:
     if key not in _BUILDERS:
         raise KeyError(f"no eval spec named {key!r}")

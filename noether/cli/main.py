@@ -26,7 +26,7 @@ from noether.verify.ladder import LadderReport, run_ladder
 
 EVAL_KEYS = (
     "eval1", "eval1s", "eval2", "eval3", "eval3s",
-    "eval4", "eval5", "vector-affine", "eval4ma",
+    "eval4", "eval5", "vector-affine", "eval4ma", "adm-affine",
 )
 
 

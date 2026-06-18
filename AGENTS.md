@@ -211,8 +211,14 @@ rather than guessed. The `adm` task is reachable the same way:
 ADM (3+1) decomposition of the gravitational sector, the Gauss-Codazzi split
 and the normal/tangential projections of the Einstein tensor, verified by the
 SymPy component kernel rather than Cadabra (it writes no model script); see
-eval 1s. Any well-posed action carrying a metric is accepted; one with no
-metric is refused. The web client renders each derivation as a provenance tree
+eval 1s. For a metric-affine NPR (independent connection with torsion and/or
+non-metricity), `derive_adm` additionally produces the connection's foliation
+decomposition (Gamma = LC + K(T) + L(Q) projected into normal and tangential
+parts), surfaces torsion and non-metricity pieces explicitly, distinguishes
+constraint pieces from evolution pieces, and identifies connection-sector
+primary/secondary constraints (gated when the Dirac chain cannot close); see
+eval adm-affine and section 6.5 of `docs/02_TECH_SPEC.md`. Any well-posed
+action carrying a metric is accepted; one with no metric is refused. The web client renders each derivation as a provenance tree
 (action, plan, kernel script, every check the kernel reported, result) and
 exports the kernel-verified results as a publication-LaTeX document; both are
 presentation over data the server already returned, so no physics runs in the

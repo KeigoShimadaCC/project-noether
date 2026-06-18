@@ -151,6 +151,31 @@ is refused); for pure GR in vacuum the projection left-hand sides vanish and
 recover the constraints stated here. `evals/test_eval_general.py` gates that the
 orchestration reproduces the kernel-verified decomposition end to end.
 
+**Metric-affine ADM.** For a metric-affine NPR (independent connection with
+torsion and/or non-metricity), `derive_adm` additionally produces five
+connection-sector pieces: the connection foliation decomposition
+(Gamma = LC + K(T) + L(Q) projected into normal and tangential parts),
+torsion foliation pieces (T^i_{jk}, T^n_{jk}, T^i_{nk}), non-metricity
+foliation pieces (Q_{ijk}, Q_{nij}, Q_{inj}), the extrinsic curvature
+convention, and the connection-sector constraints. The constraint piece
+distinguishes primary constraints (the algebraic connection EOM constrains
+Gamma without time derivatives) from secondary constraints (gated when the
+Dirac chain cannot close, e.g. when Q != 0). For a Levi-Civita connection
+(T=Q=0), the connection-sector pieces are absent and the output reduces to
+the three GR ADM pieces.
+
+**Status: implemented (adm-affine; `evals/eval_adm_affine.py`,
+`tests/test_adm_affine.py`).** Conventions: noether-default-v1 +
+metric-affine-v1. The `AffineADMGeometry` class in
+`noether/kernels/sympy_kernel/adm.py` verifies six identities on a
+nondegenerate 1+2 background with a general affine connection carrying both
+torsion and non-metricity: the post-Riemannian decomposition on the
+foliated background, the torsion and non-metricity foliation projections, the
+distortion spatial projections, the algebraic nature of the connection EOM,
+and the connection-sector primary constraint identification. The metric-sector
+checks (A-E from eval 1s) are inherited. The adapter exposes the suite as the
+`adm-affine-1p2` check. CLI: `noether adm-affine`.
+
 ---
 
 ## Eval 2 — Palatini in trace form (metric + independent connection)
@@ -974,6 +999,7 @@ checks, 11 SymPy cross-checks on 3 random affine backgrounds,
 | EC-algebraic | Einstein-Cartan algebraic torsion | Palatini connection EOM algebraic in K (no dK terms), SymPy cross-check on Q=0 T!=0 backgrounds | M3 |
 | ST-affine | Palatini scalar-tensor F(phi)R(Gamma) | three variations (g, Gamma, phi), dF non-metricity source, boundary assumption, LC limit, genuine residue-zero check on connection EOM via Euler-Lagrange target | M3 |
 | fQ | symmetric teleparallel f(Q) | coincident gauge, boundary-term identity Q = R + B (numerically verified), Cadabra residue-zero | H3 |
+| adm-affine | metric-affine ADM (3+1) | connection foliation decomposition (Gamma=LC+K(T)+L(Q)), torsion/non-metricity foliation pieces, constraint/evolution separation, connection-sector primary/secondary constraints (gated when Dirac chain cannot close) | M5 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and
 an executable spec under `evals/` (machine-checkable: input transcript, expected

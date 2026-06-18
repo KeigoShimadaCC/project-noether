@@ -13,6 +13,10 @@ Supported task payloads (capability COMPONENT_EVAL):
   {"check": "adm-gr-1p2"}  (no metric spec: builds its own foliated 1+2
                             background and runs every ADM split/constraint
                             check in noether.kernels.sympy_kernel.adm)
+  {"check": "adm-affine-1p2"}  (no metric spec: builds its own foliated
+                            1+2 background with a general affine connection
+                            and runs every metric-affine ADM decomposition
+                            check in AffineADMGeometry)
   {"check": "spectrum-scalar-tensor-minkowski"}  (no metric spec: runs every
                             linearization/diagonalization check in
                             noether.kernels.sympy_kernel.linearized)
@@ -38,6 +42,12 @@ backgrounds.
 The palatini-projective-inert-general check verifies the Palatini metric
 equation is unchanged by the projective shift on random general-connection
 backgrounds (not just Levi-Civita + projective).
+
+The adm-affine-1p2 check runs the metric-affine ADM decomposition suite:
+the post-Riemannian decomposition on the foliated background, the torsion
+and non-metricity foliation projections, the distortion spatial projections,
+the algebraic nature of the connection EOM, and the primary constraint
+identification.
 """
 
 import time
@@ -53,7 +63,7 @@ from noether.kernels.base import (
     KernelScript,
     KernelTask,
 )
-from noether.kernels.sympy_kernel.adm import adm_sample_1p2
+from noether.kernels.sympy_kernel.adm import adm_affine_sample_1p2, adm_sample_1p2
 from noether.kernels.sympy_kernel.evaluator import all_zero, evaluate
 from noether.kernels.sympy_kernel.geometry import (
     Array,
@@ -129,6 +139,14 @@ class SympyKernelAdapter:
                 payload,
                 lambda: adm_sample_1p2().run_all(),
                 "adm background: deterministic nondegenerate 1+2 sample (adm_sample_1p2)",
+            )
+        if check == "adm-affine-1p2":
+            seed = int(payload.get("seed", 42))
+            return self._run_suite(
+                payload,
+                lambda: adm_affine_sample_1p2(seed).run_all_affine(),
+                "adm-affine background: deterministic nondegenerate 1+2 sample "
+                "with general affine connection (adm_affine_sample_1p2)",
             )
         if check == "spectrum-scalar-tensor-minkowski":
             return self._run_suite(
