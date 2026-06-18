@@ -436,6 +436,23 @@ perturbative expansion (xPert), Young projection.
    its default field list, so both the metric and connection equations are
    derived by default on a Palatini session; the MCP/HTTP `with_respect_to`
    parameter can override this to derive a subset of fields.
+
+   The multi-field Palatini scalar-tensor action S = ∫√{-g} F(φ) R(Γ) extends
+   this to three independent variations: metric, connection, and scalar. The
+   metric variation gives the symmetrized Ricci equation (F × [R_{(μν)} - ½
+   g_{μν} R̃] = 0), the connection variation yields the dF non-metricity
+   source (∇_λ(√{-g} F g^{σν}) - δ^ν_λ ∇_ρ(√{-g} F g^{σρ}) = 0, where ∂F
+   = F_φ ∂φ couples the scalar sector to the connection sector), and the
+   scalar variation gives F_φ R̃(Γ) = 0. The dF source means the projective
+   mode does NOT solve the connection equation when F is non-constant (unlike
+   pure EH). The connection-variation IBP boundary-term assumption (δΓ
+   vanishes on the boundary) is recorded explicitly in the Cadabra script and
+   kernel output, not silently dropped. At T=Q=0, the metric-affine metric
+   equation reduces to the Levi-Civita result F × G_{μν} = 0, residue-pinned
+   and SymPy-confirmed. Three Cadabra templates (`palatini_st_metric`,
+   `palatini_st_connection`, `palatini_st_scalar`) are registered in
+   `templates.py` and verified in `tests/test_palatini_scalar_tensor_affine.py`.
+
    The general path is gated by `evals/test_eval_general.py`,
    which checks it reproduces eval 3's two kernel-verified equations of motion
    end to end. The `vary` task also has a compositional path that needs no

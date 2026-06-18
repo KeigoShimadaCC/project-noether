@@ -866,6 +866,7 @@ zero (dA) vs `−2AF` (covcurl).
 | 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |
 | fT | metric teleparallel f(T) | curvature-free constraint, boundary-term identity T = -R + B, gated derivation | H3 |
 | vector-affine | Maxwell on metric-affine background | field-strength choice (dA vs nabla A), zero vs nonzero hypermomentum, T/Q correction | M3 |
+| ST-affine | Palatini scalar-tensor F(phi)R(Gamma) | three variations (g, Gamma, phi), dF non-metricity source, boundary assumption, LC limit | M3 |
 | fQ | symmetric teleparallel f(Q) | curvature-free constraint, boundary-term identity Q = -R + B, gated derivation | H3 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and
