@@ -42,10 +42,7 @@ import sympy as sp
 from noether.kernels.sympy_kernel.geometry import (
     ComponentGeometry,
     _clean,
-    _all_indices,
-    components,
 )
-
 
 # ---------------------------------------------------------------------------
 # Coincident-gauge geometric quantities
