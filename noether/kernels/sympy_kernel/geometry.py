@@ -945,9 +945,15 @@ def contracted_second_bianchi_residual(
     +R_{sigma alpha} T^alpha_{mu nu} in the identity.  Moving the RHS to
     the LHS gives +R^rho...T terms and -R_{sigma alpha} T^alpha.
 
-    **Caveat:** This simplified form is valid on metric-compatible (Q=0)
-    backgrounds where nabla commutes with index contraction.  For Q != 0,
-    use the uncontracted second Bianchi and contract numerically.
+    **Caveat:** This form uses the simplification -nabla_mu R_{sigma nu}
+    in place of the numerical contraction sum_rho nabla_mu R^rho_{sigma nu
+    rho}.  That simplification step assumes nabla commutes with index
+    contraction, which requires Q=0.  However, the final identity (with
+    torsion corrections) is valid for any connection (Q arbitrary), as
+    confirmed by the numerical contraction approach
+    (contracted_second_bianchi_nonmetric_residual).  For a derivation that
+    does not rely on the Q=0 simplification, use
+    contracted_second_bianchi_nonmetric_residual.
 
     Convention: noether-default-v1 + metric-affine-v1.
     """
@@ -1517,4 +1523,166 @@ def lc_contracted_bianchi_residual(
             for nu in range(n):
                 div_Ric += g_inv[mu, nu] * nabla_Ric[mu, nu, beta]
         residual[beta] = _clean(div_Ric - sp.Rational(1, 2) * nabla_R[beta])
+    return Array(residual)
+
+
+def uncontracted_second_bianchi_residual(
+    coords: list[sp.Symbol], gamma: Array, g: Array, g_inv: Array
+) -> Array:
+    """Residual of the modified uncontracted second Bianchi identity for a
+    general affine connection carrying torsion.
+
+    Derived from the Jacobi identity for covariant derivatives
+    [nabla_a, [nabla_b, nabla_c]] + cyclic = 0, using the commutator
+    [nabla_a, nabla_b] V^rho = R^rho_{sigma ab} V^sigma - T^c_{ab} nabla_c V^rho.
+
+    The identity reads:
+
+      nabla_lambda R^rho_{sigma mu nu} + nabla_mu R^rho_{sigma nu lambda}
+        + nabla_nu R^rho_{sigma lambda mu}
+        = T^alpha_{mu nu} R^rho_{sigma lambda alpha}
+          + T^alpha_{nu lambda} R^rho_{sigma mu alpha}
+          + T^alpha_{lambda mu} R^rho_{sigma nu alpha}
+
+    Returns a (n, n, n, n, n) array indexed [rho, sigma, mu, nu, lambda].
+    When the identity holds every component is zero.
+
+    At T=0 the RHS vanishes, recovering the standard (torsion-free) second
+    Bianchi identity.  This identity holds for ANY affine connection,
+    regardless of torsion or non-metricity, because it is a consequence of
+    the Jacobi identity for covariant derivatives.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+    n = len(coords)
+    R_up = riemann_of_connection(coords, gamma)
+    T = torsion_of_connection(gamma)
+
+    # Full covariant derivative of the (1,3) Riemann tensor
+    # nabla_a R^rho_{sigma mu nu} is a (n, n, n, n, n) array
+    # indexed as [a, rho, sigma, mu, nu]
+    nabla_R = covariant_derivative_of_connection(
+        coords, gamma, R_up, variances=["up", "down", "down", "down"]
+    )
+
+    # Torsion correction terms (T * R contractions)
+    # Derived from the Jacobi identity:
+    # corr1: T^alpha_{mu nu} R^rho_{sigma lambda alpha}
+    corr1 = sp.MutableDenseNDimArray.zeros(n, n, n, n, n)
+    for rho in range(n):
+        for sig in range(n):
+            for mu in range(n):
+                for nu in range(n):
+                    for lam in range(n):
+                        val = sp.Integer(0)
+                        for alp in range(n):
+                            val += T[alp, mu, nu] * R_up[rho, sig, lam, alp]
+                        corr1[rho, sig, mu, nu, lam] = _clean(val)
+
+    # corr2: T^alpha_{nu lambda} R^rho_{sigma mu alpha}
+    corr2 = sp.MutableDenseNDimArray.zeros(n, n, n, n, n)
+    for rho in range(n):
+        for sig in range(n):
+            for mu in range(n):
+                for nu in range(n):
+                    for lam in range(n):
+                        val = sp.Integer(0)
+                        for alp in range(n):
+                            val += T[alp, nu, lam] * R_up[rho, sig, mu, alp]
+                        corr2[rho, sig, mu, nu, lam] = _clean(val)
+
+    # corr3: T^alpha_{lambda mu} R^rho_{sigma nu alpha}
+    corr3 = sp.MutableDenseNDimArray.zeros(n, n, n, n, n)
+    for rho in range(n):
+        for sig in range(n):
+            for mu in range(n):
+                for nu in range(n):
+                    for lam in range(n):
+                        val = sp.Integer(0)
+                        for alp in range(n):
+                            val += T[alp, lam, mu] * R_up[rho, sig, nu, alp]
+                        corr3[rho, sig, mu, nu, lam] = _clean(val)
+
+    # Residual = LHS - RHS
+    # LHS = nabla_lambda R^rho_{sigma mu nu} + nabla_mu R^rho_{sigma nu lambda}
+    #      + nabla_nu R^rho_{sigma lambda mu}
+    # RHS = corr1 + corr2 + corr3
+    residual = sp.MutableDenseNDimArray.zeros(n, n, n, n, n)
+    for rho in range(n):
+        for sig in range(n):
+            for mu in range(n):
+                for nu in range(n):
+                    for lam in range(n):
+                        lhs = (
+                            nabla_R[lam, rho, sig, mu, nu]
+                            + nabla_R[mu, rho, sig, nu, lam]
+                            + nabla_R[nu, rho, sig, lam, mu]
+                        )
+                        rhs = (
+                            corr1[rho, sig, mu, nu, lam]
+                            + corr2[rho, sig, mu, nu, lam]
+                            + corr3[rho, sig, mu, nu, lam]
+                        )
+                        residual[rho, sig, mu, nu, lam] = _clean(lhs - rhs)
+    return Array(residual)
+
+
+def contracted_second_bianchi_nonmetric_residual(
+    coords: list[sp.Symbol], gamma: Array, g: Array, g_inv: Array
+) -> Array:
+    """Residual of the contracted second Bianchi identity on a general
+    (Q != 0) background, computed by numerically contracting the
+    uncontracted modified second Bianchi identity rather than using
+    the Ricci-based simplified form.
+
+    The existing `contracted_second_bianchi_residual` computes:
+      nabla_rho R^rho_{sigma mu nu} - nabla_mu R_{sigma nu}
+        + nabla_nu R_{sigma mu} + torsion_corrections
+
+    The simplification step replacing sum_rho nabla_mu R^rho_{sigma nu rho}
+    with -nabla_mu R_{sigma nu} is valid only when Q=0 (nabla commutes
+    with index contraction on metric-compatible backgrounds).  When Q != 0,
+    nabla does not commute with raising/lowering, so that simplification
+    fails.
+
+    This function instead contracts the uncontracted modified second
+    Bianchi identity numerically (setting lambda = rho and summing over
+    rho), which avoids the Q=0 simplification entirely.  The uncontracted
+    identity is:
+
+      nabla_lambda R^rho_{sigma mu nu} + nabla_mu R^rho_{sigma nu lambda}
+        + nabla_nu R^rho_{sigma lambda mu}
+        = T^alpha_{mu nu} R^rho_{sigma lambda alpha}
+          + T^alpha_{nu lambda} R^rho_{sigma mu alpha}
+          + T^alpha_{lambda mu} R^rho_{sigma nu alpha}
+
+    Setting lambda = rho and summing over rho gives the contracted form.
+    The contraction is purely algebraic (no assumption about nabla
+    commuting with the metric), so it is valid for any connection.
+
+    The ONLY difference from the simplified Ricci-based form is in the
+    main terms: the numerical contraction sum_rho nabla_mu R^rho_{sigma
+    nu rho} replaces the simplified -nabla_mu R_{sigma nu}.  The torsion
+    correction terms are identical between the two forms (verified by
+    contracting the uncontracted correction terms).
+
+    Returns a (n, n, n) array indexed [sigma, mu, nu].  When the identity
+    holds every component is zero.  This should vanish on ANY background,
+    including (T, Q != 0), because it is a direct contraction of the
+    uncontracted modified second Bianchi identity (which holds for any
+    affine connection).
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+    n = len(coords)
+    B = uncontracted_second_bianchi_residual(coords, gamma, g, g_inv)
+    # Contract: sum over rho (setting lambda = rho)
+    residual = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for sig in range(n):
+        for mu in range(n):
+            for nu in range(n):
+                val = sp.Integer(0)
+                for rho in range(n):
+                    val += B[rho, sig, mu, nu, rho]
+                residual[sig, mu, nu] = _clean(val)
     return Array(residual)

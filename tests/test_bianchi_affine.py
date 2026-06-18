@@ -48,6 +48,7 @@ from noether.kernels.cadabra.curvature import (
 from noether.kernels.sympy_kernel.geometry import (
     _clean,
     components,
+    contracted_second_bianchi_nonmetric_residual,
     contracted_second_bianchi_residual,
     first_bianchi_residual,
     lc_contracted_bianchi_residual,
@@ -55,6 +56,7 @@ from noether.kernels.sympy_kernel.geometry import (
     random_affine_connection,
     random_diagonal_metric,
     torsion_of_connection,
+    uncontracted_second_bianchi_residual,
 )
 
 # ---------------------------------------------------------------------------
@@ -463,3 +465,210 @@ class TestBianchiTrapGuard:
         for idx in components(residual):
             diff = sp.simplify(idx)
             assert diff == 0, f"seed={seed}: LC divergence nonzero on Levi-Civita: {diff}"
+
+
+# ===========================================================================
+# Q != 0 contracted second Bianchi (numerical contraction of
+# uncontracted identity)
+# ===========================================================================
+
+
+class TestUncontractedSecondBianchiSymPyCrossCheck:
+    """Cross-check the modified uncontracted second Bianchi identity
+    against the SymPy oracle on explicit random backgrounds.
+
+    The modified uncontracted second Bianchi identity follows from the
+    Jacobi identity for covariant derivatives:
+
+      nabla_lambda R^rho_{sigma mu nu} + nabla_mu R^rho_{sigma nu lambda}
+        + nabla_nu R^rho_{sigma lambda mu}
+        = T^alpha_{mu nu} R^rho_{sigma lambda alpha}
+          + T^alpha_{nu lambda} R^rho_{sigma mu alpha}
+          + T^alpha_{lambda mu} R^rho_{sigma nu alpha}
+
+    holds for ANY affine connection (T and Q arbitrary).  At T=0 the
+    RHS vanishes, recovering the standard (torsion-free) second Bianchi.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_uncontracted_second_bianchi_holds_TQ_nonzero(self, seed):
+        """Modified uncontracted second Bianchi identity on (T,Q != 0)
+        backgrounds.  The identity holds because it is a consequence of
+        the Jacobi identity for covariant derivatives, modified by torsion
+        correction terms."""
+        geom, gamma = _general_background(seed, dim=2)
+
+        T = torsion_of_connection(gamma)
+        Q = nonmetricity_of_connection(geom.coords, gamma, geom.g)
+        T_nonzero = any(sp.simplify(c) != 0 for c in components(T))
+        Q_nonzero = any(sp.simplify(c) != 0 for c in components(Q))
+        assert T_nonzero or Q_nonzero, "Background should have nonzero torsion or non-metricity"
+
+        residual = uncontracted_second_bianchi_residual(geom.coords, gamma, geom.g, geom.g_inv)
+        for idx in components(residual):
+            diff = sp.simplify(idx)
+            assert diff == 0, (
+                f"seed={seed}: Uncontracted second Bianchi fails at component: "
+                f"residual = {diff}"
+            )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_uncontracted_second_bianchi_zero_at_T0(self, seed):
+        """The standard (torsion-free) second Bianchi identity
+        nabla_{[lambda} R^rho_{|sigma| mu nu]} = 0 holds when T=0."""
+        geom = random_diagonal_metric(seed, dim=2)
+        gamma = random_affine_connection(seed + 100, geom.coords, symmetric=True)
+
+        T = torsion_of_connection(gamma)
+        T_zero = all(sp.simplify(c) == 0 for c in components(T))
+        assert T_zero, "Background should have zero torsion"
+
+        residual = uncontracted_second_bianchi_residual(geom.coords, gamma, geom.g, geom.g_inv)
+        for idx in components(residual):
+            diff = sp.simplify(idx)
+            assert diff == 0, (
+                f"seed={seed}: Uncontracted second Bianchi nonzero at T=0: {diff}"
+            )
+
+
+class TestContractedBianchiNonmetricSymPyCrossCheck:
+    """Cross-check the contracted second Bianchi identity on Q != 0
+    backgrounds by numerically contracting the uncontracted modified
+    second Bianchi identity (summing over rho) rather than using the
+    simplified Ricci-based form.
+
+    The simplified Ricci-based form (contracted_second_bianchi_residual)
+    uses -nabla_mu R_{sigma nu} in place of sum_rho nabla_mu R^rho_{sigma
+    nu rho}, which is a valid algebraic step when Q=0 (nabla commutes
+    with index contraction on metric-compatible backgrounds) but NOT when
+    Q != 0.  The numerical contraction approach avoids this simplification
+    entirely, deriving the contracted identity directly from the
+    uncontracted one.
+
+    Numerically, both approaches give zero on Q != 0 backgrounds because
+    the contracted second Bianchi identity (with torsion corrections) is
+    a consequence of the Jacobi identity for covariant derivatives, which
+    holds for any affine connection.  The numerical contraction approach
+    provides a derivation that does not rely on the Q=0 simplification,
+    confirming the identity holds on (T, Q != 0) backgrounds through an
+    independent path.
+
+    The existing Q=0 tests (TestContractedBianchiSymPyCrossCheck) remain
+    correct and unchanged.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_contracted_bianchi_numerical_holds_Q_nonzero(self, seed):
+        """Numerical contraction of the uncontracted modified second
+        Bianchi identity (sum over rho) vanishes on (T, Q != 0)
+        backgrounds.
+
+        This confirms the contracted second Bianchi identity holds on
+        non-metric-compatible backgrounds, derived through a path that
+        does not assume nabla commutes with index contraction."""
+        geom, gamma = _general_background(seed, dim=2)
+
+        T = torsion_of_connection(gamma)
+        Q = nonmetricity_of_connection(geom.coords, gamma, geom.g)
+        T_nonzero = any(sp.simplify(c) != 0 for c in components(T))
+        Q_nonzero = any(sp.simplify(c) != 0 for c in components(Q))
+        assert Q_nonzero, "Background MUST have nonzero non-metricity (Q != 0) for this test"
+        assert T_nonzero or Q_nonzero, "Background should have nonzero torsion or non-metricity"
+
+        residual = contracted_second_bianchi_nonmetric_residual(
+            geom.coords, gamma, geom.g, geom.g_inv
+        )
+        for idx in components(residual):
+            diff = sp.simplify(idx)
+            assert diff == 0, (
+                f"seed={seed}: Contracted Bianchi (numerical) fails on Q!=0 "
+                f"background: residual = {diff}"
+            )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_contracted_bianchi_numerical_holds_Q0(self, seed):
+        """Numerical contraction of the uncontracted modified second
+        Bianchi identity also vanishes on metric-compatible (Q=0)
+        torsionful backgrounds, agreeing with the simplified form."""
+        geom, gamma = _torsionful_Q0_background(seed, dim=2)
+
+        T = torsion_of_connection(gamma)
+        Q = nonmetricity_of_connection(geom.coords, gamma, geom.g)
+        T_nonzero = any(sp.simplify(c) != 0 for c in components(T))
+        Q_zero = all(sp.simplify(c) == 0 for c in components(Q))
+        assert T_nonzero, "Background should have nonzero torsion"
+        assert Q_zero, "Background should be metric-compatible (Q=0)"
+
+        residual = contracted_second_bianchi_nonmetric_residual(
+            geom.coords, gamma, geom.g, geom.g_inv
+        )
+        for idx in components(residual):
+            diff = sp.simplify(idx)
+            assert diff == 0, (
+                f"seed={seed}: Contracted Bianchi (numerical) fails on Q=0 "
+                f"background: residual = {diff}"
+            )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_contracted_bianchi_numerical_agrees_with_simplified(self, seed):
+        """The numerical contraction and the simplified Ricci-based form
+        agree on Q != 0 backgrounds.  Both give zero, confirming the
+        contracted second Bianchi identity holds on non-metric-compatible
+        backgrounds through two independent derivation paths.
+
+        The simplified form uses -nabla_mu R_{sigma nu} (valid when Q=0
+        as a simplification of sum_rho nabla_mu R^rho_{sigma nu rho}), but
+        the final identity is valid for any Q because it derives from the
+        Jacobi identity for covariant derivatives.  The numerical
+        contraction provides an independent derivation that avoids the
+        simplification step."""
+        geom, gamma = _general_background(seed, dim=2)
+
+        Q = nonmetricity_of_connection(geom.coords, gamma, geom.g)
+        Q_nonzero = any(sp.simplify(c) != 0 for c in components(Q))
+        assert Q_nonzero, "Background MUST have nonzero non-metricity for this test"
+
+        res_num = contracted_second_bianchi_nonmetric_residual(
+            geom.coords, gamma, geom.g, geom.g_inv
+        )
+        res_simp = contracted_second_bianchi_residual(geom.coords, gamma, geom.g, geom.g_inv)
+
+        n = geom.dim
+        for sig in range(n):
+            for mu in range(n):
+                for nu in range(n):
+                    num_val = sp.simplify(res_num[sig, mu, nu])
+                    simp_val = sp.simplify(res_simp[sig, mu, nu])
+                    assert num_val == 0, (
+                        f"seed={seed}: Numerical nonzero at [{sig},{mu},{nu}]: {num_val}"
+                    )
+                    assert simp_val == 0, (
+                        f"seed={seed}: Simplified nonzero at [{sig},{mu},{nu}]: {simp_val}"
+                    )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_contracted_bianchi_numerical_zero_at_T0_Q0(self, seed):
+        """Numerical contraction of the uncontracted modified second
+        Bianchi identity vanishes on the Levi-Civita (T=0, Q=0) limit."""
+        geom = random_diagonal_metric(seed, dim=2)
+        gamma = geom.christoffel
+
+        T = torsion_of_connection(gamma)
+        Q = nonmetricity_of_connection(geom.coords, gamma, geom.g)
+        T_zero = all(sp.simplify(c) == 0 for c in components(T))
+        Q_zero = all(sp.simplify(c) == 0 for c in components(Q))
+        assert T_zero and Q_zero, "Background should be Levi-Civita (T=0, Q=0)"
+
+        residual = contracted_second_bianchi_nonmetric_residual(
+            geom.coords, gamma, geom.g, geom.g_inv
+        )
+        for idx in components(residual):
+            diff = sp.simplify(idx)
+            assert diff == 0, (
+                f"seed={seed}: Contracted Bianchi (numerical) nonzero on "
+                f"Levi-Civita: {diff}"
+            )
