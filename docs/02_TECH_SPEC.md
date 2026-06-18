@@ -542,6 +542,22 @@ perturbative expansion (xPert), Young projection.
    as a fully contracted expression (not as `R_{sigma nu}` with free indices and
    then contracted) to avoid a Cadabra free-index clash where the derivative
    index in the second Palatini term conflicts with the contraction index.
+
+   **Acceptance gating and the T=Q=0 LC limit.** The concrete acceptance
+   case (Palatini EH around Minkowski) is verified (both `residue_zero` and
+   `linearized_eom_match` True). The XOR condition holds: either verified with
+   both checks True, or gated (`verified=False`) with a non-empty `detail`
+   distinguishing the failure mode (no residue check / nonzero residue / residue
+   zero but cross-check mismatch). The SymPy component cross-check on explicit
+   random metric-affine backgrounds confirms the core physics claim (Ricci
+   non-symmetric on asymmetric connections, linearized Palatini EOM has real
+   metric-affine content, dG*dG part nonzero), and verified is gated behind it
+   (the dual-gate invariant against the torsion trap). At `T=Q=0`, the
+   metric-affine perturbation path reproduces the corresponding Levi-Civita
+   result: the linearized Palatini metric equation equals the linearized
+   Einstein tensor `G^{(1)}_{mu nu}` (matching the eval 3g operator), the Ricci
+   of the LC connection is symmetric, and torsion is zero.
+
    The scaffolds cover dynamical scalar fields (plain and `X`-dependent), the
    metric, the metric-affine metric (with independent connection), and rank-1
    gauge potentials, so `derive_perturbation` refuses other field kinds (the

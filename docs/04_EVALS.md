@@ -490,6 +490,24 @@ free indices then contracted) to avoid a Cadabra free-index clash where the
 derivative index in the second Palatini term conflicts with the contraction
 index.
 
+**Acceptance gating (VAL-PERT-006/007/008/014).** The concrete acceptance
+case (Palatini EH around Minkowski) returns `verified=True` with both checks
+True. The XOR condition holds: either the run is verified (both checks True) or
+it is gated (`verified=False` with a non-empty `detail` naming the specific
+failure mode). The detail distinguishes three failure modes: no residue check
+(script did not run to completion), nonzero residue (candidate does not match
+its own derivation), and residue zero with cross-check mismatch (the
+independent linearized-EOM route disagrees). The SymPy component cross-check
+on explicit random metric-affine backgrounds confirms the core physics claim
+(the Ricci tensor of a general asymmetric connection is non-symmetric, the
+linearized Palatini EOM has real metric-affine content, and the dG*dG part of
+the Ricci scalar is nonzero), and verified is gated behind this cross-check
+(the dual-gate invariant). At `T=Q=0`, the metric-affine perturbation path
+reproduces the corresponding Levi-Civita result: the linearized Palatini
+metric equation equals the linearized Einstein tensor `G^{(1)}_{μν}` (matching
+the eval 3g operator), the Ricci of the LC connection is symmetric, and torsion
+is zero. The pytest gates are in `tests/test_pert_metric_affine.py`.
+
 ---
 
 ## Eval 4 — Maxwell field on a fixed curved background
