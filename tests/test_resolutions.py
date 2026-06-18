@@ -83,6 +83,96 @@ class TestGeometryResolutionPropagation:
         assert "amb-ricci-contraction" not in _question_ids(reverted)
 
 
+class TestFieldStrengthDefinitionElicitation:
+    """VAL-EOM-019: For a vector/gauge field on an independent-connection
+    background, ingest/elicitation surfaces the field-strength-definition
+    ambiguity (F = dA exterior derivative vs F = nabla A connection-covariant
+    curl), because the two differ by torsion (VAL-GEOM-020); the answer is not
+    pre-selected and a Levi-Civita session raises no such question."""
+
+    def test_vector_action_independent_connection_shows_field_strength_question(self):
+        npr = ingest_action(MEASURE, r"A_{\mu} A^{\mu} + R").npr
+
+        confirmed = apply_resolutions(npr, {"amb-connection": "independent"})
+
+        fs_amb = next(
+            (amb for amb in confirmed.ambiguities if amb.id == "amb-field-strength-definition"),
+            None,
+        )
+        assert fs_amb is not None, (
+            "field-strength-definition ambiguity should appear "
+            "for a vector action on independent connection"
+        )
+        assert fs_amb.resolution is None, "the answer must not be pre-selected"
+        assert "exterior-derivative" in fs_amb.options
+        assert "covariant-curl" in fs_amb.options
+        assert fs_amb.kind == "conventional"
+
+    def test_no_field_strength_question_for_levi_civita_session(self):
+        npr = ingest_action(MEASURE, r"A_{\mu} A^{\mu} + R").npr
+
+        confirmed = apply_resolutions(npr, {"amb-connection": "levi-civita"})
+
+        assert "amb-field-strength-definition" not in _question_ids(confirmed)
+
+    def test_no_field_strength_question_for_scalar_action_without_vector(self):
+        npr = ingest_action(MEASURE, "R").npr
+
+        confirmed = apply_resolutions(npr, {"amb-connection": "independent"})
+
+        # Pure curvature action has no vector field, so no field-strength question.
+        assert "amb-field-strength-definition" not in _question_ids(confirmed)
+
+    def test_resolving_field_strength_definition_updates_conventions(self):
+        npr = ingest_action(MEASURE, r"A_{\mu} A^{\mu} + R").npr
+
+        # Two-pass resolution: the field-strength question opens only after
+        # the connection is resolved to independent (like amb-ricci-contraction).
+        independent = apply_resolutions(npr, {"amb-connection": "independent"})
+
+        confirmed = apply_resolutions(independent, {
+            "amb-field-strength-definition": "covariant-curl",
+        })
+
+        assert confirmed.conventions.field_strength_definition == "covariant-curl"
+
+    def test_reverting_to_levi_civita_removes_field_strength_question(self):
+        npr = ingest_action(MEASURE, r"A_{\mu} A^{\mu} + R").npr
+        independent = apply_resolutions(npr, {"amb-connection": "independent"})
+
+        assert "amb-field-strength-definition" in _question_ids(independent)
+
+        reverted = apply_resolutions(independent, {"amb-connection": "levi-civita"})
+
+        assert "amb-field-strength-definition" not in _question_ids(reverted)
+
+    def test_field_strength_definition_not_present_at_ingest(self):
+        """The field-strength question is not raised at ingest time, only after
+        the connection is resolved to independent (like amb-ricci-contraction)."""
+        npr = ingest_action(MEASURE, r"A_{\mu} A^{\mu} + R").npr
+
+        assert "amb-field-strength-definition" not in _question_ids(npr)
+
+    def test_off_menu_field_strength_answer_rejected(self):
+        npr = ingest_action(MEASURE, r"A_{\mu} A^{\mu} + R").npr
+        independent = apply_resolutions(npr, {"amb-connection": "independent"})
+
+        with pytest.raises(ValueError, match="not a listed option"):
+            apply_resolutions(independent, {"amb-field-strength-definition": "both"})
+
+    def test_multiple_vector_fields_still_one_field_strength_question(self):
+        """Even with multiple vector fields, one field-strength question covers
+        the definition choice for all of them."""
+        npr = ingest_action(MEASURE, r"A_{\mu} B_{\nu} + R").npr
+
+        confirmed = apply_resolutions(npr, {"amb-connection": "independent"})
+
+        fs_amb = [
+            amb for amb in confirmed.ambiguities if amb.id == "amb-field-strength-definition"
+        ]
+        assert len(fs_amb) == 1
+
+
 class TestTeleparallelFamilyRouting:
     """Teleparallel and symmetric-teleparallel family classification from
     curvature_free + torsion/nonmetricity/metric-compatibility flags."""

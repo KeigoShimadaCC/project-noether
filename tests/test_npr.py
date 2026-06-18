@@ -135,6 +135,7 @@ class TestSchema:
             contortion_sign="+1",
             disformation_sign="+1",
             ricci_contraction="first-fourth",
+            field_strength_definition="exterior-derivative",
             symmetrization_weight="1/n!",
         )
         assert conventions.ricci_contraction == "first-fourth"
@@ -151,6 +152,7 @@ class TestSchema:
                 contortion_sign="+1",
                 disformation_sign="-1",
                 ricci_contraction="first-fourth",
+                field_strength_definition="covariant-curl",
                 symmetrization_weight="1",
             ),
             geometry=Geometry(

@@ -36,6 +36,13 @@ class Conventions(BaseModel):
     # "first-third": R_{mu nu} = R^lambda_{mu lambda nu}
     # "first-fourth": R_{mu nu} = R^lambda_{mu nu lambda}
     ricci_contraction: Literal["first-third", "first-fourth"]
+    # Field-strength definition for a vector/gauge potential A_mu.
+    # Under a Levi-Civita connection the two definitions coincide (dA = nabla A),
+    # but under an independent connection with torsion they differ by
+    # T^lambda_{mu nu} A_lambda (VAL-GEOM-020), so the choice is elicited.
+    # "exterior-derivative": F_{mu nu} = 2 partial_{[mu} A_{nu]} = dA
+    # "covariant-curl": F_{mu nu} = 2 nabla_{[mu} A_{nu]} (full-connection nabla)
+    field_strength_definition: Literal["exterior-derivative", "covariant-curl"]
     symmetrization_weight: Literal["1/n!", "1"]
 
 
@@ -49,5 +56,6 @@ NOETHER_DEFAULT_V1 = Conventions(
     contortion_sign="+1",
     disformation_sign="+1",
     ricci_contraction="first-third",
+    field_strength_definition="exterior-derivative",
     symmetrization_weight="1/n!",
 )

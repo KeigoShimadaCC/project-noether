@@ -41,6 +41,7 @@ STRICT_MENU_AMBIGUITIES = {
     "amb-nonmetricity",
     "amb-metric-compatibility",
     "amb-ricci-contraction",
+    "amb-field-strength-definition",
 }
 
 

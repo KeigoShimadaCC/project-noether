@@ -62,8 +62,10 @@ terminals and TeX; a CLI proves the four-beat loop with zero frontend investment
 Status: `noether chat` runs the conversational loop (multiline LaTeX paste,
 ingest, questions as numbered options plus free-form answers, plan once well
 posed); for the metric-affine questionnaire, connection type, torsion,
-non-metricity, metric compatibility, and the follow-up Ricci-contraction
-choice all resolve through the same on-menu confirmation path used by the HTTP
+non-metricity, metric compatibility, the follow-up Ricci-contraction
+choice, and the field-strength-definition question (when a vector/gauge
+potential exists on an independent-connection background) all resolve
+through the same on-menu confirmation path used by the HTTP
 surface, so `chat` and `resume` persist the same geometry state before
 planning. `propose` inside the loop asks the detected agent CLI for suggestions
 that take effect only when the human accepts them one by one. `noether
@@ -219,7 +221,9 @@ plumbing deterministic in tests. The LLM gets tools, not freedom:
   mutates the dependent NPR fields. On the metric-affine path that means
   `geometry.connection` is updated from the confirmed menu answers, off-menu
   answers raise rather than slipping through, and choosing an independent
-  connection opens a follow-up Ricci-contraction convention question before
+  connection opens a follow-up Ricci-contraction convention question and, if
+  a vector/gauge potential is present, a field-strength-definition question
+  (`F = dA` vs `F = nabla A`, differing by torsion per VAL-GEOM-020) before
   planning can continue. Reachable as `noether elicit "<lagrangian>"`; the
   explicit `--accept-llm` flag delegates confirmation to the model. Tested
   against all five acceptance actions (`tests/test_llm.py`,
@@ -273,6 +277,7 @@ Top-level shape:
     "signature": "mostly-plus",
     "riemann_sign": "+1",
     "ricci_contraction": "first-third",
+    "field_strength_definition": "exterior-derivative",
     "symmetrization_weight": "1/n!"
   },
   "geometry": {

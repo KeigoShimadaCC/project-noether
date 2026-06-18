@@ -101,9 +101,11 @@ noether/             Python package
                      adds a Gamma connection object when the action carries an
                      explicit connection, so the derive path can vary it),
                      elicit (model proposes resolutions; only human-confirmed
-                     answers mutate the NPR, including geometry.connection and
+                     answers mutate the NPR, including geometry.connection,
                      the Ricci-contraction question that opens for an
-                     independent connection), definitions (propose readability
+                     independent connection, and the field-strength-definition
+                     question that opens when a vector/gauge potential exists
+                     on an independent-connection background), definitions (propose readability
                      shorthands like F_phi for dF/dphi and, on metric-affine
                      NPRs, K(T), L(Q), and the f(Q) scalar Q; human adopts),
                      derive (general EOM / perturbation path: model writes a
@@ -219,6 +221,9 @@ every computation.
 - Ricci: `R_{μν} = R^λ_{μλν}`. Scalar: `R = g^{μν}R_{μν}`.
 - d'Alembertian: `□ = g^{μν}∇_μ∇_ν`.
 - Torsion: `T^λ_{μν} = Γ^λ_{μν} - Γ^λ_{νμ}`.
+- Field-strength definition: `F_{μν} = 2∂_{[μ}A_{ν]}` (exterior derivative, `dA`); the
+  covariant-curl definition `F = 2∇_{[μ}A_{ν]}` differs by `T^λ_{μν}A_λ` under torsion
+  and is elicited as an alternative under an independent connection.
 - (Anti)symmetrization with weight: `A_{(μν)} = ½(A_{μν} + A_{νμ})`.
 - Canonical kinetic shorthand: `X = -½ ∇_μφ ∇^μφ`.
 - Units: `c = 1`; keep `κ = 8πG` symbolic unless the user fixes it.

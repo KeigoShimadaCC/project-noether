@@ -40,9 +40,12 @@ On the CLI chat and resume loop, those geometry answers stay on the same
 confirmation rail as the HTTP resolve surface: numbered picks and typed on-menu
 answers are applied through the shared menu validator before they land in the
 session store.
-If the physicist confirms an independent connection, elicitation opens one more
-conventional question: which Ricci contraction to use now that `R_{μν}` need not
-be symmetric. A curvature-free scalar action does not open that questionnaire
+If the physicist confirms an independent connection, elicitation opens
+conventional follow-up questions: which Ricci contraction to use now that
+`R_{μν}` need not be symmetric, and (if the action declares a vector/gauge
+potential) how the field strength should be defined (exterior derivative `dA`
+vs connection-covariant curl `nabla A`, which differ by torsion per
+VAL-GEOM-020). A curvature-free scalar action does not open that questionnaire
 and stays on the default Levi-Civita draft.
 
 ### 1.2 Question discipline

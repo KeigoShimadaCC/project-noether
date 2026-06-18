@@ -263,13 +263,15 @@ def _resolve_all_geometry(body, tools, *, connection="independent", torsion="tor
                           metric_compat="not-metric-compatible",
                           conventions="noether-default-v1",
                           vary_wrt="g and Gamma",
-                          ricci_contraction="first-third"):
+                          ricci_contraction="first-third",
+                          field_strength_definition="exterior-derivative"):
     """Resolve all ambiguities for a Palatini-style session, returning the
     updated session payload.
 
     After resolving the connection to 'independent', a new
     amb-ricci-contraction ambiguity is opened, so this helper does a
-    two-pass resolution."""
+    two-pass resolution. If a vector potential is present, the
+    amb-field-strength-definition ambiguity is also opened."""
     sid = body["session_id"]
     resolutions = {}
     for q in body["questions"]:
@@ -292,12 +294,15 @@ def _resolve_all_geometry(body, tools, *, connection="independent", torsion="tor
     result = tools.resolve(sid, resolutions)
 
     # Second pass: resolve any ambiguities opened by the first pass
-    # (e.g. amb-ricci-contraction when connection=independent).
+    # (e.g. amb-ricci-contraction when connection=independent,
+    #  amb-field-strength-definition when a vector potential is present).
     remaining = {}
     for q in result.get("questions", []):
         if q.get("resolution") is None:
             if q["id"] == "amb-ricci-contraction":
                 remaining[q["id"]] = ricci_contraction
+            elif q["id"] == "amb-field-strength-definition":
+                remaining[q["id"]] = field_strength_definition
             else:
                 remaining[q["id"]] = q["options"][0]
     if remaining:

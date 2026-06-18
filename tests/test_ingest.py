@@ -254,6 +254,7 @@ class TestConventionOverrides:
             contortion_sign="+1",
             disformation_sign="+1",
             ricci_contraction="first-fourth",
+            field_strength_definition="covariant-curl",
             symmetrization_weight="1",
         )
 

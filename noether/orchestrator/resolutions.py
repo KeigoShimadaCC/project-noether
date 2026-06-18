@@ -18,6 +18,7 @@ import re
 from noether.npr.schema import NPR, Ambiguity
 
 _RICCI_AMBIGUITY_ID = "amb-ricci-contraction"
+_FIELD_STRENGTH_AMBIGUITY_ID = "amb-field-strength-definition"
 
 
 def _set_connection_family(npr: NPR) -> None:
@@ -68,6 +69,47 @@ def _remove_ricci_contraction_ambiguity(npr: NPR) -> None:
     npr.ambiguities = [amb for amb in npr.ambiguities if amb.id != _RICCI_AMBIGUITY_ID]
 
 
+def _has_vector_potential(npr: NPR) -> bool:
+    """Does the NPR declare a rank-1 tensor field (a vector/gauge potential)?"""
+    return any(
+        obj.kind == "tensor-field" and obj.rank == 1
+        for obj in npr.objects
+    )
+
+
+def _ensure_field_strength_definition_ambiguity(npr: NPR) -> None:
+    """Open the field-strength-definition question when a vector potential
+    exists on an independent-connection background.
+
+    Under a Levi-Civita connection, the exterior derivative dA and the
+    covariant curl nabla_{[mu} A_{nu]} coincide, so there is no ambiguity.
+    Under an independent connection with torsion, they differ by
+    T^lambda_{mu nu} A_lambda (VAL-GEOM-020), so the definition matters.
+    """
+    if any(amb.id == _FIELD_STRENGTH_AMBIGUITY_ID for amb in npr.ambiguities):
+        return
+    if not _has_vector_potential(npr):
+        return
+    npr.ambiguities.append(
+        Ambiguity(
+            id=_FIELD_STRENGTH_AMBIGUITY_ID,
+            question=(
+                "Under an independent connection, the exterior derivative dA and the "
+                "covariant curl nabla A of a vector potential differ by torsion. "
+                "How should the gauge field strength be defined?"
+            ),
+            kind="conventional",
+            options=["exterior-derivative", "covariant-curl"],
+        )
+    )
+
+
+def _remove_field_strength_definition_ambiguity(npr: NPR) -> None:
+    npr.ambiguities = [
+        amb for amb in npr.ambiguities if amb.id != _FIELD_STRENGTH_AMBIGUITY_ID
+    ]
+
+
 def _propagate_geometry_resolution(npr: NPR, ambiguity: Ambiguity) -> None:
     connection = npr.geometry.connection
 
@@ -75,6 +117,7 @@ def _propagate_geometry_resolution(npr: NPR, ambiguity: Ambiguity) -> None:
         if ambiguity.resolution == "independent":
             connection.type = "independent"
             _ensure_ricci_contraction_ambiguity(npr)
+            _ensure_field_strength_definition_ambiguity(npr)
         elif ambiguity.resolution == "levi-civita":
             connection.type = "levi-civita"
             connection.torsion = False
@@ -82,6 +125,7 @@ def _propagate_geometry_resolution(npr: NPR, ambiguity: Ambiguity) -> None:
             connection.metric_compatible = True
             connection.curvature_free = False
             _remove_ricci_contraction_ambiguity(npr)
+            _remove_field_strength_definition_ambiguity(npr)
         _set_connection_family(npr)
         return
 
@@ -111,6 +155,11 @@ def _propagate_geometry_resolution(npr: NPR, ambiguity: Ambiguity) -> None:
     if ambiguity.id == _RICCI_AMBIGUITY_ID and ambiguity.resolution:
         npr.conventions = npr.conventions.model_copy(
             update={"ricci_contraction": ambiguity.resolution}
+        )
+
+    if ambiguity.id == _FIELD_STRENGTH_AMBIGUITY_ID and ambiguity.resolution:
+        npr.conventions = npr.conventions.model_copy(
+            update={"field_strength_definition": ambiguity.resolution}
         )
 
 
