@@ -68,6 +68,7 @@ export interface FieldDerivation {
   script: string;
   bundle_path: string | null;
   detail: string;
+  teaching: string;
 }
 
 export interface DerivePayload {

@@ -6,8 +6,8 @@ import type { FieldDerivation, PlanPayload, SessionPayload } from "@/lib/api";
 
 // A self-contained provenance tree for one derivation: the action it started
 // from, the plan that shaped it, the kernel that ran, every verification check
-// the kernel reported, and the result it confirmed. This renders data the
-// server already returned; it computes no physics.
+// the kernel reported, the result it confirmed, and any teaching narration.
+// This renders data the server already returned; it computes no physics.
 
 export function headingFor(d: FieldDerivation): string {
   if (d.kind === "adm") return d.wrt;
@@ -90,14 +90,16 @@ export default function DerivationTree({
         </ul>
       </div>
 
-      <div className="dtree-node result">
+      <div className={`dtree-node result ${d.verified ? "" : "unverified-result"}`}>
         <span className="dtree-label">result</span>
         <div className="dtree-body">
           <div className="defn-row">
             <span className="mono">{headingFor(d)}</span>
-            <span>
-              {stale && <span className="badge open">stale: assumptions changed</span>}{" "}
-              <span className={`badge ${d.verified ? "resolved" : "error"}`}>
+            <span className="verdict-badges">
+              {stale && (
+                <span className="badge stale">stale</span>
+              )}
+              <span className={`badge ${d.verified ? "verified" : "unverified"}`}>
                 {d.verified ? "kernel-verified" : "unverified"}
               </span>
             </span>
@@ -115,6 +117,17 @@ export default function DerivationTree({
           </div>
         </div>
       </div>
+
+      {d.teaching && (
+        <div className="dtree-node teaching">
+          <span className="dtree-label">
+            teaching <span className="teaching-caveat">(reasoned, not kernel-verified)</span>
+          </span>
+          <div className="dtree-body teaching-body">
+            <p>{d.teaching}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

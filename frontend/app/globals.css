@@ -169,6 +169,35 @@ button:disabled {
   color: var(--bad);
 }
 
+/* Verdict badges: kernel-verified, unverified, stale */
+
+.badge.verified {
+  color: var(--good);
+  background: #e6f2ec;
+  border-color: var(--good);
+  font-weight: 600;
+}
+
+.badge.unverified {
+  color: var(--bad);
+  background: #f7e6e6;
+  border-color: var(--bad);
+  font-weight: 600;
+}
+
+.badge.stale {
+  color: var(--muted);
+  background: #f0eeeb;
+  border-color: var(--muted);
+  font-weight: 600;
+}
+
+.verdict-badges {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
 .qmeta {
   color: var(--muted);
   font-size: 0.8rem;
@@ -350,6 +379,38 @@ ul.checks li {
 .dtree-node.result .dtree-body {
   border-left: 3px solid var(--good);
   padding-left: 0.7rem;
+}
+
+/* Unverified result: red left border instead of green */
+.dtree-node.result.unverified-result .dtree-body {
+  border-left-color: var(--bad);
+}
+
+/* Teaching panel: visually distinct from result and checks */
+
+.dtree-node.teaching::before {
+  background: var(--open);
+}
+
+.dtree-node.teaching .dtree-body {
+  border-left: 3px solid var(--open);
+  padding-left: 0.7rem;
+  background: #fdf8ef;
+  border-radius: 0 6px 6px 0;
+}
+
+.teaching-caveat {
+  color: var(--open);
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.teaching-body p {
+  margin: 0.3rem 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
 }
 
 textarea.export-tex {
