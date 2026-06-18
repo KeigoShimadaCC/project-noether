@@ -66,6 +66,7 @@ class FieldDerivation(BaseModel):
     script: str = ""
     bundle_path: str | None = None
     detail: str = ""
+    narrative: str = ""  # teaching/explanatory prose (reasoned, not verified)
 
 
 def _ladder_from_kernel(computed: ComputedResult, verified: bool, detail: str) -> LadderReport:
@@ -731,12 +732,27 @@ _ADM_CONNECTION_CONSTRAINTS_Q_TEX = (
     r";\;\text{Dirac chain closure requires action-specific analysis}"
 )
 
-_ADM_AFFINE_OUTPUTS: list[tuple[str, str]] = [
-    ("connection foliation decomposition", _ADM_CONNECTION_FOLIATION_TEX),
-    ("torsion foliation pieces", _ADM_TORSION_FOLIATION_TEX),
-    ("non-metricity foliation pieces", _ADM_NONMETRICITY_FOLIATION_TEX),
-    ("extrinsic curvature convention", _ADM_K_SIGN_TEX),
-    ("connection-sector constraints", _ADM_CONNECTION_CONSTRAINTS_TEX),
+_ADM_AFFINE_OUTPUTS: list[tuple[str, str, str]] = [
+    ("connection foliation decomposition", _ADM_CONNECTION_FOLIATION_TEX, ""),
+    ("torsion foliation pieces", _ADM_TORSION_FOLIATION_TEX, ""),
+    ("non-metricity foliation pieces", _ADM_NONMETRICITY_FOLIATION_TEX, ""),
+    ("extrinsic curvature convention", _ADM_K_SIGN_TEX, ""),
+    (
+        "connection-sector constraints",
+        _ADM_CONNECTION_CONSTRAINTS_TEX,
+        (
+            "The independent connection Gamma decomposes as LC(g) + K(T) + L(Q) "
+            "along the foliation. When the connection EOM is algebraic in the "
+            "contortion K (as on a metric-compatible torsionful background), the "
+            "connection components carry no time derivatives and generate primary "
+            "constraints in the Dirac sense. For pure Palatini EH on a "
+            "metric-compatible background the projective gauge freedom generates "
+            "first-class constraints, and the Dirac chain closes. When non-metricity "
+            "is present, the disformation L(Q) introduces additional structure "
+            "requiring action-specific analysis, and the Dirac chain closure is "
+            "gated as unverified."
+        ),
+    ),
 ]
 
 
@@ -873,10 +889,11 @@ def derive_adm(
         # requires action-specific analysis). Gate the constraint piece.
         dirac_closeable = not has_nonmetricity
 
-        for label, tex in _ADM_AFFINE_OUTPUTS:
+        for label, tex, default_narrative in _ADM_AFFINE_OUTPUTS:
             piece_verified = affine_verified
             piece_detail = affine_detail
             piece_checks = affine_checks
+            piece_narrative = default_narrative
 
             # The connection-sector constraints piece carries a more
             # specific verdict depending on the Dirac chain closure.
@@ -931,6 +948,7 @@ def derive_adm(
                     ),
                     detail=piece_detail,
                     bundle_path=bundle_path,
+                    narrative=piece_narrative,
                 )
             )
 

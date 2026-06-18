@@ -650,6 +650,63 @@ class AffineADMGeometry:
         ok = all(feats.values())
         return ok, "; ".join(f"{k}: {v}" for k, v in feats.items())
 
+    def check_distortion_nonzero_falsifier(self) -> tuple[bool, str]:
+        """Explicit falsifier for the ADM verification model: every
+        distortion feature (contortion K and disformation L from torsion
+        T and non-metricity Q) must be nonzero on the background, so
+        that a wrong tensor relation cannot survive this check.
+
+        This is the nondegeneracy/distortion-nonzero falsifier required
+        by VAL-ADM-007: each named check passed=True on a background
+        whose distortion features are asserted nonzero.
+
+        Returns (ok, detail) where ok is True only when ALL distortion
+        features are nonzero.
+        """
+        feats: dict[str, bool] = {}
+        # Torsion distortion
+        feats["T^i_{jk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.torsion_spatial)
+        )
+        feats["T^n_{jk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.torsion_normal_upper)
+        )
+        feats["T^i_{nk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.torsion_mixed)
+        )
+        # Non-metricity distortion
+        feats["Q_{ijk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.nonmetricity_spatial)
+        )
+        feats["Q_{nij} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.nonmetricity_normal_first)
+        )
+        feats["Q_{inj} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.nonmetricity_mixed)
+        )
+        # Contortion (from torsion)
+        feats["K^i_{jk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.contortion_spatial)
+        )
+        feats["K^n_{jk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.contortion_normal_upper)
+        )
+        feats["K^i_{nk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.contortion_mixed)
+        )
+        # Disformation (from non-metricity)
+        feats["L^i_{jk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.disformation_spatial)
+        )
+        feats["L^n_{jk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.disformation_normal_upper)
+        )
+        feats["L^i_{nk} nonzero"] = any(
+            not _zero(c) for c in _array_components(self.disformation_mixed)
+        )
+        ok = all(feats.values())
+        return ok, "; ".join(f"{k}: {v}" for k, v in feats.items())
+
     def check_post_riemannian_on_foliation(self) -> tuple[bool, str]:
         """(F) Gamma = LC + K(T) + L(Q) on the foliated background.
 
@@ -915,6 +972,7 @@ class AffineADMGeometry:
         """
         return {
             "background-nondegenerate-affine": self.check_background_nondegenerate_affine(),
+            "distortion-nonzero-falsifier": self.check_distortion_nonzero_falsifier(),
             "post-riemannian-on-foliation": self.check_post_riemannian_on_foliation(),
             "torsion-nonmetricity-foliation": self.check_torsion_nonmetricity_foliation(),
             "distortion-spatial-projections": self.check_distortion_spatial_projections(),

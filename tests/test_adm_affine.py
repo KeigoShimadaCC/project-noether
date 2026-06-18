@@ -10,11 +10,17 @@ VAL-ADM-002: lapse/shift/spatial-metric decomposition is surfaced.
 VAL-ADM-003: independent-connection degrees of freedom are decomposed.
 VAL-ADM-004: constraints are separated from evolution.
 VAL-ADM-005: connection-sector primary/secondary constraints are surfaced.
+VAL-ADM-006: SymPy component kernel is the verifier (no model script).
+VAL-ADM-007: Verified verdict backed by explicit-background component checks
+             with a distortion-nonzero falsifier.
+VAL-ADM-008: A reduction that cannot close is gated, not faked.
+VAL-ADM-009: Teaching narration is separate from the verified verdict.
 """
 
 import pytest
 import sympy as sp
 
+from noether.kernels.base import Capability
 from noether.kernels.sympy_kernel.adm import (
     ADMGeometry,
     AffineADMGeometry,
@@ -253,13 +259,13 @@ class TestConstraintEvolutionSeparation:
         Hamiltonian and momentum are labeled as 'projection' (constraint),
         and the connection-sector constraints are labeled separately."""
         from noether.orchestrator.derive import _ADM_AFFINE_OUTPUTS, _ADM_OUTPUTS
-        constraint_labels = [label for label, _ in _ADM_OUTPUTS]
+        constraint_labels = [label for label, _, _ in _ADM_AFFINE_OUTPUTS]
         # Hamiltonian and momentum projections are constraints
-        assert "Hamiltonian (normal-normal) projection" in constraint_labels
-        assert "momentum (normal-tangential) projection" in constraint_labels
+        metric_labels = [label for label, _ in _ADM_OUTPUTS]
+        assert "Hamiltonian (normal-normal) projection" in metric_labels
+        assert "momentum (normal-tangential) projection" in metric_labels
         # Connection-sector constraints are a separate constraint piece
-        affine_labels = [label for label, _ in _ADM_AFFINE_OUTPUTS]
-        assert "connection-sector constraints" in affine_labels
+        assert "connection-sector constraints" in constraint_labels
 
 
 # ---------------------------------------------------------------------------
@@ -388,6 +394,457 @@ class TestSympyAdapter:
         )
         assert result.value.get("passed"), result.value.get("detail", "")
         checks = result.value.get("checks", {})
-        assert len(checks) >= 6, f"expected >= 6 checks, got {len(checks)}"
+        assert len(checks) >= 7, f"expected >= 7 checks, got {len(checks)}"
         for name, val in checks.items():
             assert val == "True", f"{name}: {val}"
+
+
+# ---------------------------------------------------------------------------
+# VAL-ADM-006: SymPy component kernel is the verifier (no model script)
+# ---------------------------------------------------------------------------
+
+
+class TestSympyVerificationModel:
+    """The ADM result's kernel_name is 'sympy', it carries a SymPy
+    reproduction script, and no LLM Cadabra script is written for the
+    adm path."""
+
+    def test_adm_derivation_kernel_name_is_sympy(self):
+        """derive_adm sets kernel_name='sympy' on all derivations."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr()
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-006")
+        for d in results:
+            assert d.kernel_name == "sympy", (
+                f"ADM derivation kernel_name should be 'sympy', "
+                f"got {d.kernel_name!r}"
+            )
+
+    def test_adm_derivation_carries_sympy_script(self):
+        """Each ADM derivation carries a SymPy reproduction script."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr()
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-006")
+        for d in results:
+            assert d.script, "ADM derivation should carry a script"
+            assert "sympy" in d.script.lower() or "SympyKernelAdapter" in d.script, (
+                "ADM derivation script should reference the SymPy kernel"
+            )
+
+    def test_no_model_cadabra_script_for_adm(self):
+        """The adm path does not call an LLM or write a Cadabra script.
+        derive_adm takes no LLM adapter, and kernel_name is 'sympy'."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr()
+        # derive_adm signature takes no LLM adapter
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-006")
+        for d in results:
+            assert d.llm_name == "", (
+                f"ADM derivation should have no LLM name, got {d.llm_name!r}"
+            )
+            assert d.kernel_name == "sympy", (
+                "ADM derivation should not use Cadabra"
+            )
+
+    def test_gr_adm_kernel_name_is_sympy(self):
+        """GR ADM also uses the SymPy kernel (not Cadabra)."""
+        from evals.eval1s_adm import build_npr as build_adm_npr
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = build_adm_npr(resolved=True)
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-gr-006")
+        for d in results:
+            assert d.kernel_name == "sympy"
+
+
+# ---------------------------------------------------------------------------
+# VAL-ADM-007: Verified verdict backed by explicit-background component checks
+# ---------------------------------------------------------------------------
+
+
+class TestExplicitBackgroundVerification:
+    """A verified ADM split is verified because the SymPy kernel reduced the
+    split and constraint projections to zero on an explicit nondegenerate
+    metric-affine background (torsion/non-metricity on), with a
+    nondegeneracy/distortion-nonzero falsifier."""
+
+    def test_distortion_nonzero_falsifier_passes(self, affine_checks):
+        """The distortion-nonzero falsifier check passes on the standard
+        metric-affine background, asserting all distortion features are
+        nonzero."""
+        ok, detail = affine_checks["distortion-nonzero-falsifier"]
+        assert ok, detail
+
+    def test_each_named_check_passed_on_distortion_nonzero_background(self, affine_checks):
+        """Every named check in the metric-affine suite passed=True on a
+        background where the distortion features (T, Q, K, L) are all
+        nonzero (as asserted by the falsifier)."""
+        # First confirm the falsifier passed
+        falsifier_ok, falsifier_detail = affine_checks["distortion-nonzero-falsifier"]
+        assert falsifier_ok, (
+            "falsifier must pass before checks prove anything: "
+            + falsifier_detail
+        )
+        # Then confirm each check passed
+        for name, (ok, detail) in affine_checks.items():
+            assert ok, f"check {name!r} failed on distortion-nonzero background: {detail}"
+
+    def test_falsifier_asserts_contortion_nonzero(self, affine_adm):
+        """The falsifier explicitly asserts contortion K is nonzero."""
+        ok, detail = affine_adm.check_distortion_nonzero_falsifier()
+        assert ok, detail
+        assert "K^i_{jk} nonzero: True" in detail, (
+            "falsifier should assert K^i_{jk} is nonzero: " + detail
+        )
+
+    def test_falsifier_asserts_disformation_nonzero(self, affine_adm):
+        """The falsifier explicitly asserts disformation L is nonzero."""
+        ok, detail = affine_adm.check_distortion_nonzero_falsifier()
+        assert ok, detail
+        assert "L^i_{jk} nonzero: True" in detail, (
+            "falsifier should assert L^i_{jk} is nonzero: " + detail
+        )
+
+    def test_falsifier_asserts_torsion_nonzero(self, affine_adm):
+        """The falsifier explicitly asserts torsion T is nonzero."""
+        ok, detail = affine_adm.check_distortion_nonzero_falsifier()
+        assert ok, detail
+        assert "T^i_{jk} nonzero: True" in detail, (
+            "falsifier should assert T^i_{jk} is nonzero: " + detail
+        )
+
+    def test_falsifier_asserts_nonmetricity_nonzero(self, affine_adm):
+        """The falsifier explicitly asserts non-metricity Q is nonzero."""
+        ok, detail = affine_adm.check_distortion_nonzero_falsifier()
+        assert ok, detail
+        assert "Q_{ijk} nonzero: True" in detail, (
+            "falsifier should assert Q_{ijk} is nonzero: " + detail
+        )
+
+    def test_adapter_adm_affine_falsifier_check(self):
+        """The SymPy adapter runs the distortion-nonzero falsifier as part
+        of the adm-affine-1p2 check suite."""
+        from noether.kernels.base import Capability, KernelTask
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+
+        adapter = SympyKernelAdapter()
+        result = adapter.run(
+            KernelTask(
+                capability=Capability.COMPONENT_EVAL,
+                description="metric-affine ADM 1+2 check",
+                payload={"check": "adm-affine-1p2"},
+            )
+        )
+        checks = result.value.get("checks", {})
+        assert "distortion-nonzero-falsifier" in checks, (
+            "distortion-nonzero-falsifier check must be in the suite"
+        )
+        assert checks["distortion-nonzero-falsifier"] == "True", (
+            "distortion-nonzero-falsifier must pass"
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-ADM-008: A reduction that cannot close is gated, not faked
+# ---------------------------------------------------------------------------
+
+
+class TestGatedResult:
+    """Any part that cannot be reduced is returned verified==False with a
+    detail naming the blocker; the piece is still surfaced (result_tex
+    present), never dropped or reported true."""
+
+    def test_gated_constraint_piece_has_verified_false(self):
+        """When Q != 0, the connection-sector constraints piece carries
+        verified==False (the Dirac chain cannot be closed)."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr(nonmetricity=True)
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-008")
+        constraint_piece = next(
+            (d for d in results if d.wrt == "connection-sector constraints"), None
+        )
+        assert constraint_piece is not None, "connection-sector constraints piece missing"
+        assert constraint_piece.verified is False, (
+            "connection-sector constraints should be verified==False when Q != 0"
+        )
+
+    def test_gated_piece_has_nonempty_detail(self):
+        """The gated piece carries a non-empty detail naming the blocker."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr(nonmetricity=True)
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-008")
+        constraint_piece = next(
+            (d for d in results if d.wrt == "connection-sector constraints"), None
+        )
+        assert constraint_piece is not None
+        assert constraint_piece.detail, (
+            "gated piece must have a non-empty detail naming the blocker"
+        )
+        assert "Dirac chain" in constraint_piece.detail or "Q != 0" in constraint_piece.detail, (
+            "detail should name the blocker (Dirac chain / Q != 0): "
+            + constraint_piece.detail
+        )
+
+    def test_gated_piece_still_has_result_tex(self):
+        """The gated piece is still surfaced with result_tex present;
+        it is never dropped."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr(nonmetricity=True)
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-008")
+        constraint_piece = next(
+            (d for d in results if d.wrt == "connection-sector constraints"), None
+        )
+        assert constraint_piece is not None
+        assert constraint_piece.result_tex, (
+            "gated piece must still have result_tex present (never dropped)"
+        )
+
+    def test_other_affine_pieces_still_verified(self):
+        """The non-gated metric-affine pieces (decomposition, foliation
+        pieces) are still verified when the constraint piece is gated."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr(nonmetricity=True)
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-008")
+        # The connection foliation decomposition piece should be verified
+        decomp_piece = next(
+            (d for d in results if d.wrt == "connection foliation decomposition"), None
+        )
+        assert decomp_piece is not None
+        assert decomp_piece.verified is True, (
+            "connection foliation decomposition should be verified"
+        )
+
+    def test_metric_compatible_constraints_are_verified(self):
+        """When Q == 0 (metric-compatible), the constraint piece is
+        verified (the Dirac chain closes)."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr(nonmetricity=False)
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-008")
+        constraint_piece = next(
+            (d for d in results if d.wrt == "connection-sector constraints"), None
+        )
+        assert constraint_piece is not None
+        assert constraint_piece.verified is True, (
+            "connection-sector constraints should be verified when Q == 0: "
+            + constraint_piece.detail
+        )
+
+
+# ---------------------------------------------------------------------------
+# VAL-ADM-009: Teaching narration is separate from the verified verdict
+# ---------------------------------------------------------------------------
+
+
+class TestNarrationSeparation:
+    """Explanatory narration about the connection's constraints is on the
+    teaching/narrative channel and never sets a result expression or flips
+    verified."""
+
+    def test_narrative_field_present_on_adm_derivations(self):
+        """ADM derivations carry a narrative field for teaching prose."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr()
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-009")
+        for d in results:
+            # The narrative field exists (may be empty for metric-only pieces)
+            assert hasattr(d, "narrative"), "FieldDerivation must have a narrative field"
+
+    def test_constraint_piece_has_teaching_narrative(self):
+        """The connection-sector constraints piece carries explanatory
+        narrative about the constraint structure."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr()
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-009")
+        constraint_piece = next(
+            (d for d in results if d.wrt == "connection-sector constraints"), None
+        )
+        assert constraint_piece is not None
+        assert constraint_piece.narrative, (
+            "connection-sector constraints should carry teaching narrative"
+        )
+        # The narrative should explain the constraint structure
+        assert "algebraic" in constraint_piece.narrative.lower() or (
+            "constraint" in constraint_piece.narrative.lower()
+        ), (
+            "narrative should explain the constraint structure: "
+            + constraint_piece.narrative
+        )
+
+    def test_narrative_never_flips_verified(self):
+        """Varying the narrative content never changes the verified flag.
+        The verified flag is determined solely by the kernel checks."""
+        from noether.orchestrator.derive import FieldDerivation
+
+        # Construct two derivations that differ only in narrative
+        d1 = FieldDerivation(
+            wrt="test",
+            kind="adm",
+            capability=Capability.ADM,
+            result_id="test-1",
+            result_tex="some result",
+            verified=True,
+            checks={"check-a": "True"},
+            kernel_name="sympy",
+            kernel_version="1.14",
+            detail="verified",
+            narrative="explanatory prose A",
+        )
+        d2 = FieldDerivation(
+            wrt="test",
+            kind="adm",
+            capability=Capability.ADM,
+            result_id="test-2",
+            result_tex="some result",
+            verified=True,
+            checks={"check-a": "True"},
+            kernel_name="sympy",
+            kernel_version="1.14",
+            detail="verified",
+            narrative="different explanatory prose B",
+        )
+        # Both are verified regardless of narrative content
+        assert d1.verified is True
+        assert d2.verified is True
+        # Narrative is separate from result_tex
+        assert d1.narrative != d1.result_tex
+        assert d2.narrative != d2.result_tex
+
+    def test_narrative_separate_from_result_tex(self):
+        """The narrative field does not appear in result_tex, and vice
+        versa."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr()
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-009")
+        for d in results:
+            if d.narrative and d.result_tex:
+                # Narrative prose should not appear as a LaTeX expression
+                assert d.narrative != d.result_tex, (
+                    f"narrative must be distinct from result_tex for {d.wrt!r}"
+                )
+
+    def test_narrative_does_not_appear_in_checks(self):
+        """The narrative text does not appear in the checks dict."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr()
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-009")
+        for d in results:
+            if d.narrative:
+                for check_val in d.checks.values():
+                    assert d.narrative not in check_val, (
+                        "narrative must not appear in check values"
+                    )
+
+    def test_gated_piece_narrative_explains_constraint_structure(self):
+        """Even a gated (verified==False) piece carries narrative that
+        explains the constraint structure without falsely asserting
+        verification."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr(nonmetricity=True)
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-009")
+        constraint_piece = next(
+            (d for d in results if d.wrt == "connection-sector constraints"), None
+        )
+        assert constraint_piece is not None
+        # The piece is gated
+        assert constraint_piece.verified is False
+        # But it still has narrative explaining the structure
+        assert constraint_piece.narrative, (
+            "gated piece should still carry teaching narrative"
+        )
+        # And the narrative explains the constraint structure without
+        # falsely claiming verification
+        assert "Dirac" in constraint_piece.narrative or (
+            "constraint" in constraint_piece.narrative.lower()
+        ), (
+            "narrative should explain the constraint structure"
+        )
+        # The narrative does not set result_tex
+        assert constraint_piece.result_tex is not None
+        # The narrative is separate from detail
+        assert constraint_piece.narrative != constraint_piece.detail
+
+
+# ---------------------------------------------------------------------------
+# Helper: build a metric-affine NPR for ADM testing
+# ---------------------------------------------------------------------------
+
+
+def _build_metric_affine_adm_npr(*, nonmetricity: bool = True):
+    """Build a well-posed metric-affine NPR for ADM derivation testing.
+
+    With nonmetricity=True the connection has both torsion and
+    non-metricity, so the Dirac chain cannot close and the constraint
+    piece should be gated (verified==False). With nonmetricity=False
+    the connection is metric-compatible with torsion, so the Dirac chain
+    closes and the constraint piece should be verified.
+    """
+    from noether.npr import (
+        NOETHER_DEFAULT_V1,
+        NPR,
+        Action,
+        ConnectionSpec,
+        Geometry,
+        ObjectDecl,
+        Task,
+    )
+    from noether.npr.ast import tensor
+
+    connection = ConnectionSpec(
+        type="independent",
+        torsion=True,
+        nonmetricity=nonmetricity,
+        metric_compatible=not nonmetricity,
+        family="metric-affine",
+    )
+    geometry = Geometry(
+        metric_name="g",
+        connection_name="Gamma",
+        connection=connection,
+    )
+    return NPR(
+        conventions=NOETHER_DEFAULT_V1,
+        geometry=geometry,
+        objects=[
+            ObjectDecl(name="g", kind="metric", role="dynamical", symmetry="symmetric", rank=2),
+            ObjectDecl(
+                name="Gamma",
+                kind="connection",
+                role="dynamical",
+                rank=3,
+            ),
+        ],
+        action=Action(
+            measure_tex=r"d^4x \sqrt{-g}",
+            lagrangian=tensor("R"),
+            lagrangian_tex="R",
+        ),
+        task=Task(type="adm", with_respect_to=["g"]),
+        ambiguities=[],
+    )

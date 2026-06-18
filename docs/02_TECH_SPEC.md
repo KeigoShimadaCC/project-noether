@@ -1066,7 +1066,7 @@ structural checks, 11 SymPy cross-checks on 3 random affine backgrounds,
 2 XOR gate checks).  Routing: `perturb-vector-affine-dA` and
 `perturb-vector-affine-covcurl` in `generate.py`.
 
-### 6.5 Metric-affine ADM (3+1) decomposition (VAL-ADM-001 through VAL-ADM-005)
+### 6.5 Metric-affine ADM (3+1) decomposition (VAL-ADM-001 through VAL-ADM-009)
 
 The existing `derive_adm` path (section 6, item 8) produces the GR ADM split
 (lapse, shift, induced metric, extrinsic curvature K_{ij}, Hamiltonian and
@@ -1104,15 +1104,22 @@ with a stated reason: the disformation L(Q) introduces additional structure
 that requires action-specific analysis.
 
 **Verification.** The `AffineADMGeometry` class in
-`noether/kernels/sympy_kernel/adm.py` runs six checks on a nondegenerate
+`noether/kernels/sympy_kernel/adm.py` runs seven checks on a nondegenerate
 1+2 background with a general affine connection carrying both torsion and
 non-metricity: (F) the post-Riemannian decomposition `Gamma = LC + K(T) +
 L(Q)` holds componentwise on the foliated background; (G) the torsion and
 non-metricity foliation pieces are correctly extracted from the full tensors;
 (H) the connection EOM is algebraic on a metric-compatible background; (I)
 the connection-sector primary constraints are identified; plus
-distortion-spatial-projections consistency and background nondegeneracy with
-all distortion features switched on. The metric-sector GR checks (A-E) are
+distortion-spatial-projections consistency, background nondegeneracy with
+all distortion features switched on, and a distortion-nonzero falsifier
+that explicitly asserts every distortion feature (T, Q, K, L in their
+spatial, normal-upper, and mixed components) is nonzero on the background.
+The falsifier is required by VAL-ADM-007: a verified ADM split is verified
+because the SymPy kernel reduced the split and constraint projections to
+zero on an explicit nondegenerate metric-affine background whose distortion
+features are asserted nonzero, so a wrong tensor relation cannot survive
+the check. The metric-sector GR checks (A-E) are
 inherited from `ADMGeometry`. The adapter exposes the suite as the
 `adm-affine-1p2` component-eval check. The derive path runs both
 `adm-gr-1p2` (metric sector) and `adm-affine-1p2` (connection sector) when
@@ -1120,7 +1127,21 @@ the connection is independent, producing eight `FieldDerivation` objects:
 three GR pieces plus five connection-sector pieces. The connection-sector
 constraints piece carries `verified=False` with a detail when the Dirac chain
 cannot close (Q!=0), and `verified=True` with a positive detail when the chain
-closes (Q=0).
+closes (Q=0). The piece is never dropped: even a gated piece surfaces with
+its `result_tex` present (VAL-ADM-008).
+**Verification model (VAL-ADM-006 through VAL-ADM-009).** The ADM result's
+`kernel_name` is `"sympy"`: the SymPy component kernel verifies the split and
+projections, and no LLM Cadabra script is written for the adm path (the
+`derive_adm` function takes no `LLMAdapter`). The `verified` flag is set
+solely by the kernel's component-eval checks, not by the model or by
+explanatory prose. Each named check must `passed=True` on a background whose
+distortion features are asserted nonzero by the falsifier. Any part that
+cannot be reduced is returned `verified=False` with a `detail` naming the
+blocker; the piece is still surfaced (`result_tex` present), never dropped
+or reported true. Explanatory narration about the connection's constraints
+is on the `narrative` field of `FieldDerivation` (teaching/explanatory prose,
+distinct from `detail` which is failure-diagnostic only) and never sets a
+result expression or flips `verified`.
 
 Tests: `tests/test_adm_affine.py` (34 tests: reachability, metric-sector
 split, connection foliation decomposition, constraint/evolution separation,
