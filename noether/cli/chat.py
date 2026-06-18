@@ -58,6 +58,21 @@ class ChatLoop:
         self.input_fn = input_fn
         self.out = out
         self._pending: dict[str, str] = {}
+        self._rationales: dict[str, str] = {}
+
+    def _show_pending(self, amb_id: str) -> None:
+        """Show the pending proposal for an ambiguity, with rationale if any."""
+        if amb_id not in self._pending:
+            return
+        choice = self._pending[amb_id]
+        rationale = self._rationales.get(amb_id, "")
+        if rationale:
+            self._say(
+                f"  (model proposes: {choice}; "
+                f"rationale: {rationale}; Enter accepts)"
+            )
+        else:
+            self._say(f"  (model proposes: {choice}; Enter accepts)")
 
     def _say(self, text: str = "") -> None:
         print(text, file=self.out)
@@ -141,8 +156,7 @@ class ChatLoop:
             self._say(f"\n[{amb.id}] {amb.question}")
             for i, option in enumerate(amb.options, start=1):
                 self._say(f"  {i}. {option}")
-            if amb.id in self._pending:
-                self._say(f"  (model proposes: {self._pending[amb.id]}; Enter accepts)")
+            self._show_pending(amb.id)
             while True:
                 answer = self._ask("> ").strip()
                 if answer == "quit":
@@ -151,8 +165,7 @@ class ChatLoop:
                     break
                 if answer == "propose":
                     self._propose(session)
-                    if amb.id in self._pending:
-                        self._say(f"  (model proposes: {self._pending[amb.id]}; Enter accepts)")
+                    self._show_pending(amb.id)
                     continue
                 if not answer:
                     if amb.id in self._pending:
@@ -202,6 +215,12 @@ class ChatLoop:
             return
         self._pending = {
             p.ambiguity_id: p.choice for p in proposal.proposals if p.choice is not None
+        }
+        # Store rationales for display alongside pending choices.
+        self._rationales: dict[str, str] = {
+            p.ambiguity_id: p.rationale
+            for p in proposal.proposals
+            if p.choice is not None and p.rationale
         }
         self._say(
             f"  proposals from {proposal.llm_name} {proposal.llm_version} "

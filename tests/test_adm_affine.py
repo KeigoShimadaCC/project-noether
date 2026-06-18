@@ -657,16 +657,16 @@ class TestNarrationSeparation:
     teaching/narrative channel and never sets a result expression or flips
     verified."""
 
-    def test_narrative_field_present_on_adm_derivations(self):
-        """ADM derivations carry a narrative field for teaching prose."""
+    def test_teaching_field_present_on_adm_derivations(self):
+        """ADM derivations carry a teaching field for teaching prose."""
         from noether.kernels.sympy_kernel import SympyKernelAdapter
         from noether.orchestrator.derive import derive_adm
 
         npr = _build_metric_affine_adm_npr()
         results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-009")
         for d in results:
-            # The narrative field exists (may be empty for metric-only pieces)
-            assert hasattr(d, "narrative"), "FieldDerivation must have a narrative field"
+            # The teaching field exists (may be empty for metric-only pieces)
+            assert hasattr(d, "teaching"), "FieldDerivation must have a teaching field"
 
     def test_constraint_piece_has_teaching_narrative(self):
         """The connection-sector constraints piece carries explanatory
@@ -680,23 +680,23 @@ class TestNarrationSeparation:
             (d for d in results if d.wrt == "connection-sector constraints"), None
         )
         assert constraint_piece is not None
-        assert constraint_piece.narrative, (
+        assert constraint_piece.teaching, (
             "connection-sector constraints should carry teaching narrative"
         )
         # The narrative should explain the constraint structure
-        assert "algebraic" in constraint_piece.narrative.lower() or (
-            "constraint" in constraint_piece.narrative.lower()
+        assert "algebraic" in constraint_piece.teaching.lower() or (
+            "constraint" in constraint_piece.teaching.lower()
         ), (
             "narrative should explain the constraint structure: "
-            + constraint_piece.narrative
+            + constraint_piece.teaching
         )
 
-    def test_narrative_never_flips_verified(self):
-        """Varying the narrative content never changes the verified flag.
+    def test_teaching_never_flips_verified(self):
+        """Varying the teaching content never changes the verified flag.
         The verified flag is determined solely by the kernel checks."""
         from noether.orchestrator.derive import FieldDerivation
 
-        # Construct two derivations that differ only in narrative
+        # Construct two derivations that differ only in teaching
         d1 = FieldDerivation(
             wrt="test",
             kind="adm",
@@ -708,7 +708,7 @@ class TestNarrationSeparation:
             kernel_name="sympy",
             kernel_version="1.14",
             detail="verified",
-            narrative="explanatory prose A",
+            teaching="explanatory prose A",
         )
         d2 = FieldDerivation(
             wrt="test",
@@ -721,17 +721,17 @@ class TestNarrationSeparation:
             kernel_name="sympy",
             kernel_version="1.14",
             detail="verified",
-            narrative="different explanatory prose B",
+            teaching="different explanatory prose B",
         )
-        # Both are verified regardless of narrative content
+        # Both are verified regardless of teaching content
         assert d1.verified is True
         assert d2.verified is True
         # Narrative is separate from result_tex
-        assert d1.narrative != d1.result_tex
-        assert d2.narrative != d2.result_tex
+        assert d1.teaching != d1.result_tex
+        assert d2.teaching != d2.result_tex
 
-    def test_narrative_separate_from_result_tex(self):
-        """The narrative field does not appear in result_tex, and vice
+    def test_teaching_separate_from_result_tex(self):
+        """The teaching field does not appear in result_tex, and vice
         versa."""
         from noether.kernels.sympy_kernel import SympyKernelAdapter
         from noether.orchestrator.derive import derive_adm
@@ -739,28 +739,28 @@ class TestNarrationSeparation:
         npr = _build_metric_affine_adm_npr()
         results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-009")
         for d in results:
-            if d.narrative and d.result_tex:
+            if d.teaching and d.result_tex:
                 # Narrative prose should not appear as a LaTeX expression
-                assert d.narrative != d.result_tex, (
-                    f"narrative must be distinct from result_tex for {d.wrt!r}"
+                assert d.teaching != d.result_tex, (
+                    f"teaching must be distinct from result_tex for {d.wrt!r}"
                 )
 
-    def test_narrative_does_not_appear_in_checks(self):
-        """The narrative text does not appear in the checks dict."""
+    def test_teaching_does_not_appear_in_checks(self):
+        """The teaching text does not appear in the checks dict."""
         from noether.kernels.sympy_kernel import SympyKernelAdapter
         from noether.orchestrator.derive import derive_adm
 
         npr = _build_metric_affine_adm_npr()
         results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-009")
         for d in results:
-            if d.narrative:
+            if d.teaching:
                 for check_val in d.checks.values():
-                    assert d.narrative not in check_val, (
-                        "narrative must not appear in check values"
+                    assert d.teaching not in check_val, (
+                        "teaching must not appear in check values"
                     )
 
-    def test_gated_piece_narrative_explains_constraint_structure(self):
-        """Even a gated (verified==False) piece carries narrative that
+    def test_gated_piece_teaching_explains_constraint_structure(self):
+        """Even a gated (verified==False) piece carries teaching that
         explains the constraint structure without falsely asserting
         verification."""
         from noether.kernels.sympy_kernel import SympyKernelAdapter
@@ -774,21 +774,21 @@ class TestNarrationSeparation:
         assert constraint_piece is not None
         # The piece is gated
         assert constraint_piece.verified is False
-        # But it still has narrative explaining the structure
-        assert constraint_piece.narrative, (
+        # But it still has teaching explaining the structure
+        assert constraint_piece.teaching, (
             "gated piece should still carry teaching narrative"
         )
-        # And the narrative explains the constraint structure without
+        # And the teaching explains the constraint structure without
         # falsely claiming verification
-        assert "Dirac" in constraint_piece.narrative or (
-            "constraint" in constraint_piece.narrative.lower()
+        assert "Dirac" in constraint_piece.teaching or (
+            "constraint" in constraint_piece.teaching.lower()
         ), (
-            "narrative should explain the constraint structure"
+            "teaching should explain the constraint structure"
         )
-        # The narrative does not set result_tex
+        # The teaching does not set result_tex
         assert constraint_piece.result_tex is not None
-        # The narrative is separate from detail
-        assert constraint_piece.narrative != constraint_piece.detail
+        # The teaching is separate from detail
+        assert constraint_piece.teaching != constraint_piece.detail
 
 
 # ---------------------------------------------------------------------------
@@ -1085,7 +1085,7 @@ class TestMatterHypermomentumInDeriveADM:
             "matter piece should name the hypermomentum: "
             + matter_piece.result_tex
         )
-        assert matter_piece.narrative, (
+        assert matter_piece.teaching, (
             "matter piece should carry teaching narrative"
         )
 

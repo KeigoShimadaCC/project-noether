@@ -66,7 +66,7 @@ class FieldDerivation(BaseModel):
     script: str = ""
     bundle_path: str | None = None
     detail: str = ""
-    narrative: str = ""  # teaching/explanatory prose (reasoned, not verified)
+    teaching: str = ""  # teaching narration (reasoned, not verified; distinct from detail)
     # The active convention block at derivation time. Explicit and named;
     # never silently assumed. Populated for ADM derivations and threaded
     # through the results payload so the consumer can see which conventions
@@ -392,6 +392,133 @@ def _convention_block(npr: NPR) -> dict[str, str]:
     return block
 
 
+def _geometry_teaching(npr: NPR, wrt: str, kind: str) -> str:
+    """Generate teaching narration for a derivation on a metric-affine NPR.
+
+    The teaching contrasts the physical consequences of the geometric
+    choices the user made (torsion -> spin coupling, non-metricity ->
+    length non-conservation, projective freedom), not a bare restatement
+    of the menu. It remains on the teaching channel and resolves nothing.
+    It mutates no NPR and sets no result expression.
+
+    For Levi-Civita NPRs (the default), the teaching is empty: there are
+    no geometric tradeoffs to narrate. For metric-affine NPRs with an
+    independent connection, the teaching explains what the geometry means
+    for the derivation at hand.
+    """
+    conn = npr.geometry.connection
+    if conn.type != "independent":
+        return ""
+
+    parts: list[str] = []
+    has_torsion = conn.torsion
+    has_nonmetricity = conn.nonmetricity
+
+    if kind == "eom":
+        if wrt and any(
+            o.name == wrt and o.kind == "connection" for o in npr.objects
+        ):
+            # Connection variation teaching
+            parts.append(
+                "The independent connection equation is algebraic in "
+                "the distortion tensors: it constrains the connection "
+                "without time derivatives, so the connection carries no "
+                "independent propagating degrees of freedom."
+            )
+            if has_torsion:
+                parts.append(
+                    "With torsion allowed, the contortion K(T) couples "
+                    "to the spin current of matter fields. A nonzero "
+                    "spin density sources torsion, so the geometry "
+                    "responds to intrinsic angular momentum rather than "
+                    "just energy-momentum."
+                )
+            if has_nonmetricity:
+                parts.append(
+                    "With non-metricity allowed, the disformation L(Q) "
+                    "means the covariant derivative of the metric is no "
+                    "longer zero: parallel transport does not preserve "
+                    "vector length. This couples to the dilation and "
+                    "shear currents of matter (the dilation trace of the "
+                    "hypermomentum)."
+                )
+            parts.append(
+                "The projective freedom (Gamma -> Gamma + delta^lambda_nu "
+                "A_mu for arbitrary A_mu) is a gauge redundancy of the "
+                "connection equation for pure Palatini Einstein-Hilbert "
+                "gravity: the connection is determined only up to this "
+                "family, never uniquely fixed."
+            )
+        else:
+            # Metric variation teaching on a metric-affine background
+            parts.append(
+                "The metric equation varies the action with respect to "
+                "g while treating the connection as independent: curvature "
+                "is not varied with the metric, and the resulting field "
+                "equation involves the symmetric part of the Ricci tensor."
+            )
+            if has_torsion:
+                parts.append(
+                    "Torsion introduces a spin-current coupling: the "
+                    "antisymmetric part of the affine connection allows "
+                    "matter with intrinsic spin to source torsion "
+                    "nonlinearly, modifying the effective stress-energy "
+                    "felt by the metric."
+                )
+            if has_nonmetricity:
+                parts.append(
+                    "Non-metricity means length is not conserved under "
+                    "parallel transport: the covariant derivative of the "
+                    "metric is Q_{lambda mu nu} rather than zero. This "
+                    "introduces dilation and shear currents that modify "
+                    "the metric equation beyond the standard Einstein form."
+                )
+    elif kind == "perturbation":
+        if has_torsion or has_nonmetricity:
+            torsion_text = (
+                "torsion fluctuations contribute to the connection "
+                "perturbation dG"
+                if has_torsion
+                else ""
+            )
+            nonmetricity_text = (
+                "non-metricity fluctuations contribute to dG "
+                "alongside the metric fluctuation h"
+                if has_nonmetricity
+                else ""
+            )
+            fragments = [t for t in [torsion_text, nonmetricity_text] if t]
+            parts.append(
+                "On a metric-affine background the quadratic action "
+                "retains the connection fluctuation dG alongside the "
+                "metric fluctuation h. "
+                + " and ".join(fragments)
+                + ". These cross-terms between h and dG are "
+                "characteristic of the metric-affine perturbation "
+                "structure and have no Levi-Civita analogue."
+            )
+    elif kind == "adm":
+        if has_torsion:
+            parts.append(
+                "In the ADM decomposition, torsion projects into "
+                "spatial (T^i_{jk}), normal-upper (T^n_{jk}), and "
+                "mixed (T^i_{nk}) pieces. The contortion K(T) enters "
+                "the connection constraint structure, and a nonzero "
+                "spin current sources primary torsion constraints."
+            )
+        if has_nonmetricity:
+            parts.append(
+                "Non-metricity in the ADM split produces spatial "
+                "(Q_{ijk}), normal-first (Q_{nij}), and mixed "
+                "(Q_{inj}) pieces. The disformation L(Q) introduces "
+                "additional structure that makes the Dirac constraint "
+                "chain harder to close, requiring action-specific "
+                "analysis."
+            )
+
+    return " ".join(parts) if parts else ""
+
+
 def derive_field(
     npr: NPR,
     wrt: str,
@@ -566,6 +693,7 @@ def derive_field(
         llm_version=llm_version,
         script=source,
         detail=detail,
+        teaching=_geometry_teaching(npr, wrt, kind),
         conventions=_convention_block(npr),
     )
 
@@ -985,11 +1113,11 @@ def derive_adm(
         # requires action-specific analysis). Gate the constraint piece.
         dirac_closeable = not has_nonmetricity
 
-        for label, tex, default_narrative in _ADM_AFFINE_OUTPUTS:
+        for label, tex, default_teaching in _ADM_AFFINE_OUTPUTS:
             piece_verified = affine_verified
             piece_detail = affine_detail
             piece_checks = affine_checks
-            piece_narrative = default_narrative
+            piece_teaching = default_teaching
 
             # The connection-sector constraints piece carries a more
             # specific verdict depending on the Dirac chain closure.
@@ -1044,7 +1172,7 @@ def derive_adm(
                     ),
                     detail=piece_detail,
                     bundle_path=bundle_path,
-                    narrative=piece_narrative,
+                    teaching=piece_teaching,
                     conventions=conv_block,
                 )
             )
@@ -1058,7 +1186,7 @@ def derive_adm(
             matter_verified = affine_verified
             matter_detail = affine_detail
             matter_checks = affine_checks
-            matter_narrative = _ADM_MATTER_HYPERMOMENTUM_NARRATIVE
+            matter_teaching = _ADM_MATTER_HYPERMOMENTUM_NARRATIVE
             if not dirac_closeable:
                 matter_verified = False
                 matter_detail = (
@@ -1106,7 +1234,7 @@ def derive_adm(
                     ),
                     detail=matter_detail,
                     bundle_path=bundle_path,
-                    narrative=matter_narrative,
+                    teaching=matter_teaching,
                     conventions=conv_block,
                 )
             )

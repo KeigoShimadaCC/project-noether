@@ -202,3 +202,33 @@ class TestPropose:
         loop, _, out = make_loop(tmp_path, lines, llm=offline)
         assert loop.start() == 0
         assert "no agent CLI detected" in out.getvalue()
+
+
+class TestRationaleDisplay:
+    """VAL-GUIDE-019: the proposal's rationale is surfaced alongside the
+    on-menu choice during chat elicitation."""
+
+    @pytest.fixture()
+    def answers_with_rationale(self):
+        npr = ingest_action(r"d^4x \sqrt{-g}", "R").npr
+        return {a.id: a.options[0] for a in npr.ambiguities}
+
+    def test_propose_shows_rationale(self, tmp_path, answers_with_rationale):
+        """After 'propose', each pending choice shows its rationale."""
+        lines = ["R", "", "propose"] + [""] * question_count()
+        llm = StubLLMAdapter(stub_reply(answers_with_rationale))
+        loop, _, out = make_loop(tmp_path, lines, llm=llm)
+        assert loop.start() == 0
+        text = out.getvalue()
+        # The rationale from the stub reply should appear in the output
+        assert "rationale" in text, "rationale should be displayed after propose"
+
+    def test_rationale_shown_alongside_choice(self, tmp_path, answers_with_rationale):
+        """The rationale is displayed with the proposed choice."""
+        lines = ["R", "", "propose"] + [""] * question_count()
+        llm = StubLLMAdapter(stub_reply(answers_with_rationale))
+        loop, _, out = make_loop(tmp_path, lines, llm=llm)
+        assert loop.start() == 0
+        text = out.getvalue()
+        # Should show "model proposes: <choice>; rationale: <text>"
+        assert "model proposes:" in text

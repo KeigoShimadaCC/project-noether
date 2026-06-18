@@ -123,6 +123,12 @@ noether/             Python package
                      Cadabra script, kernel's residue check decides verified vs
                      unverified; derive_eom includes connection fields in its
                      default list when geometry.connection.type is independent;
+                     FieldDerivation carries a teaching field (pure prose,
+                     distinct from the failure-diagnostic detail and from
+                     result_tex) that narrates geometry tradeoffs for
+                     metric-affine derivations; generating teaching mutates no
+                     NPR and sets no result; /derive and /results expose
+                     teaching as a top-level per-derivation key;
                      plus derive_adm, a SymPy-verified ADM split),
                      store (JSON session persistence; derive records each
                      result id into the session so history reloads)
@@ -138,7 +144,9 @@ noether/             Python package
   cli/               `noether chat` / `resume` / `sessions` (conversational
                      loop, chat.py; numbered geometry answers go through the
                      same menu-validation path as HTTP resolve before the
-                     session store is updated), `noether kernels`, `noether ingest`,
+                     session store is updated; _propose surfaces the model's
+                     rationale alongside each proposed choice, so the user sees
+                     why the model suggests a particular answer), `noether kernels`, `noether ingest`,
                      `noether elicit`, `noether serve`, `noether mcp`,
                      `noether eval{1..5}`, `noether eval1s` (ADM of GR),
                      `noether eval3s` (Minkowski spectrum)
@@ -155,7 +163,13 @@ tests/               Unit and adapter tests (cadabra golden test included;
                      contract: propose_resolutions for geometry ambiguities,
                      off-menu nulled, never auto-applied, apply_resolutions
                      on-menu mutates, off-menu raises, HTTP /elicit and
-                     /resolve surface enforcement)
+                     /resolve surface enforcement;
+                     test_teaching_channel.py covers the teaching narration
+                     channel: teaching field distinct from detail, teaching
+                     mutates no NPR, HTTP payloads expose teaching as a
+                     top-level key, verified-vs-reasoned boundary, teaching
+                     explains geometry tradeoffs, elicitation rationale
+                     preserved)
 frontend/            Web client (Next.js + KaTeX) over the HTTP session API;
                      /api/* proxied to `noether serve`, no client-side physics
 pyproject.toml       Package, deps, ruff, pytest config

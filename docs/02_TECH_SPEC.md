@@ -1194,10 +1194,16 @@ the convention id; for metric-affine NPRs the field-strength definition is
 also included. A non-default convention chosen at elicitation (for example
 `ricci_contraction=first-fourth`) appears identically in the convention blocks
 of EOM, perturbation, and ADM results within the same session (VAL-CROSS-003).
-Changing the elicited Ricci-contraction is reflected in all results. Explanatory narration about the connection's constraints
-is on the `narrative` field of `FieldDerivation` (teaching/explanatory prose,
-distinct from `detail` which is failure-diagnostic only) and never sets a
-result expression or flips `verified`.
+Changing the elicited Ricci-contraction is reflected in all results. Teaching
+narration about the geometry and its tradeoffs (torsion -> spin coupling,
+non-metricity -> length non-conservation, projective freedom) is on the
+`teaching` field of `FieldDerivation` (distinct from `detail` which is
+failure-diagnostic only, and from `result_tex` which carries the kernel output).
+The teaching field is pure prose that never sets a result expression, never
+appears in `checks`, and never flips `verified`. Generating teaching mutates no
+NPR and adds no NPR version. /derive and /results expose teaching as a
+top-level per-derivation key. During elicitation (chat / HTTP elicit), the
+proposal's rationale is surfaced to the user alongside the on-menu choice.
 
 Tests: `tests/test_adm_affine.py` (34 tests: reachability, metric-sector
 split, connection foliation decomposition, constraint/evolution separation,

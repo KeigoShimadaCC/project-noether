@@ -161,7 +161,9 @@ Two boundaries keep this honest:
 ## 4. The verification ladder
 
 Every result climbs as far up the ladder as its class allows. Verdicts ship in
-`checks.json` and in the user-facing narrative. Failure at any rung blocks
+`checks.json` and in the user-facing narrative. Teaching prose is carried on
+the `teaching` field of `FieldDerivation`, separate from both `detail`
+(diagnostic) and `checks` (kernel-verified). Failure at any rung blocks
 PRESENT from labeling the result verified; Noether says plainly which checks ran,
 which passed, and which were not applicable.
 

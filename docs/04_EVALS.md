@@ -999,7 +999,7 @@ checks, 11 SymPy cross-checks on 3 random affine backgrounds,
 | EC-algebraic | Einstein-Cartan algebraic torsion | Palatini connection EOM algebraic in K (no dK terms), SymPy cross-check on Q=0 T!=0 backgrounds | M3 |
 | ST-affine | Palatini scalar-tensor F(phi)R(Gamma) | three variations (g, Gamma, phi), dF non-metricity source, boundary assumption, LC limit, genuine residue-zero check on connection EOM via Euler-Lagrange target | M3 |
 | fQ | symmetric teleparallel f(Q) | coincident gauge, boundary-term identity Q = R + B (numerically verified), Cadabra residue-zero | H3 |
-| adm-affine | metric-affine ADM (3+1) | connection foliation decomposition (Gamma=LC+K(T)+L(Q)), torsion/non-metricity foliation pieces, constraint/evolution separation, connection-sector primary/secondary constraints (gated when Dirac chain cannot close), distortion-nonzero falsifier, SymPy-only verification (kernel_name='sympy'), narrative/teaching separation from verified verdict | M5 |
+| adm-affine | metric-affine ADM (3+1) | connection foliation decomposition (Gamma=LC+K(T)+L(Q)), torsion/non-metricity foliation pieces, constraint/evolution separation, connection-sector primary/secondary constraints (gated when Dirac chain cannot close), distortion-nonzero falsifier, SymPy-only verification (kernel_name='sympy'), teaching field on FieldDerivation distinct from verified/detail | M5 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and
 an executable spec under `evals/` (machine-checkable: input transcript, expected
