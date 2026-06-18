@@ -69,6 +69,7 @@ export interface FieldDerivation {
   bundle_path: string | null;
   detail: string;
   teaching: string;
+  conventions: Record<string, string>;
 }
 
 export interface DerivePayload {

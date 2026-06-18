@@ -399,6 +399,21 @@ ul.checks li {
   border-radius: 0 6px 6px 0;
 }
 
+/* Conventions node: neutral style, sits between verification and result */
+
+.dtree-node.conventions::before {
+  background: var(--muted);
+}
+
+.dtree-node.conventions .dtree-body {
+  border-left: 3px solid var(--line);
+  padding-left: 0.7rem;
+}
+
+.dtree-node.conventions dl.kv {
+  font-size: 0.82rem;
+}
+
 .teaching-caveat {
   color: var(--open);
   font-size: 0.68rem;

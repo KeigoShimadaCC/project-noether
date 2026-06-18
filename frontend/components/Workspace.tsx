@@ -119,10 +119,12 @@ function DerivationPanel({
   sessionId,
   action,
   plan,
+  objects,
 }: {
   sessionId: string;
   action: SessionPayload["action"];
   plan: PlanPayload | null;
+  objects: SessionPayload["objects"];
 }) {
   const [results, setResults] = useState<FieldDerivation[] | null>(null);
   const [staleIds, setStaleIds] = useState<string[]>([]);
@@ -147,7 +149,10 @@ function DerivationPanel({
     setBusyKind(kind);
     setError(null);
     try {
-      await api.derive(sessionId, undefined, kind);
+      // For EOM on metric-affine sessions, explicitly pass all dynamical
+      // fields so both the metric and connection equations are derived.
+      const withRespectTo = kind === "eom" ? eomFields : undefined;
+      await api.derive(sessionId, withRespectTo, kind);
       await refresh();
     } catch (err) {
       setError(
@@ -163,6 +168,18 @@ function DerivationPanel({
   }
 
   const busy = busyKind !== null;
+
+  // For metric-affine sessions (those with a connection object), the EOM
+  // derive should include all dynamical fields so the user gets both the
+  // metric and the connection equation. The server's derive_eom auto-
+  // includes connection objects when the geometry has an independent
+  // connection, but only when npr.task.with_respect_to is null. Since
+  // the vary-wrt question is always resolved (it's a required question),
+  // the UI sends the full field list explicitly for EOM derives.
+  const hasConnection = objects.some((o) => o.kind === "connection");
+  const eomFields = hasConnection
+    ? objects.filter((o) => o.role === "dynamical").map((o) => o.name)
+    : undefined;
 
   return (
     <div className="card">
@@ -392,7 +409,7 @@ export default function Workspace({ sessionId }: { sessionId: string }) {
         <NotationCard proposals={definitions} busy={busy} onAdopt={adoptDefinition} />
         {openQuestions.length === 0 && plan && <PlanCard plan={plan} />}
         {openQuestions.length === 0 && plan && (
-          <DerivationPanel sessionId={sessionId} action={session.action} plan={plan} />
+          <DerivationPanel sessionId={sessionId} action={session.action} plan={plan} objects={session.objects} />
         )}
       </div>
       <NprPanel

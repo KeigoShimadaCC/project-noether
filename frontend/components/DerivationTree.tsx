@@ -90,6 +90,20 @@ export default function DerivationTree({
         </ul>
       </div>
 
+      {Object.keys(d.conventions).length > 0 && (
+        <div className="dtree-node conventions">
+          <span className="dtree-label">conventions</span>
+          <dl className="dtree-body kv">
+            {Object.entries(d.conventions).map(([key, value]) => (
+              <span key={key}>
+                <dt className="mono">{key}</dt>
+                <dd>{value}</dd>
+              </span>
+            ))}
+          </dl>
+        </div>
+      )}
+
       <div className={`dtree-node result ${d.verified ? "" : "unverified-result"}`}>
         <span className="dtree-label">result</span>
         <div className="dtree-body">
