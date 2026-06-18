@@ -497,6 +497,12 @@ perturbative expansion (xPert), Young projection.
    to the Levi-Civita result F × G_{μν} = 0, residue-pinned and
    SymPy-confirmed; the connection equation at F=const, Γ=LC vanishes
    identically (metric compatibility), also SymPy-confirmed componentwise.
+   The phi-dependent dF source term (`√{-g} F_φ [g^{γβ} ∂_α φ
+   - δ^α_β g^{γρ} ∂_ρ φ]`) that couples the scalar and connection sectors
+   is confirmed numerically by the SymPy oracle on explicit random
+   metric and connection backgrounds (multiple seeds, both linear F = 1+cφ
+   and nonlinear F = φ²), closing the gap where previously only the
+   F=const sub-case had a SymPy cross-check.
    Three Cadabra templates (`palatini_st_metric`, `palatini_st_connection`,
    `palatini_st_scalar`) are registered in `templates.py` and verified in
    `tests/test_palatini_scalar_tensor_affine.py`.

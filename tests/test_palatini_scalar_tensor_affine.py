@@ -24,7 +24,12 @@ from noether.kernels.cadabra.templates import get as get_template
 from noether.kernels.sympy_kernel.geometry import (
     _clean,
     components,
+    palatini_connection_eom,
+    palatini_st_connection_eom,
+    palatini_st_dF_source,
+    random_affine_connection,
     random_diagonal_metric,
+    random_scalar_field,
 )
 
 requires_cadabra = pytest.mark.skipif(
@@ -393,6 +398,239 @@ class TestConnectionEOMSymPy:
                     assert sp.simplify(eom_val) == 0, (
                         f"Connection EOM at LC not zero: seed={seed}, "
                         f"alpha={alpha}, beta={beta}, gamma={gamma_}, val={eom_val}"
+                    )
+
+
+# ---------------------------------------------------------------------------
+# VAL-EOM-024 (dF source): SymPy component cross-check for phi-dependent F
+# on explicit backgrounds. This is the missing gate in the dual verification:
+# the Cadabra residue check covers the full expression structurally, but the
+# SymPy cross-check previously only covered F=const. These tests confirm the
+# dF source term numerically on phi-dependent F backgrounds with multiple
+# seeds.
+# ---------------------------------------------------------------------------
+
+
+class TestConnectionEOMdFSourceSymPy:
+    """SymPy component cross-check: the connection EOM for F(phi)R(Gamma)
+    carries the dF source term that couples the scalar and connection sectors.
+
+    The full EOM decomposes as:
+      E(F) = F * E(F=1) + dF_source
+    where dF_source = sg F_phi [g^{gamma beta} partial_alpha phi
+                              - delta^alpha_beta g^{gamma rho} partial_rho phi]
+    is nonzero when F_phi != 0 and phi varies spatially.
+
+    This verifies VAL-EOM-024's dF source numerically on explicit backgrounds,
+    complementing the structural Cadabra residue check.
+    """
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_full_eom_decomposes_on_LC(self, seed):
+        """On an LC background with phi-dependent F, the full connection EOM
+        equals F * EH_EOM + dF_source componentwise."""
+        geom = random_diagonal_metric(seed, dim=3)
+        n = geom.dim
+        x = geom.coords
+        g = geom.g
+        g_inv = geom.g_inv
+        gamma = geom.christoffel  # LC connection
+
+        # phi field and F(phi) = 1 + phi/3
+        phi = random_scalar_field(seed * 13 + 7, x)
+        F = 1 + sp.Rational(1, 3) * phi
+        F_phi = sp.Rational(1, 3)  # dF/dphi = 1/3
+
+        # Compute the full F(phi) connection EOM
+        E_full = palatini_st_connection_eom(x, gamma, g, g_inv, F)
+
+        # Compute the pure EH (F=1) connection EOM
+        E_eh = palatini_connection_eom(x, gamma, g, g_inv)
+
+        # Compute the expected dF source
+        dF = palatini_st_dF_source(x, g, g_inv, F_phi, phi)
+
+        # Verify: E_full = F * E_eh + dF
+        for a in range(n):
+            for b in range(n):
+                for c in range(n):
+                    residual = _clean(
+                        E_full[a, b, c] - F * E_eh[a, b, c] - dF[a, b, c]
+                    )
+                    assert sp.simplify(residual) == 0, (
+                        f"E_full != F*E_eh + dF on LC: seed={seed}, "
+                        f"a={a}, b={b}, c={c}, residual={residual}"
+                    )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_full_eom_decomposes_on_general_connection(self, seed):
+        """On a general (non-LC) connection background with phi-dependent F,
+        the full connection EOM still decomposes as F * EH_EOM + dF_source."""
+        geom = random_diagonal_metric(seed, dim=3)
+        n = geom.dim
+        x = geom.coords
+        g = geom.g
+        g_inv = geom.g_inv
+
+        # General (asymmetric) connection -- torsionful, non-metric
+        gamma = random_affine_connection(seed * 17 + 3, x)
+
+        # phi field and F(phi) = 1 + phi/3
+        phi = random_scalar_field(seed * 13 + 7, x)
+        F = 1 + sp.Rational(1, 3) * phi
+        F_phi = sp.Rational(1, 3)
+
+        # Compute and verify decomposition
+        E_full = palatini_st_connection_eom(x, gamma, g, g_inv, F)
+        E_eh = palatini_connection_eom(x, gamma, g, g_inv)
+        dF = palatini_st_dF_source(x, g, g_inv, F_phi, phi)
+
+        for a in range(n):
+            for b in range(n):
+                for c in range(n):
+                    residual = _clean(
+                        E_full[a, b, c] - F * E_eh[a, b, c] - dF[a, b, c]
+                    )
+                    assert sp.simplify(residual) == 0, (
+                        f"E_full != F*E_eh + dF on general conn: seed={seed}, "
+                        f"a={a}, b={b}, c={c}, residual={residual}"
+                    )
+
+    @pytest.mark.parametrize("seed", [11, 23])
+    def test_full_eom_decomposes_with_nonlinear_F(self, seed):
+        """With F = phi^2 (F_phi = 2*phi, not a constant), the
+        decomposition E(F) = F * E(F=1) + dF_source still holds."""
+        geom = random_diagonal_metric(seed, dim=3)
+        n = geom.dim
+        x = geom.coords
+        g = geom.g
+        g_inv = geom.g_inv
+        gamma = geom.christoffel  # LC connection
+
+        # phi field and F(phi) = phi^2
+        phi = random_scalar_field(seed * 13 + 7, x)
+        F = phi**2
+        F_phi = 2 * phi  # dF/dphi = 2*phi
+
+        E_full = palatini_st_connection_eom(x, gamma, g, g_inv, F)
+        E_eh = palatini_connection_eom(x, gamma, g, g_inv)
+        dF = palatini_st_dF_source(x, g, g_inv, F_phi, phi)
+
+        for a in range(n):
+            for b in range(n):
+                for c in range(n):
+                    residual = _clean(
+                        E_full[a, b, c] - F * E_eh[a, b, c] - dF[a, b, c]
+                    )
+                    assert sp.simplify(residual) == 0, (
+                        f"E_full != F*E_eh + dF (nonlinear F): seed={seed}, "
+                        f"a={a}, b={b}, c={c}, residual={residual}"
+                    )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_dF_source_nonzero_when_F_depends_on_phi(self, seed):
+        """The dF source term is nonzero when F_phi != 0 and phi
+        varies spatially (confirming it is a non-trivial coupling)."""
+        geom = random_diagonal_metric(seed, dim=3)
+        x = geom.coords
+        g = geom.g
+        g_inv = geom.g_inv
+
+        phi = random_scalar_field(seed * 13 + 7, x)
+        F_phi = sp.Rational(1, 3)  # nonzero
+
+        dF = palatini_st_dF_source(x, g, g_inv, F_phi, phi)
+
+        is_nonzero = any(sp.simplify(c) != 0 for c in components(dF))
+        assert is_nonzero, (
+            f"dF source should be nonzero when F_phi != 0 on seed {seed}"
+        )
+
+    @pytest.mark.parametrize("seed", [7, 19])
+    def test_dF_source_zero_when_F_const(self, seed):
+        """The dF source term vanishes when F is constant (F_phi = 0),
+        recovering the pure Palatini EH case."""
+        geom = random_diagonal_metric(seed, dim=3)
+        n = geom.dim
+        x = geom.coords
+        g = geom.g
+        g_inv = geom.g_inv
+
+        phi = random_scalar_field(seed * 13 + 7, x)
+        F_phi = sp.Integer(0)  # F is constant
+
+        dF = palatini_st_dF_source(x, g, g_inv, F_phi, phi)
+
+        for a in range(n):
+            for b in range(n):
+                for c in range(n):
+                    assert sp.simplify(dF[a, b, c]) == 0, (
+                        f"dF source should be zero when F_phi=0: seed={seed}, "
+                        f"a={a}, b={b}, c={c}, val={dF[a, b, c]}"
+                    )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_full_eom_on_LC_equals_dF_source(self, seed):
+        """On an LC background, the F=1 EOM vanishes, so the full
+        F(phi) EOM equals the dF source alone. This is the simplest
+        cross-check: compute both independently and compare."""
+        geom = random_diagonal_metric(seed, dim=3)
+        n = geom.dim
+        x = geom.coords
+        g = geom.g
+        g_inv = geom.g_inv
+        gamma = geom.christoffel  # LC
+
+        phi = random_scalar_field(seed * 13 + 7, x)
+        F = 1 + sp.Rational(1, 3) * phi
+        F_phi = sp.Rational(1, 3)
+
+        # Full EOM
+        E_full = palatini_st_connection_eom(x, gamma, g, g_inv, F)
+
+        # dF source
+        dF = palatini_st_dF_source(x, g, g_inv, F_phi, phi)
+
+        # On LC, E(F=1) = 0, so E(F) = dF_source
+        for a in range(n):
+            for b in range(n):
+                for c in range(n):
+                    diff = _clean(E_full[a, b, c] - dF[a, b, c])
+                    assert sp.simplify(diff) == 0, (
+                        f"Full EOM != dF source on LC: seed={seed}, "
+                        f"a={a}, b={b}, c={c}, diff={diff}"
+                    )
+
+    @pytest.mark.parametrize("seed", [7, 19, 37])
+    def test_dF_source_matches_formula_on_general_connection(self, seed):
+        """The dF source does not depend on the connection (only on g and phi).
+        Verify that the difference between the full EOM and F*EH_EOM matches
+        the dF source formula on a general connection background."""
+        geom = random_diagonal_metric(seed, dim=3)
+        n = geom.dim
+        x = geom.coords
+        g = geom.g
+        g_inv = geom.g_inv
+
+        # General (asymmetric) connection
+        gamma = random_affine_connection(seed * 17 + 3, x)
+
+        phi = random_scalar_field(seed * 13 + 7, x)
+        F = 1 + sp.Rational(1, 3) * phi
+        F_phi = sp.Rational(1, 3)
+
+        E_full = palatini_st_connection_eom(x, gamma, g, g_inv, F)
+        E_eh = palatini_connection_eom(x, gamma, g, g_inv)
+        dF = palatini_st_dF_source(x, g, g_inv, F_phi, phi)
+
+        # The difference E_full - F*E_eh should equal dF_source exactly
+        for a in range(n):
+            for b in range(n):
+                for c in range(n):
+                    diff = _clean(E_full[a, b, c] - F * E_eh[a, b, c])
+                    assert sp.simplify(diff - dF[a, b, c]) == 0, (
+                        f"E_full - F*E_eh != dF source: seed={seed}, "
+                        f"a={a}, b={b}, c={c}"
                     )
 
 

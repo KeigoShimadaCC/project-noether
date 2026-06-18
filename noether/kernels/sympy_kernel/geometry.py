@@ -1686,3 +1686,163 @@ def contracted_second_bianchi_nonmetric_residual(
                     val += B[rho, sig, mu, nu, rho]
                 residual[sig, mu, nu] = _clean(val)
     return Array(residual)
+
+
+def palatini_st_connection_eom(
+    coords: list[sp.Symbol],
+    gamma: Array,
+    g: Array,
+    g_inv: Array,
+    F: sp.Expr,
+) -> Array:
+    """Palatini scalar-tensor connection EOM (coefficient of
+    delta Gamma^alpha_{beta gamma}) for the action
+    S = -int sqrt(-g) F(phi) g^{sigma nu} R_{nu sigma}(Gamma).
+
+    The Euler-Lagrange equation is:
+      E^alpha_{beta gamma} = partial_alpha(sg F g^{gamma beta})
+                            - delta^alpha_beta partial_rho(sg F g^{gamma rho})
+                            - sg F delta^alpha_beta (g^{sigma nu} Gamma^gamma_{nu sigma})
+                            - sg F g^{beta gamma} Gamma^lambda_{lambda alpha}
+                            + sg F g^{sigma beta} Gamma^gamma_{alpha sigma}
+                            + sg F g^{gamma nu} Gamma^beta_{nu alpha}
+
+    where sg = sqrt(-g) and F = F(phi) may depend on coordinates
+    through the scalar field phi.
+
+    The EOM decomposes as:
+      E(F) = F * E(F=1) + dF_source
+    where E(F=1) is the pure EH Palatini connection EOM (computed by
+    palatini_connection_eom) and
+      dF_source = sg [g^{gamma beta} partial_alpha F
+                      - delta^alpha_beta g^{gamma rho} partial_rho F]
+    is the non-metricity source coupling the scalar sector to the
+    connection sector (computed by palatini_st_dF_source).
+
+    Returns a (n, n, n) array E^alpha_{beta gamma}.  On the Palatini
+    solution with F=const, this reduces to F * palatini_connection_eom
+    which evaluates to zero on an LC connection.
+
+    Convention: noether-default-v1 + metric-affine-v1."""
+    n = len(coords)
+    x = coords
+    g_mat = sp.Matrix([[g[i, j] for j in range(n)] for i in range(n)])
+    sg = sp.sqrt(-sp.det(g_mat))
+
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for a in range(n):
+        for b in range(n):
+            for c in range(n):
+                # partial_a(sg F g^{c b})
+                d_sg = _clean(sp.diff(sg, x[a]))
+                d_ginv = _clean(sp.diff(g_inv[c, b], x[a]))
+                d_F = _clean(sp.diff(F, x[a]))
+                term1 = _clean(
+                    d_sg * F * g_inv[c, b]
+                    + sg * d_F * g_inv[c, b]
+                    + sg * F * d_ginv
+                )
+
+                # -delta^a_b partial_rho(sg F g^{c rho})
+                if a == b:
+                    term2 = sp.Integer(0)
+                    for rho in range(n):
+                        d_sg_rho = _clean(sp.diff(sg, x[rho]))
+                        d_ginv_rho = _clean(sp.diff(g_inv[c, rho], x[rho]))
+                        d_F_rho = _clean(sp.diff(F, x[rho]))
+                        term2 -= _clean(
+                            d_sg_rho * F * g_inv[c, rho]
+                            + sg * d_F_rho * g_inv[c, rho]
+                            + sg * F * d_ginv_rho
+                        )
+                else:
+                    term2 = sp.Integer(0)
+
+                # -sg F delta^a_b (g^{sigma nu} Gamma^c_{nu sigma})
+                if a == b:
+                    term3 = sp.Integer(0)
+                    for sig in range(n):
+                        for nu_ in range(n):
+                            term3 -= sg * F * g_inv[sig, nu_] * gamma[c, nu_, sig]
+                    term3 = _clean(term3)
+                else:
+                    term3 = sp.Integer(0)
+
+                # -sg F g^{b c} Gamma^lam_{lam a}
+                term4 = _clean(
+                    -sg * F * g_inv[b, c] * sum(gamma[lam, lam, a] for lam in range(n))
+                )
+
+                # +sg F g^{sigma b} Gamma^c_{a sigma}
+                term5 = _clean(
+                    sg * F * sum(g_inv[sig, b] * gamma[c, a, sig] for sig in range(n))
+                )
+
+                # +sg F g^{c nu} Gamma^b_{nu a}
+                term6 = _clean(
+                    sg * F * sum(g_inv[c, nu_] * gamma[b, nu_, a] for nu_ in range(n))
+                )
+
+                out[a, b, c] = _clean(term1 + term2 + term3 + term4 + term5 + term6)
+
+    return Array(out)
+
+
+def palatini_st_dF_source(
+    coords: list[sp.Symbol],
+    g: Array,
+    g_inv: Array,
+    F_phi: sp.Expr,
+    phi: sp.Expr,
+) -> Array:
+    """dF source term in the Palatini scalar-tensor connection EOM.
+
+    The non-metricity source that couples the scalar sector to the
+    connection sector when F depends on phi:
+
+      dF_source^alpha_{beta gamma} = sg F_phi [g^{gamma beta} partial_alpha phi
+                                      - delta^alpha_beta g^{gamma rho} partial_rho phi]
+
+    This term is absent when F is constant (F_phi = 0) and is the
+    physically interesting coupling that distinguishes the Palatini
+    scalar-tensor theory from the pure Palatini Einstein-Hilbert case.
+
+    The full connection EOM decomposes as:
+      E(F) = F * E(F=1) + dF_source
+
+    Parameters:
+        coords: coordinate symbols
+        g: metric matrix (symmetric)
+        g_inv: inverse metric matrix
+        F_phi: dF/dphi (may be a constant or an expression in coordinates)
+        phi: scalar field (expression in coordinates)
+
+    Returns a (n, n, n) array dF_source^alpha_{beta gamma}.
+
+    Convention: noether-default-v1 + metric-affine-v1."""
+    n = len(coords)
+    x = coords
+    g_mat = sp.Matrix([[g[i, j] for j in range(n)] for i in range(n)])
+    sg = sp.sqrt(-sp.det(g_mat))
+
+    dphi = [_clean(sp.diff(phi, x[mu])) for mu in range(n)]
+
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for a in range(n):
+        for b in range(n):
+            for c in range(n):
+                # sg F_phi g^{c b} partial_a phi
+                term1 = _clean(sg * F_phi * g_inv[c, b] * dphi[a])
+
+                # -sg F_phi delta^a_b g^{c rho} partial_rho phi
+                if a == b:
+                    term2 = sp.Integer(0)
+                    for rho in range(n):
+                        term2 -= sg * F_phi * g_inv[c, rho] * dphi[rho]
+                    term2 = _clean(term2)
+                else:
+                    term2 = sp.Integer(0)
+
+                out[a, b, c] = _clean(term1 + term2)
+
+    return Array(out)
