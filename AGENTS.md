@@ -108,9 +108,15 @@ noether/             Python package
                      on an independent-connection background; geometry
                      inference is exercised deterministically with
                      StubLLMAdapter: propose_resolutions returns one proposal
-                     per open geometry ambiguity with every non-null choice in
-                     the menu, off-menu suggestions yield choice=None, and the
-                     NPR is unchanged after proposing), definitions (propose readability
+                     per open geometry and convention ambiguity with every
+                     non-null choice in the menu, off-menu suggestions yield
+                     choice=None, and the NPR is unchanged after proposing;
+                     the inference prompt embeds the action's geometric cues
+                     (R(Γ), T, Q, f(Q)/f(T) family) so the model's proposals
+                     are grounded in the action, not a fixed default; a scalar
+                     action carries no such cue; convention proposals
+                     (Ricci-contraction, field-strength definition) are on-menu
+                     with rationale and never auto-applied), definitions (propose readability
                      shorthands like F_phi for dF/dphi and, on metric-affine
                      NPRs, K(T), L(Q), and the f(Q) scalar Q; human adopts),
                      derive (general EOM / perturbation path: model writes a

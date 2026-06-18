@@ -55,11 +55,26 @@ ambiguity, constrained to the menu; off-menu suggestions are nulled (choice is
 unchanged (not well-posed, geometry ambiguities unresolved, `geometry.connection`
 unchanged). Only a human-confirmed on-menu answer, routed through
 `apply_resolutions`, mutates `geometry.connection`. Off-menu and unknown-id
-confirmations raise `ValueError` and never mutate the NPR. The HTTP surface
-enforces this identically: `POST /elicit` returns `confirmed: false` with
-proposals (off-menu nulled), and `POST /resolve` with an off-menu geometry
-answer returns 400. Inference is exercised deterministically with
-`StubLLMAdapter` (VAL-GUIDE-001..007, `tests/test_geometry_inference.py`).
+confirmations raise `ValueError` and never mutate the NPR.
+
+The inference prompt (`build_elicitation_prompt`) embeds the action's geometric
+cues (presence of `R(\Gamma)`, explicit `T`/`Q`, `f(Q)`/`f(T)` family) so the
+model's proposed geometry choices are grounded in the action, not a fixed
+default; a scalar action carries no such geometry cue (VAL-GUIDE-017).
+
+Convention proposals (Ricci-contraction when the connection is independent,
+field-strength definition when a gauge field is present on an
+independent-connection background) follow the same propose-then-confirm
+contract: the model proposes an on-menu choice with rationale, never
+auto-applies it, and an off-menu convention proposal is nulled
+(VAL-GUIDE-020). NPR conventions are unchanged until a human confirms
+through `apply_resolutions`.
+
+The HTTP surface enforces this identically: `POST /elicit` returns
+`confirmed: false` with proposals (off-menu nulled), and `POST /resolve`
+with an off-menu geometry answer returns 400. Inference is exercised
+deterministically with `StubLLMAdapter` (VAL-GUIDE-001..007,
+VAL-GUIDE-017, VAL-GUIDE-020, `tests/test_geometry_inference.py`).
 
 ### 1.2 Question discipline
 

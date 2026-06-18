@@ -1,4 +1,5 @@
-"""Geometry inference: the model proposes, the human confirms (VAL-GUIDE-001..007).
+"""Geometry inference: the model proposes, the human confirms (VAL-GUIDE-001..007,
+VAL-GUIDE-017, VAL-GUIDE-020).
 
 The contract: propose_resolutions returns one ProposedResolution per open
 geometry ambiguity; every non-null choice is in that ambiguity's options;
@@ -13,7 +14,11 @@ off-menu).  Driven deterministically with StubLLMAdapter.
 import pytest
 
 from noether.llm import StubLLMAdapter, stub_reply
-from noether.orchestrator.elicit import apply_resolutions, propose_resolutions
+from noether.orchestrator.elicit import (
+    apply_resolutions,
+    build_elicitation_prompt,
+    propose_resolutions,
+)
 from noether.orchestrator.ingest import ingest_action
 
 MEASURE = r"d^4x \sqrt{-g}"
@@ -583,3 +588,226 @@ class TestHttpGeometryInference:
         assert not (GEOMETRY_AMBIGUITY_IDS & proposal_ids), (
             "scalar action must not produce geometry proposals"
         )
+
+
+# ---------------------------------------------------------------------------
+# Convention ambiguity IDs
+# ---------------------------------------------------------------------------
+
+CONVENTION_AMBIGUITY_IDS = {
+    "amb-ricci-contraction",
+    "amb-field-strength-definition",
+}
+
+# Action that opens the field-strength-definition ambiguity when the
+# connection is resolved to independent (carries a vector/gauge potential).
+GAUGE_PALATINI_ACTION = r"g^{\mu\nu} R_{\mu\nu}(\Gamma) + A_{\mu} A^{\mu}"
+
+
+# ---------------------------------------------------------------------------
+# VAL-GUIDE-017: Structural cues reach the inference prompt
+# ---------------------------------------------------------------------------
+
+
+class TestStructuralCuesReachInferencePrompt:
+    """VAL-GUIDE-017: The proposal prompt built for a cued action contains
+    the geometric cue text; the scalar control does not."""
+
+    def test_palatini_action_prompt_contains_connection_cue(self):
+        """A metric-affine action with R(Gamma) embeds the cue that the
+        curvature depends on an independent connection."""
+        npr = ingest_action(MEASURE, PALATINI_ACTION).npr
+        prompt = build_elicitation_prompt(npr, npr.unresolved_ambiguities())
+        # The prompt should contain a geometric-cue section mentioning
+        # that the curvature is built from an independent connection.
+        assert "geometric cue" in prompt.lower(), (
+            "cued action prompt must contain a geometric cue section"
+        )
+        assert "R(\\Gamma)" in prompt or "independent connection" in prompt.lower(), (
+            "cued action prompt must mention R(Gamma) or independent connection"
+        )
+
+    def test_torsion_cue_appears_in_prompt(self):
+        """An action with explicit torsion T embeds the torsion cue."""
+        npr = ingest_action(MEASURE, r"T^{\lambda}_{\mu\nu} T_{\lambda}^{\mu\nu}").npr
+        prompt = build_elicitation_prompt(npr, npr.unresolved_ambiguities())
+        assert "geometric cue" in prompt.lower(), (
+            "torsion action prompt must contain a geometric cue section"
+        )
+        assert "torsion" in prompt.lower(), "torsion action must mention torsion in cues"
+
+    def test_nonmetricity_cue_appears_in_prompt(self):
+        """An action with explicit non-metricity Q embeds the Q cue."""
+        npr = ingest_action(MEASURE, r"Q_{\lambda\mu\nu} Q^{\lambda\mu\nu}").npr
+        prompt = build_elicitation_prompt(npr, npr.unresolved_ambiguities())
+        assert "geometric cue" in prompt.lower(), (
+            "non-metricity action prompt must contain a geometric cue section"
+        )
+        assert "non-metricity" in prompt.lower(), (
+            "non-metricity action must mention non-metricity in cues"
+        )
+
+    def test_scalar_action_prompt_has_no_geometry_cue(self):
+        """A scalar action carries no geometry cue text."""
+        npr = ingest_action(MEASURE, SCALAR_ACTION).npr
+        prompt = build_elicitation_prompt(npr, npr.unresolved_ambiguities())
+        assert "geometric cue" not in prompt.lower(), (
+            "scalar action prompt must not contain a geometric cue section"
+        )
+
+    def test_curvature_free_cue_appears_in_prompt(self):
+        """An action using T but no R (teleparallel family) embeds the
+        curvature-free family cue."""
+        npr = ingest_action(
+            MEASURE, r"T^{\lambda}_{\mu\nu} T_{\lambda}^{\mu\nu}"
+        ).npr
+        prompt = build_elicitation_prompt(npr, npr.unresolved_ambiguities())
+        assert "geometric cue" in prompt.lower()
+        # Curvature-free / teleparallel family cue should be present
+        assert "curvature-free" in prompt.lower() or "teleparallel" in prompt.lower(), (
+            "teleparallel action must mention curvature-free or teleparallel family"
+        )
+
+    def test_multiple_cues_combined(self):
+        """An action with curvature, torsion, and connection embeds
+        all three cues."""
+        npr = ingest_action(
+            MEASURE,
+            r"g^{\mu\nu} R_{\mu\nu}(\Gamma) + T^{\lambda}_{\mu\nu} T_{\lambda}^{\mu\nu}",
+        ).npr
+        prompt = build_elicitation_prompt(npr, npr.unresolved_ambiguities())
+        assert "geometric cue" in prompt.lower()
+        # Should mention both connection and torsion
+        cue_section = prompt[prompt.lower().find("geometric cue"):]
+        assert "independent connection" in cue_section.lower() or "R(\\Gamma)" in cue_section
+        assert "torsion" in cue_section.lower()
+
+
+# ---------------------------------------------------------------------------
+# VAL-GUIDE-020: Convention choices proposed on-menu, never silently defaulted
+# ---------------------------------------------------------------------------
+
+
+class TestConventionProposalOnMenu:
+    """VAL-GUIDE-020: For conventions that must be chosen under an
+    independent connection (Ricci-contraction, and the field-strength
+    definition when a gauge field is present), inference proposes an
+    on-menu choice with rationale and never auto-applies; an off-menu
+    convention proposal is nulled."""
+
+    def _make_independent_npr_with_gauge(self):
+        """Ingest a Palatini+gauge action and resolve connection=independent
+        so the convention ambiguities (ricci-contraction, field-strength)
+        are open."""
+        npr = ingest_action(MEASURE, GAUGE_PALATINI_ACTION).npr
+        return apply_resolutions(npr, {"amb-connection": "independent"})
+
+    def _make_independent_npr_no_gauge(self):
+        """Ingest a plain Palatini action and resolve connection=independent
+        so the ricci-contraction ambiguity is open but field-strength is not."""
+        npr = ingest_action(MEASURE, PALATINI_ACTION).npr
+        return apply_resolutions(npr, {"amb-connection": "independent"})
+
+    def test_ricci_contraction_proposal_is_on_menu(self):
+        """propose_resolutions returns an on-menu choice for
+        amb-ricci-contraction with a rationale."""
+        npr = self._make_independent_npr_no_gauge()
+        answers = {amb.id: amb.options[0] for amb in npr.ambiguities}
+        proposal = propose_resolutions(npr, StubLLMAdapter(stub_reply(answers)))
+
+        ricci_p = next(
+            (p for p in proposal.proposals if p.ambiguity_id == "amb-ricci-contraction"),
+            None,
+        )
+        assert ricci_p is not None, "must have a proposal for amb-ricci-contraction"
+        assert ricci_p.choice in ("first-third", "first-fourth"), (
+            f"ricci proposal must be on-menu, got {ricci_p.choice!r}"
+        )
+        assert ricci_p.rationale, "convention proposal must have a rationale"
+
+    def test_field_strength_proposal_is_on_menu(self):
+        """propose_resolutions returns an on-menu choice for
+        amb-field-strength-definition with a rationale."""
+        npr = self._make_independent_npr_with_gauge()
+        answers = {amb.id: amb.options[0] for amb in npr.ambiguities}
+        proposal = propose_resolutions(npr, StubLLMAdapter(stub_reply(answers)))
+
+        fs_p = next(
+            (p for p in proposal.proposals if p.ambiguity_id == "amb-field-strength-definition"),
+            None,
+        )
+        assert fs_p is not None, "must have a proposal for amb-field-strength-definition"
+        assert fs_p.choice in ("exterior-derivative", "covariant-curl"), (
+            f"field-strength proposal must be on-menu, got {fs_p.choice!r}"
+        )
+        assert fs_p.rationale, "convention proposal must have a rationale"
+
+    def test_convention_proposal_does_not_change_npr(self):
+        """propose_resolutions does not change NPR conventions even when
+        all convention proposals are on-menu."""
+        npr = self._make_independent_npr_with_gauge()
+        conventions_before = npr.conventions.model_copy()
+
+        answers = {amb.id: amb.options[0] for amb in npr.ambiguities}
+        propose_resolutions(npr, StubLLMAdapter(stub_reply(answers)))
+
+        assert npr.conventions == conventions_before, (
+            "propose must not change NPR conventions"
+        )
+
+    def test_off_menu_ricci_contraction_proposal_is_nulled(self):
+        """An off-menu Ricci-contraction proposal yields choice=None."""
+        npr = self._make_independent_npr_no_gauge()
+        # Build answers where ricci-contraction is off-menu
+        answers = {amb.id: amb.options[0] for amb in npr.ambiguities}
+        answers["amb-ricci-contraction"] = "second-fourth"  # not in options
+
+        proposal = propose_resolutions(npr, StubLLMAdapter(stub_reply(answers)))
+
+        ricci_p = next(
+            p for p in proposal.proposals if p.ambiguity_id == "amb-ricci-contraction"
+        )
+        assert ricci_p.choice is None, (
+            f"off-menu ricci proposal must be None, got {ricci_p.choice!r}"
+        )
+
+    def test_off_menu_field_strength_proposal_is_nulled(self):
+        """An off-menu field-strength-definition proposal yields choice=None."""
+        npr = self._make_independent_npr_with_gauge()
+        answers = {amb.id: amb.options[0] for amb in npr.ambiguities}
+        answers["amb-field-strength-definition"] = "covariant-derivative"  # not in options
+
+        proposal = propose_resolutions(npr, StubLLMAdapter(stub_reply(answers)))
+
+        fs_p = next(
+            p for p in proposal.proposals if p.ambiguity_id == "amb-field-strength-definition"
+        )
+        assert fs_p.choice is None, (
+            f"off-menu field-strength proposal must be None, got {fs_p.choice!r}"
+        )
+
+    def test_convention_unchanged_until_resolve(self):
+        """NPR conventions are unchanged until an explicit on-menu resolve."""
+        npr = self._make_independent_npr_with_gauge()
+        assert npr.conventions.ricci_contraction == "first-third"
+        assert npr.conventions.field_strength_definition == "exterior-derivative"
+
+        # Propose does not change conventions
+        answers = {amb.id: amb.options[0] for amb in npr.ambiguities}
+        propose_resolutions(npr, StubLLMAdapter(stub_reply(answers)))
+        assert npr.conventions.ricci_contraction == "first-third"
+        assert npr.conventions.field_strength_definition == "exterior-derivative"
+
+        # Only apply_resolutions with on-menu answer changes conventions
+        confirmed = apply_resolutions(npr, {"amb-ricci-contraction": "first-fourth"})
+        assert confirmed.conventions.ricci_contraction == "first-fourth"
+        # Original NPR untouched
+        assert npr.conventions.ricci_contraction == "first-third"
+
+    def test_levi_civita_session_has_no_convention_ambiguities(self):
+        """A Levi-Civita session never opens Ricci-contraction or
+        field-strength-definition ambiguities."""
+        npr = ingest_action(MEASURE, CURVATURE_ACTION).npr
+        convention_ids = {amb.id for amb in npr.ambiguities}
+        assert "amb-ricci-contraction" not in convention_ids
+        assert "amb-field-strength-definition" not in convention_ids
