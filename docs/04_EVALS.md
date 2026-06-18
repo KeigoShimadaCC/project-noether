@@ -871,6 +871,18 @@ verifies as `G_{μν} = 0`. An X-dependent curvature coupling `G(φ,X)R` (Hornde
 G4) matches no block and is refused. G4 and G5 stay out of this path until their
 covariant equations of motion verify; they are held rather than added partially.
 
+**G4(φ,X)/G5 best-effort closure attempt (VAL-GEOM-015).** The module
+`noether/kernels/cadabra/horndeski_g4g5.py` (`attempt_g4g5_closure`) tries the
+held-out higher Horndeski closures using the M2 geometry primitives. The G4
+scalar EOM is second order after IBP (confirmed by hand-audit), but the metric
+EOM has wrapped nabla_μ(G4_X nabla_ν nabla_ρ φ nabla^ρ φ) terms that expand to
+third derivatives of φ. Those need systematic normal-ordering (xAct's SortCovDs,
+not available here) to reduce through the commutator and Ricci folds. The gate
+is both EOMs or neither, so the closure returns `verified=False` with a
+non-empty `detail` naming the SortCovDs blocker. VAL-GEOM-015's XOR condition
+holds: the result is either fully closed or explicitly gated with a stated
+reason, never falsely verified.
+
 ---
 
 ## Eval vector-affine — Maxwell on a metric-affine background
@@ -993,6 +1005,7 @@ checks, 11 SymPy cross-checks on 3 random affine backgrounds,
 | 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule, both EOMs by composition | H3 |
 | 7 | k-essence / general scalar Horndeski | X-dependent coupling, block decomposition, no per-theory template | H3 |
 | 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |
+| G4/G5 closure | held higher Horndeski | best-effort closure attempt, SortCovDs gate, VAL-GEOM-015 | M2 |
 | fT | metric teleparallel f(T) | boundary-term identity T = -R + B, tetrad/Weitzenbock formulation, Cadabra residue-zero | H3 |
 | vector-affine | Maxwell on metric-affine background | field-strength choice (dA vs nabla A), zero vs nonzero hypermomentum, T/Q correction | M3 |
 | vector-affine pert | quadratic action under field-strength choice | T-dependent difference (VAL-PERT-017), a*dG cross term (VAL-PERT-018), covcurl gated | M4 |
