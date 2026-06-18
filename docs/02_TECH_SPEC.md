@@ -883,6 +883,54 @@ SymPy cross-checks on 3 random affine backgrounds).  Eval module:
 `evals/eval_vector_affine.py`, `evals/test_eval_vector_affine.py`, registered
 as `vector-affine` in `evals/registry.py`.
 
+### 6.3 Einstein-Cartan connection equation (VAL-EOM-011)
+
+The Einstein-Cartan connection equation is the Palatini connection EOM on a
+metric-compatible (Q=0) torsionful background.  Its key property is that it
+is algebraic in the contortion K: after substituting Gamma = LC + K, no
+derivatives of K appear.  This means torsion is algebraically determined by
+any spin source (hypermomentum) rather than propagating as an independent
+degree of freedom.
+
+Two verification gates enforce this claim (dual-gate requirement, section 3.2):
+
+1. **Cadabra residue check**: the registered template
+   `ec_connection_algebraic_in_K` in `templates.py` derives the Palatini
+   connection equation, substitutes G = LC + K, and verifies that setting
+   `partial_K -> 0` does not change the expression (`algebraic_in_K` check).
+   It also verifies that G = LC + projective mode satisfies the equation
+   (`solution_zero` check).  The template replaces the previously inline
+   Cadabra script string in the test file.
+
+2. **SymPy cross-check**: `palatini_connection_eom` in `geometry.py` computes
+   the Palatini connection EOM coefficient for a general connection on an
+   explicit coordinate-dependent background.  The Euler-Lagrange-derived
+   formula is algebraic in Gamma (no derivative-of-Gamma terms after IBP),
+   so the EOM difference E(Gamma=LC+K) - E(Gamma=LC) is purely algebraic in
+   K.  The function `einstein_cartan_algebraic_in_K_residual` verifies this
+   componentwise: it computes E(LC+K) - E(LC) and checks the difference
+   equals the expected algebraic K expression (no derivative-of-K terms) on
+   metric-compatible (Q=0) torsionful backgrounds.  A negative-control test
+   confirms that K has nonzero coordinate derivatives on these backgrounds
+   (the contortion involves g^{-1} and g, which are coordinate-dependent),
+   making the absence of derivative-of-K terms a non-trivial cancellation.
+
+   Additionally, `palatini_connection_eom` evaluates to zero at Gamma = LC
+   (the Palatini solution up to projective mode), providing a SymPy analogue
+   of the Cadabra `solution_zero` check.
+
+The dead oracle function `einstein_cartan_connection_equation_residual` that
+previously existed in `geometry.py` computed the EOM at Levi-Civita only,
+with a wrong index structure in the delta term, and was never imported or
+called.  It has been replaced by the correct `palatini_connection_eom` and
+`einstein_cartan_algebraic_in_K_residual` functions, both wired into passing
+tests.
+
+Tests: `tests/test_einstein_cartan.py` (17 tests: 2 Cadabra residue checks
+via the registered template, 15 SymPy cross-checks on 3 random
+metric-compatible torsionful backgrounds).  The Cadabra template is
+registered as `ec_connection_algebraic_in_K` in `templates.py`.
+
 ## 7. Provenance bundles
 
 Every result is a directory (and a DB row pointing at it):

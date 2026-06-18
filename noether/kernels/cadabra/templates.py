@@ -1824,3 +1824,98 @@ meld(residue);
 print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
 """,
 )
+
+# ---------------------------------------------------------------------------
+# Einstein-Cartan connection equation: algebraic torsion-vs-spin relation
+# (VAL-EOM-011).
+#
+# Two checks:
+#   1. solution_zero: G = LC + projective mode satisfies the Palatini
+#      connection equation (the connection is determined only up to
+#      the projective mode A_mu).
+#   2. algebraic_in_K: after substituting G = LC + K, setting partial_K
+#      to zero does not change the expression, confirming the EOM is
+#      algebraic in K (no derivative-of-K terms).  This means torsion
+#      is algebraically determined by any spin source rather than
+#      propagating as an independent degree of freedom.
+#
+# SymPy cross-check: einstein_cartan_algebraic_in_K_residual in
+# geometry.py verifies the algebraic-in-K property componentwise on
+# random metric-compatible (Q=0) torsionful backgrounds (3 seeds).
+#
+# Convention: noether-default-v1 + metric-affine-v1.
+# ---------------------------------------------------------------------------
+
+register(
+    "ec_connection_algebraic_in_K",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\partial{#}::PartialDerivative.
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+sg::LaTeXForm("\sqrt{-g}").
+{g_{\mu\nu}, g^{\mu\nu}, sg, G^{\lambda}_{\mu\nu}, dG^{\lambda}_{\mu\nu}}::Depends(\partial{#}).
+C^{\lambda}_{\mu\nu}::TableauSymmetry(shape={2}, indices={1,2}).
+C^{\lambda}_{\mu\nu}::Depends(\partial{#}).
+A_{\mu}::Depends(\partial{#}).
+K^{\lambda}_{\mu\nu}::Depends(\partial{#}).
+LC^{\lambda}_{\mu\nu}::TableauSymmetry(shape={2}, indices={1,2}).
+LC^{\lambda}_{\mu\nu}::Depends(\partial{#}).
+
+# Step 1: Derive the Palatini connection equation
+ex := \int{ - sg g^{\sigma\nu} ( \partial_{\lambda}{G^{\lambda}_{\nu\sigma}} - \partial_{\nu}{G^{\lambda}_{\lambda\sigma}} + G^{\lambda}_{\lambda\rho} G^{\rho}_{\nu\sigma} - G^{\lambda}_{\nu\rho} G^{\rho}_{\lambda\sigma} ) }{x};
+vary(ex, $G^{\lambda}_{\mu\nu} -> dG^{\lambda}_{\mu\nu}$);
+distribute(ex);
+integrate_by_parts(ex, $dG^{\lambda}_{\mu\nu}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\int{A??}{x} -> A??$);
+
+# Step 2: Verify G = LC + projective satisfies the equation
+soln := @(ex);
+substitute(soln, $G^{\lambda}_{\mu\nu} -> C^{\lambda}_{\mu\nu} + g^{\lambda}_{\nu} A_{\mu}$);
+distribute(soln);
+substitute(soln, $\partial_{\lambda}{g^{\nu\sigma}} -> -g^{\nu\rho} C^{\sigma}_{\lambda\rho} - g^{\sigma\rho} C^{\nu}_{\lambda\rho}$);
+substitute(soln, $\partial_{\lambda}{g_{\nu\sigma}} -> g_{\rho\sigma} C^{\rho}_{\lambda\nu} + g_{\nu\rho} C^{\rho}_{\lambda\sigma}$);
+substitute(soln, $\partial_{\lambda}{sg} -> sg C^{\rho}_{\rho\lambda}$);
+distribute(soln);
+eliminate_kronecker(soln);
+sort_product(soln);
+canonicalise(soln);
+rename_dummies(soln);
+meld(soln);
+print("NOETHER_CHECK: solution_zero=" + str(str(soln) == "0"))
+
+# Step 3: Substitute G = LC + K and verify algebraic in K
+algex := @(ex);
+substitute(algex, $G^{\lambda}_{\mu\nu} -> LC^{\lambda}_{\mu\nu} + K^{\lambda}_{\mu\nu}$);
+distribute(algex);
+product_rule(algex);
+distribute(algex);
+
+# Check: substituting partial_K -> 0 should give the same result
+noDK := @(algex);
+substitute(noDK, $\partial_{\mu}{K^{\lambda}_{\nu\rho}} -> 0$, repeat=True);
+distribute(noDK);
+eliminate_metric(noDK);
+eliminate_kronecker(noDK);
+sort_product(noDK);
+canonicalise(noDK);
+rename_dummies(noDK);
+
+# Compute difference: full expression minus no-deriv-K expression
+diff := @(algex) - @(noDK);
+distribute(diff);
+eliminate_metric(diff);
+eliminate_kronecker(diff);
+sort_product(diff);
+canonicalise(diff);
+rename_dummies(diff);
+meld(diff);
+print("NOETHER_CHECK: algebraic_in_K=" + str(str(diff) == "0"))
+""",
+)

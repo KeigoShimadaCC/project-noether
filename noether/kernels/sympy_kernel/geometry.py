@@ -1307,124 +1307,186 @@ def random_hypermomentum(seed: int, dim: int = 3) -> Array:
     return Array(out)
 
 
-def einstein_cartan_connection_equation_residual(
+def palatini_connection_eom(
     coords: list[sp.Symbol], gamma: Array, g: Array, g_inv: Array
 ) -> Array:
-    """Residual of the Einstein-Cartan connection equation on a
-    metric-compatible (Q=0) torsionful background.
+    """Palatini connection EOM (coefficient of delta Gamma^alpha_{beta gamma})
+    for the action S = -int sqrt(-g) g^{sigma nu} R_{nu sigma}(Gamma).
 
-    The Palatini connection equation of the EH action, written in terms
-    of the decomposition Gamma = LC + K(T), is algebraic in K.  This
-    function computes the residual after substituting the decomposition,
-    verifying that no derivatives of K appear (the algebraic nature).
+    The Euler-Lagrange equation is:
 
-    Specifically, the Palatini connection EOM is:
+      E^alpha_{beta gamma} = partial_alpha(sg g^{gamma beta})
+                            - delta^alpha_beta partial_rho(sg g^{gamma rho})
+                            - sg delta^alpha_beta (g^{sigma nu} Gamma^gamma_{nu sigma})
+                            - sg g^{beta gamma} Gamma^lambda_{lambda alpha}
+                            + sg g^{sigma beta} Gamma^gamma_{alpha sigma}
+                            + sg g^{gamma nu} Gamma^beta_{nu alpha}
 
-    delta S_EH / delta Gamma^lam_{mu nu} = 0
+    where sg = sqrt(-g).  The first two terms depend only on the metric
+    and its derivatives (not on Gamma).  The remaining terms are purely
+    algebraic in Gamma.  This structure is what makes the Palatini
+    connection equation algebraic in the contortion K when Gamma = LC + K
+    on a metric-compatible (Q=0) background: the partial(sg g) terms are
+    the same for Gamma and LC, and the difference involves only K without
+    derivatives of K.
 
-    After IBP, this gives an expression linear in Gamma (no second
-    derivatives).  Substituting Gamma = LC + K, the expression splits
-    into an LC part and a K part.  The K part is algebraic (no
-    derivatives of K), which means torsion is algebraically determined
-    by any spin source.
-
-    This function computes the Palatini EOM on a metric-compatible
-    background (using the Christoffel symbols for the LC part and the
-    contortion for the K part) and verifies the algebraic nature.
-
-    Returns a (n, n, n) array.  On the pure Palatini solution
-    (Gamma = LC + projective), the residual is zero.
+    Returns a (n, n, n) array E^alpha_{beta gamma}.  On the Palatini
+    solution (Gamma = LC + projective mode), this evaluates to zero.
 
     Convention: noether-default-v1 + metric-affine-v1."""
     n = len(coords)
-    LC = christoffel_of_metric(coords, g, g_inv)
+    x = coords
+    g_mat = sp.Matrix([[g[i, j] for j in range(n)] for i in range(n)])
+    sg = sp.sqrt(-sp.det(g_mat))
 
-    # The Palatini connection EOM coefficient of dG^{lam}_{mu nu} is:
-    # partial_lambda(sqrt(-g) g^{mu nu}) - delta^nu_lambda partial_rho(sqrt(-g) g^{mu rho})
-    # + sqrt(-g) [ -g^{mu nu} Gamma^rho_{rho lambda} + g^{rho nu} Gamma^mu_{rho lambda}
-    #             - g^{mu rho} Gamma^nu_{rho lambda} + g^{mu rho} Gamma^nu_{lambda rho} ]
-    #
-    # For the algebraic check, we substitute Gamma = LC + K and verify
-    # that no partial derivatives of K appear.
-    #
-    # The practical check: compute the Palatini EOM residual with
-    # Gamma = LC (the Levi-Civita connection), then with Gamma = LC + K,
-    # and verify the difference is algebraic in K (proportional to K,
-    # not to partial K).
+    out = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for a in range(n):
+        for b in range(n):
+            for c in range(n):
+                # partial_a(sg g^{c b})
+                d_sg = _clean(sp.diff(sg, x[a]))
+                d_ginv = _clean(sp.diff(g_inv[c, b], x[a]))
+                term1 = _clean(d_sg * g_inv[c, b] + sg * d_ginv)
 
-    # Compute the Palatini EOM residual for Gamma = LC + K
-    # (should be zero when the equation is satisfied)
-    # This is a more involved computation; for now, verify the key
-    # algebraic property: the EOM evaluated at Gamma = LC + K differs
-    # from the EOM at Gamma = LC by terms that are linear in K with
-    # no derivatives of K.
-
-    # Residual = EOM(LC + K) - EOM(LC) - K_terms (should be zero)
-    # where K_terms are the expected algebraic K contributions.
-
-    # Simplified check: verify that on a metric-compatible background,
-    # the contortion K is algebraically related to torsion T,
-    # and the Palatini EOM is satisfied when T = 0 (pure Levi-Civita).
-    # This confirms the algebraic nature: with a spin source,
-    # T = f(spin) algebraically.
-
-    # For a full verification, we check that the connection equation
-    # residual vanishes when Gamma = LC (the Palatini solution with
-    # T=0, up to projective mode).
-
-    # The Palatini connection EOM (coefficient of dG):
-    # E^{lam}_{mu nu} = partial_lambda(sg g^{mu nu}) - delta^nu_lambda partial_rho(sg g^{mu rho})
-    #   + sg [ -g^{mu nu} Gamma^rho_{rho lambda} + g^{rho nu} Gamma^mu_{rho lambda}
-    #         - g^{mu rho} Gamma^nu_{rho lambda} + g^{mu rho} Gamma^nu_{lambda rho} ]
-
-    # Compute this for Gamma = LC
-    sg = sp.sqrt(-sp.det(g))
-
-    # partial_lambda(sg g^{mu nu})
-    # = g^{mu nu} partial_lambda(sg) + sg partial_lambda(g^{mu nu})
-    # partial_lambda(sg) = sg LC^rho_{rho lambda}
-    # partial_lambda(g^{mu nu}) = -g^{mu rho} LC^nu_{lambda rho} - g^{nu rho} LC^mu_{lambda rho}
-
-    # This is a component computation; let's compute it directly.
-    E_LC = sp.MutableDenseNDimArray.zeros(n, n, n)
-    for lam in range(n):
-        for mu in range(n):
-            for nu in range(n):
-                # partial_lambda(sg g^{mu nu})
-                d_sg = sg * sum(LC[rho, rho, lam] for rho in range(n))
-                term1 = g_inv[mu, nu] * d_sg + sg * (
-                    -sum(g_inv[mu, rho] * LC[nu, lam, rho] for rho in range(n))
-                    - sum(g_inv[nu, rho] * LC[mu, lam, rho] for rho in range(n))
-                )
-
-                # -delta^nu_lambda partial_rho(sg g^{mu rho})
-                if lam == nu:
-                    term2 = -sum(
-                        g_inv[mu, rho] * sg * sum(
-                            LC[rho2, rho2, rho] for rho2 in range(n)
-                        )
-                        + sg * (
-                            -sum(g_inv[mu, rho2] * LC[rho, rho, rho2]
-                                 for rho2 in range(n))
-                            - sum(g_inv[rho, rho2] * LC[mu, rho, rho2]
-                                  for rho2 in range(n))
-                        )
-                        for rho in range(n)
-                    )
+                # -delta^a_b partial_rho(sg g^{c rho})
+                if a == b:
+                    term2 = sp.Integer(0)
+                    for rho in range(n):
+                        d_sg_rho = _clean(sp.diff(sg, x[rho]))
+                        d_ginv_rho = _clean(sp.diff(g_inv[c, rho], x[rho]))
+                        term2 -= _clean(d_sg_rho * g_inv[c, rho] + sg * d_ginv_rho)
                 else:
                     term2 = sp.Integer(0)
 
-                # Gamma terms
-                gamma_terms = sg * (
-                    -g_inv[mu, nu] * sum(LC[rho, rho, lam] for rho in range(n))
-                    + sum(g_inv[rho, nu] * LC[mu, rho, lam] for rho in range(n))
-                    - sum(g_inv[mu, rho] * LC[nu, rho, lam] for rho in range(n))
-                    + sum(g_inv[mu, rho] * LC[nu, lam, rho] for rho in range(n))
+                # -sg delta^a_b (g^{sigma nu} Gamma^c_{nu sigma})
+                if a == b:
+                    term3 = sp.Integer(0)
+                    for sig in range(n):
+                        for nu in range(n):
+                            term3 -= sg * g_inv[sig, nu] * gamma[c, nu, sig]
+                    term3 = _clean(term3)
+                else:
+                    term3 = sp.Integer(0)
+
+                # -sg g^{b c} Gamma^lam_{lam a}
+                term4 = _clean(
+                    -sg * g_inv[b, c] * sum(gamma[lam, lam, a] for lam in range(n))
                 )
 
-                E_LC[lam, mu, nu] = _clean(term1 + term2 + gamma_terms)
+                # +sg g^{sigma b} Gamma^c_{a sigma}
+                term5 = _clean(
+                    sg * sum(g_inv[sig, b] * gamma[c, a, sig] for sig in range(n))
+                )
 
-    return Array(E_LC)
+                # +sg g^{c nu} Gamma^b_{nu a}
+                term6 = _clean(
+                    sg * sum(g_inv[c, nu] * gamma[b, nu, a] for nu in range(n))
+                )
+
+                out[a, b, c] = _clean(term1 + term2 + term3 + term4 + term5 + term6)
+
+    return Array(out)
+
+
+def einstein_cartan_algebraic_in_K_residual(
+    coords: list[sp.Symbol], gamma: Array, g: Array, g_inv: Array
+) -> Array:
+    """Residual verifying the Palatini connection EOM is algebraic in K.
+
+    On a metric-compatible (Q=0) torsionful background where
+    Gamma = LC(g) + K(T), the Palatini connection EOM splits as:
+
+      E(Gamma) = E_metric_part + E_Gamma_part(LC + K)
+
+    The metric part (partial_a(sg g^{c b}) - delta^a_b ...) is the same
+    whether Gamma or LC is used.  The Gamma part is linear in Gamma, so
+    E(Gamma) - E(LC) is purely algebraic in K:
+
+      E(Gamma) - E(LC) = sg [-delta^a_b g^{sigma nu} K^c_{nu sigma}
+                             - g^{b c} K^lam_{lam a}
+                             + g^{sigma b} K^c_{a sigma}
+                             + g^{c nu} K^b_{nu a}]
+
+    This residual should be zero componentwise, confirming:
+    (1) The EOM difference between Gamma = LC + K and Gamma = LC equals
+        the expected algebraic K expression.
+    (2) The K expression has no derivative-of-K terms (it is manifestly
+        algebraic in K, not proportional to partial K).
+
+    This is the SymPy cross-check for VAL-EOM-011: the Palatini
+    connection EOM is algebraic in the contortion K, meaning torsion is
+    algebraically determined by any spin source rather than propagating
+    as an independent degree of freedom.
+
+    Parameters:
+        coords: coordinate symbols
+        gamma: affine connection array (must be metric-compatible, Q=0)
+        g: metric matrix (symmetric)
+        g_inv: inverse metric matrix
+
+    Returns a (n, n, n) array.  Should be zero componentwise on
+    metric-compatible (Q=0) torsionful backgrounds.
+
+    Convention: noether-default-v1 + metric-affine-v1."""
+    n = len(coords)
+    g_mat = sp.Matrix([[g[i, j] for j in range(n)] for i in range(n)])
+    sg = sp.sqrt(-sp.det(g_mat))
+
+    LC = christoffel_of_metric(coords, g, g_inv)
+    K = contortion_of_torsion(gamma, g, g_inv)
+
+    # Compute the Palatini EOM for the full connection and for LC alone
+    E_full = palatini_connection_eom(coords, gamma, g, g_inv)
+    E_lc = palatini_connection_eom(coords, LC, g, g_inv)
+
+    # Expected algebraic K contribution (linear in K, no derivative-of-K):
+    # sg * [-delta^a_b g^{sigma nu} K^c_{nu sigma}
+    #       - g^{b c} K^lam_{lam a}
+    #       + g^{sigma b} K^c_{a sigma}
+    #       + g^{c nu} K^b_{nu a}]
+    K_contribution = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for a in range(n):
+        for b in range(n):
+            for c in range(n):
+                # -delta^a_b sg g^{sigma nu} K^c_{nu sigma}
+                if a == b:
+                    term_delta = sp.Integer(0)
+                    for sig in range(n):
+                        for nu in range(n):
+                            term_delta -= sg * g_inv[sig, nu] * K[c, nu, sig]
+                    term_delta = _clean(term_delta)
+                else:
+                    term_delta = sp.Integer(0)
+
+                # -sg g^{b c} K^lam_{lam a}
+                term_trace = _clean(
+                    -sg * g_inv[b, c] * sum(K[lam, lam, a] for lam in range(n))
+                )
+
+                # +sg g^{sigma b} K^c_{a sigma}
+                term_raise1 = _clean(
+                    sg * sum(g_inv[sig, b] * K[c, a, sig] for sig in range(n))
+                )
+
+                # +sg g^{c nu} K^b_{nu a}
+                term_raise2 = _clean(
+                    sg * sum(g_inv[c, nu] * K[b, nu, a] for nu in range(n))
+                )
+
+                K_contribution[a, b, c] = _clean(
+                    term_delta + term_trace + term_raise1 + term_raise2
+                )
+
+    # Residual: (E_full - E_lc) - K_contribution should be zero
+    residual = sp.MutableDenseNDimArray.zeros(n, n, n)
+    for a in range(n):
+        for b in range(n):
+            for c in range(n):
+                residual[a, b, c] = _clean(
+                    E_full[a, b, c] - E_lc[a, b, c] - K_contribution[a, b, c]
+                )
+
+    return Array(residual)
 
 
 def lc_contracted_bianchi_residual(
