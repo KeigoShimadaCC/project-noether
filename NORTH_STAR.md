@@ -12,6 +12,7 @@ Those come later, and they serve this document — not the other way around.
 
 | Document | Role |
 |---|---|
+| `README.md` | Front door: overview, install, quickstart, surface map |
 | `AGENTS.md` | Working guide for AI agents and contributors in this repo |
 | `docs/00_INDEX.md` | Map of all project documents |
 | `docs/01_RESEARCH.md` | Landscape: existing CAS kernels, prior art, what we build on |

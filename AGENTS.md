@@ -22,6 +22,8 @@ design or implementation choice is unclear, re-read sections 8 (principles) and 
 
 Read in this order when onboarding:
 
+0. `README.md` — overview, install, quickstart, and the command/API surface.
+   The fastest orientation; the documents below are authoritative.
 1. `NORTH_STAR.md` — vision, principles, anti-goals. The constitution.
 2. `docs/00_INDEX.md` — map of all documents and their status.
 3. `docs/01_RESEARCH.md` — the CAS landscape and prior art we build on.
@@ -71,6 +73,7 @@ These mirror the North Star principles in operational form.
 Current:
 
 ```
+README.md            Front door: overview, install, quickstart, surface map
 NORTH_STAR.md        Vision document
 AGENTS.md            This file
 docs/                Design and research documents (00 through 04)
