@@ -864,7 +864,7 @@ zero (dA) vs `−2AF` (covcurl).
 | 6 | cubic Galileon (Horndeski G3) | coupling times box phi, two-pass IBP, coupling chain rule, both EOMs by composition | H3 |
 | 7 | k-essence / general scalar Horndeski | X-dependent coupling, block decomposition, no per-theory template | H3 |
 | 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |
-| fT | metric teleparallel f(T) | curvature-free constraint, boundary-term identity T = -R + B, gated derivation | H3 |
+| fT | metric teleparallel f(T) | boundary-term identity T = -R + B, tetrad/Weitzenbock formulation, Cadabra residue-zero | H3 |
 | vector-affine | Maxwell on metric-affine background | field-strength choice (dA vs nabla A), zero vs nonzero hypermomentum, T/Q correction | M3 |
 | EC-algebraic | Einstein-Cartan algebraic torsion | Palatini connection EOM algebraic in K (no dK terms), SymPy cross-check on Q=0 T!=0 backgrounds | M3 |
 | ST-affine | Palatini scalar-tensor F(phi)R(Gamma) | three variations (g, Gamma, phi), dF non-metricity source, boundary assumption, LC limit, genuine residue-zero check on connection EOM via Euler-Lagrange target | M3 |
@@ -876,7 +876,7 @@ canonical forms, required check verdicts). The executable form is created when
 implementation starts, and the worked solutions above get their kernel-verified
 sign-pinning pass at that time.
 
-### f(T) eval (gated)
+### f(T) eval (verified, tetrad/Weitzenbock formulation)
 
 **Action:** S = int sqrt(-g) f(T), where T is the torsion scalar (the
 teleparallel equivalent of the Ricci scalar).
@@ -884,13 +884,20 @@ teleparallel equivalent of the Ricci scalar).
 **Geometry:** teleparallel (curvature-free, metric-compatible, torsionful).
 `ConnectionSpec` carries `curvature_free=True`, `family="teleparallel"`.
 
-**Status: gated.** The derivation infrastructure does not yet support
-constrained-connection variation (where the connection depends on the metric
-through the curvature-free constraint R(Gamma) = 0). The linear case
-f(T) = T is equivalent to GR by the boundary-term identity T = -R + 2 nabla_mu
-T^mu. SymPy cross-checks verify that Gamma = LC + K(T) is metric-compatible
-with nonzero torsion, and that the curvature-free constraint is nontrivial
-(arbitrary torsion does not produce R = 0).
+**Status: verified (tetrad/Weitzenbock formulation).** The linear f(T) = T
+EOM is derived via the boundary-term identity T = -R + 2 nabla_mu T^mu,
+which reduces the variation to the Einstein-Hilbert path (G_{mu nu} = 0).
+The Cadabra template `eom_ft_linear_tetrad` exercises this path and passes
+the residue check (residue_zero == True). The SymPy componentwise
+cross-check confirms the EOM formula and the Weitzenbock geometry on a
+metric-compatible torsionful (T!=0, Q=0) background with the
+tetrad-teleparallel-v1 convention block. The Weitzenbock connection
+Gamma^rho_{mu nu} = E_a^rho partial_mu e^a_nu is flat (R=0),
+metric-compatible (Q=0), and torsionful (T!=0). For general f(T) the field
+equation is
+f'(T) [G_{mu nu} - (1/2) g_{mu nu} T] + S_{mu nu}^rho nabla_rho f'(T)
++ (1/2) g_{mu nu} [f(T) - T f'(T)] = 0,
+where S^{rho mu nu} is the modified superpotential.
 
 ### f(Q) eval (verified, coincident gauge)
 

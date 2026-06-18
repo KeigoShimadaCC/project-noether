@@ -1981,3 +1981,136 @@ meld(diff);
 print("NOETHER_CHECK: algebraic_in_K=" + str(str(diff) == "0"))
 """,
 )
+
+# ---------------------------------------------------------------------------
+# Vector-affine eval: Maxwell EOM on a metric-affine background (VAL-EOM-020).
+#
+# Three templates covering the two field-strength choices (F=dA, F=nabla A)
+# and their hypermomentum consequences (VAL-EOM-021).
+#
+# 1. vector_affine_dA_eom: dA Maxwell EOM residue check.
+#    With F = dA (exterior derivative), the EOM is nabla^{LC}_mu F^{mu nu} = 0.
+#    The action is varied w.r.t. A only (g and Gamma are background). Because
+#    F = dA does not depend on Gamma, the variation uses nabla with the
+#    LC-substitution approach (valid since F = 2 partial_{[mu} A_{nu]}).
+#    Residue check: the variation result minus
+#    sg g^{mu alpha} g^{nu beta} nabla_mu F_{alpha beta} dA_nu must be 0.
+#
+# 2. vector_affine_dA_hypermomentum: dA choice yields zero hypermomentum.
+#    The action S = -1/4 int sqrt(-g) F_{mu nu} F^{mu nu} with F = dA has
+#    no Gamma dependence, so varying w.r.t. G^lam_{mu nu} gives zero
+#    (no dG terms appear). This confirms the gauge field does not source
+#    the connection equation with F = dA.
+#
+# 3. vector_affine_covcurl_hypermomentum: covariant-curl choice yields
+#    nonzero hypermomentum. With F = nabla A, the action depends on Gamma
+#    through the covariant curl, so varying w.r.t. G^lam_{mu nu} produces
+#    nonzero dG terms. The hypermomentum is Delta^lam_{mu nu} = -2 A_lam
+#    F^{mu nu} (antisymmetric in mu, nu), a purely spin-type coupling.
+#
+# Conventions: noether-default-v1 + metric-affine-v1.
+# ---------------------------------------------------------------------------
+
+register(
+    "vector_affine_dA_eom",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\nabla{#}::Derivative.
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+F_{\mu\nu}::AntiSymmetric.
+sg::LaTeXForm("\sqrt{-g}").
+{F_{\mu\nu}, A_{\mu}, dA_{\mu}}::Depends(\nabla{#}).
+
+ex := \int{ - 1/4 sg g^{\mu\alpha} g^{\nu\beta} F_{\mu\nu} F_{\alpha\beta} }{x};
+vary(ex, $F_{\mu\nu} -> \nabla_{\mu}{dA_{\nu}} - \nabla_{\nu}{dA_{\mu}}$);
+distribute(ex);
+canonicalise(ex);
+integrate_by_parts(ex, $dA_{\mu}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+substitute(ex, $\int{A??}{x} -> A??$);
+eliminate_kronecker(ex);
+sort_product(ex);
+canonicalise(ex);
+rename_dummies(ex);
+print("NOETHER_RESULT: " + str(ex))
+
+target := sg g^{\mu\alpha} g^{\nu\beta} \nabla_{\mu}{F_{\alpha\beta}} dA_{\nu};
+distribute(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+
+residue := @(ex) - @(target);
+distribute(residue);
+eliminate_kronecker(residue);
+sort_product(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: dA_eom_residue_zero=" + str(str(residue) == "0"))
+""",
+)
+
+register(
+    "vector_affine_dA_hypermomentum",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\partial{#}::PartialDerivative.
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+sg::LaTeXForm("\sqrt{-g}").
+{g_{\mu\nu}, g^{\mu\nu}, sg, A_{\mu}, dG^{\lambda}_{\mu\nu}}::Depends(\partial{#}).
+
+# Action with F = dA (no connection dependence)
+ex := \int{ - 1/4 sg g^{\mu\alpha} g^{\nu\beta}
+  (\partial_{\mu}{A_{\nu}} - \partial_{\nu}{A_{\mu}})
+  (\partial_{\alpha}{A_{\beta}} - \partial_{\beta}{A_{\alpha}}) }{x};
+vary(ex, $G^{\lambda}_{\mu\nu} -> dG^{\lambda}_{\mu\nu}$);
+distribute(ex);
+canonicalise(ex);
+has_dG = "dG" in str(ex);
+print("NOETHER_CHECK: dA_hypermomentum_zero=" + str(not has_dG))
+""",
+)
+
+register(
+    "vector_affine_covcurl_hypermomentum",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\partial{#}::PartialDerivative.
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+sg::LaTeXForm("\sqrt{-g}").
+{g_{\mu\nu}, g^{\mu\nu}, sg, A_{\mu}, dG^{\lambda}_{\mu\nu}}::Depends(\partial{#}).
+
+# Action with F = nabla A (connection-dependent)
+ex := \int{ - 1/4 sg g^{\mu\alpha} g^{\nu\beta}
+  (\partial_{\mu}{A_{\nu}} - G^{\lambda}_{\mu\nu} A_{\lambda}
+   - \partial_{\nu}{A_{\mu}} + G^{\lambda}_{\nu\mu} A_{\lambda})
+  (\partial_{\alpha}{A_{\beta}} - G^{\rho}_{\alpha\beta} A_{\rho}
+   - \partial_{\beta}{A_{\alpha}} + G^{\rho}_{\beta\alpha} A_{\rho}) }{x};
+vary(ex, $G^{\lambda}_{\mu\nu} -> dG^{\lambda}_{\mu\nu}$);
+distribute(ex);
+canonicalise(ex);
+has_dG = "dG" in str(ex);
+print("NOETHER_CHECK: covcurl_hypermomentum_nonzero=" + str(has_dG))
+""",
+)

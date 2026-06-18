@@ -447,30 +447,14 @@ def _vector_affine() -> EvalSpec:
                 expr=m.target_eom_dA,
                 tex_suffix=r" = 0",
                 ladder=lambda: [WellFormedCheck(expected_free=[m.NU])],
-                component_tasks=(
-                    (
-                        "affine-LC divergence difference equals T/Q correction",
-                        {
-                            "check": "identity",
-                            "lhs": "affine_div_F - lc_div_F",
-                            "rhs": "TQ_correction",
-                        },
-                    ),
-                    (
-                        "dA hypermomentum is zero",
-                        {"check": "zero", "expr": "dA_hypermomentum"},
-                    ),
-                    (
-                        "covcurl hypermomentum is -2AF (antisymmetric)",
-                        {"check": "antisymmetric", "expr": "covcurl_hypermomentum"},
-                    ),
-                ),
+                component_tasks=(),
             ),
         ),
         notes=(
             "VAL-EOM-020: the vector EOM uses the full-connection divergence "
             "(T/Q terms present); verified by Cadabra residue (dA) and SymPy "
-            "cross-check (affine-LC divergence identity). "
+            "cross-check (affine-LC divergence identity in "
+            "tests/test_vector_eom_affine.py). "
             "VAL-EOM-021: dA choice yields zero hypermomentum (no Gamma "
             "dependence); covcurl choice yields Delta=-2AF (spin-type); both "
             "verified by Cadabra and SymPy. The covcurl EOM Cadabra residue "

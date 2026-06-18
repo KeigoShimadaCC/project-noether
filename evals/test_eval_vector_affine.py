@@ -30,11 +30,6 @@ from noether.kernels.sympy_kernel import SympyKernelAdapter
 from noether.orchestrator.planner import AmbiguityBlocked, build_plan
 from noether.verify.checks import WellFormedCheck
 from noether.verify.ladder import run_ladder
-from tests.test_vector_eom_affine import (
-    _COVCURL_HYPERMOMENTUM_SCRIPT,
-    _DA_EOM_SCRIPT,
-    _DA_HYPERMOMENTUM_SCRIPT,
-)
 
 
 class TestElicitationGate:
@@ -85,7 +80,7 @@ class TestKernelDerivation:
             KernelTask(
                 capability=Capability.SUBSTITUTE,
                 description="dA Maxwell EOM on metric-affine background",
-                payload={"script": _DA_EOM_SCRIPT},
+                payload={"template": "vector_affine_dA_eom"},
             )
         )
         assert result.raw.returncode == 0, result.raw.stderr
@@ -98,7 +93,7 @@ class TestKernelDerivation:
             KernelTask(
                 capability=Capability.SUBSTITUTE,
                 description="dA hypermomentum on metric-affine background",
-                payload={"script": _DA_HYPERMOMENTUM_SCRIPT},
+                payload={"template": "vector_affine_dA_hypermomentum"},
             )
         )
         assert result.raw.returncode == 0, result.raw.stderr
@@ -111,7 +106,7 @@ class TestKernelDerivation:
             KernelTask(
                 capability=Capability.SUBSTITUTE,
                 description="covcurl hypermomentum on metric-affine background",
-                payload={"script": _COVCURL_HYPERMOMENTUM_SCRIPT},
+                payload={"template": "vector_affine_covcurl_hypermomentum"},
             )
         )
         assert result.raw.returncode == 0, result.raw.stderr
