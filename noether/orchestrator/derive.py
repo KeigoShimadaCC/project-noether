@@ -755,6 +755,65 @@ _ADM_AFFINE_OUTPUTS: list[tuple[str, str, str]] = [
     ),
 ]
 
+_ADM_MATTER_HYPERMOMENTUM_TEX = (
+    r"\Delta^{\lambda}_{\mu\nu} = \tau^{\lambda}_{\mu\nu}"
+    r" + \tfrac{1}{n}\delta^{\lambda}_{\mu}\Delta_{\nu}"
+    r" + \sigma^{\lambda}_{\mu\nu}"
+    r";\;\text{spin/dilation/shear enter constraint structure}"
+)
+
+_ADM_MATTER_HYPERMOMENTUM_NARRATIVE = (
+    "When matter couples to the independent connection, the hypermomentum "
+    "Delta^lambda_{mu nu} enters the connection-sector constraints as a "
+    "source. The spin part tau (antisymmetric, traceless) sources the "
+    "torsion primary constraint, the dilation trace Delta_nu sources "
+    "the projective constraint, and the shear part sigma (symmetric, "
+    "traceless) sources the non-metricity constraint. On a metric-compatible "
+    "background (Q=0) the Dirac chain closes; with non-metricity it is gated."
+)
+
+
+def _action_has_hypermomentum(npr: NPR) -> bool:
+    """Determine whether the action has matter that couples to the
+    independent connection (has nonzero hypermomentum).
+
+    The hypermomentum Delta^lambda_{mu nu} is nonzero when any matter
+    field in the action depends on the connection Gamma. Detection:
+    - A vector/gauge field with F = covariant curl has hypermomentum
+      (Delta = -2 A_lambda F^{mu nu}, nonzero).
+    - A gauge field with F = dA has zero hypermomentum.
+    - A scalar in F(phi) R(Gamma) Palatini has connection coupling
+      through the non-constant F(phi) term (dF sources the connection
+      equation), contributing to the disformation/non-metricity source.
+    - Pure gravity (only metric and connection) has zero hypermomentum.
+
+    Convention: noether-default-v1 + metric-affine-v1.
+    """
+    # Check for vector/gauge fields with covariant-curl field-strength.
+    # In the NPR schema, a gauge potential is a rank-1 tensor-field.
+    field_strength = getattr(
+        npr.conventions, "field_strength_definition", "exterior-derivative"
+    )
+    has_gauge_covcurl = field_strength == "covariant-curl" and any(
+        o.kind == "tensor-field" and o.rank == 1 for o in npr.objects
+    )
+
+    # Check for scalar fields that could couple through F(phi)R(Gamma)
+    has_scalar_coupling = any(
+        o.kind == "scalar-field" for o in npr.objects
+    )
+
+    # If the connection is independent and there is matter (beyond
+    # just the metric and connection), the action may have hypermomentum
+    has_only_geometry = all(
+        o.kind in ("metric", "connection") for o in npr.objects
+    )
+
+    return (
+        has_gauge_covcurl
+        or (has_scalar_coupling and not has_only_geometry)
+    )
+
 
 def _ladder_from_components(computed: ComputedResult, verified: bool, detail: str) -> LadderReport:
     """Represent the SymPy component-eval suite as a one-rung ladder. Each
@@ -949,6 +1008,67 @@ def derive_adm(
                     detail=piece_detail,
                     bundle_path=bundle_path,
                     narrative=piece_narrative,
+                )
+            )
+
+        # --- Matter hypermomentum contribution (VAL-ADM-015) ---
+        # When the action has matter that couples to the independent
+        # connection (has hypermomentum), a constraint piece names the
+        # matter contribution. Pure-gravity sessions carry no such piece.
+        has_matter_hypermomentum = _action_has_hypermomentum(npr)
+        if has_matter_hypermomentum:
+            matter_verified = affine_verified
+            matter_detail = affine_detail
+            matter_checks = affine_checks
+            matter_narrative = _ADM_MATTER_HYPERMOMENTUM_NARRATIVE
+            if not dirac_closeable:
+                matter_verified = False
+                matter_detail = (
+                    "Matter hypermomentum enters the connection-sector "
+                    "constraints as a source (spin/dilation/shear), but "
+                    "the Dirac chain cannot be closed for the general "
+                    "metric-affine case with non-metricity (Q != 0): "
+                    "the disformation L(Q) introduces additional structure "
+                    "that requires action-specific analysis. "
+                    "Gated with a stated reason."
+                )
+            else:
+                matter_detail = (
+                    "Matter hypermomentum enters the connection-sector "
+                    "constraints as a source: spin (antisymmetric, "
+                    "traceless) sources the torsion primary constraint, "
+                    "dilation (trace vector) sources the projective "
+                    "constraint, shear (symmetric, traceless) sources "
+                    "the non-metricity constraint. "
+                    + affine_detail
+                )
+            derivations.append(
+                FieldDerivation(
+                    wrt="matter hypermomentum contribution",
+                    kind="adm",
+                    capability=Capability.ADM,
+                    result_id=result_id,
+                    result_tex=_ADM_MATTER_HYPERMOMENTUM_TEX,
+                    verified=matter_verified,
+                    checks=matter_checks,
+                    kernel_name=(
+                        affine_computed.kernel_name
+                        if affine_computed
+                        else computed.kernel_name
+                    ),
+                    kernel_version=(
+                        affine_computed.kernel_version
+                        if affine_computed
+                        else computed.kernel_version
+                    ),
+                    script=(
+                        affine_computed.script.source
+                        if affine_computed
+                        else computed.script.source
+                    ),
+                    detail=matter_detail,
+                    bundle_path=bundle_path,
+                    narrative=matter_narrative,
                 )
             )
 

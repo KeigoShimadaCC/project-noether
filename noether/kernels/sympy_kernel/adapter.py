@@ -63,7 +63,11 @@ from noether.kernels.base import (
     KernelScript,
     KernelTask,
 )
-from noether.kernels.sympy_kernel.adm import adm_affine_sample_1p2, adm_sample_1p2
+from noether.kernels.sympy_kernel.adm import (
+    adm_affine_matter_sample_1p2,
+    adm_affine_sample_1p2,
+    adm_sample_1p2,
+)
 from noether.kernels.sympy_kernel.evaluator import all_zero, evaluate
 from noether.kernels.sympy_kernel.geometry import (
     Array,
@@ -147,6 +151,25 @@ class SympyKernelAdapter:
                 lambda: adm_affine_sample_1p2(seed).run_all_affine(),
                 "adm-affine background: deterministic nondegenerate 1+2 sample "
                 "with general affine connection (adm_affine_sample_1p2)",
+            )
+        if check == "adm-affine-matter-1p2":
+            seed = int(payload.get("seed", 42))
+            nonmetricity = bool(payload.get("nonmetricity", True))
+            affine, Delta = adm_affine_matter_sample_1p2(
+                seed, nonmetricity=nonmetricity
+            )
+            base_checks = affine.run_all_affine()
+            matter_check = affine.check_matter_hypermomentum_constraints(Delta)
+            all_checks = {
+                **base_checks,
+                "matter-hypermomentum-constraints": matter_check,
+            }
+            return self._run_suite(
+                payload,
+                lambda: all_checks,
+                "adm-affine-matter background: deterministic 1+2 sample "
+                "with general affine connection and matter hypermomentum "
+                "(adm_affine_matter_sample_1p2)",
             )
         if check == "spectrum-scalar-tensor-minkowski":
             return self._run_suite(

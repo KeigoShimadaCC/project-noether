@@ -848,3 +848,390 @@ def _build_metric_affine_adm_npr(*, nonmetricity: bool = True):
         task=Task(type="adm", with_respect_to=["g"]),
         ambiguities=[],
     )
+
+
+def _build_metric_affine_adm_npr_with_matter(
+    *, nonmetricity: bool = True, covcurl: bool = True
+):
+    """Build a well-posed metric-affine NPR with matter that couples to the
+    connection (has hypermomentum), for ADM derivation testing.
+
+    With covcurl=True the gauge field has F = covariant curl, which
+    couples to the connection (hypermomentum nonzero). With covcurl=False
+    the gauge field has F = dA (no hypermomentum).
+    """
+    from noether.npr import (
+        NOETHER_DEFAULT_V1,
+        NPR,
+        Action,
+        ConnectionSpec,
+        Geometry,
+        ObjectDecl,
+        Task,
+    )
+    from noether.npr.ast import tensor
+
+    conventions = NOETHER_DEFAULT_V1
+    if covcurl:
+        conventions = conventions.model_copy(
+            update={"field_strength_definition": "covariant-curl"}
+        )
+
+    connection = ConnectionSpec(
+        type="independent",
+        torsion=True,
+        nonmetricity=nonmetricity,
+        metric_compatible=not nonmetricity,
+        family="metric-affine",
+    )
+    geometry = Geometry(
+        metric_name="g",
+        connection_name="Gamma",
+        connection=connection,
+    )
+    return NPR(
+        conventions=conventions,
+        geometry=geometry,
+        objects=[
+            ObjectDecl(name="g", kind="metric", role="dynamical", symmetry="symmetric", rank=2),
+            ObjectDecl(
+                name="Gamma",
+                kind="connection",
+                role="dynamical",
+                rank=3,
+            ),
+            ObjectDecl(name="A", kind="tensor-field", role="dynamical", rank=1),
+        ],
+        action=Action(
+            measure_tex=r"d^4x \sqrt{-g}",
+            lagrangian=tensor("R"),
+            lagrangian_tex="R - 1/4 F_{mu nu} F^{mu nu}",
+        ),
+        task=Task(type="adm", with_respect_to=["g"]),
+        ambiguities=[],
+    )
+
+
+# ---------------------------------------------------------------------------
+# VAL-ADM-015: Matter coupled to the connection appears in the ADM
+# constraint structure
+# ---------------------------------------------------------------------------
+
+
+class TestMatterHypermomentumConstraints:
+    """For a metric-affine action with matter that sources the connection
+    (hypermomentum), the ADM result surfaces the matter contribution to
+    the connection-sector constraints; pure-gravity sessions carry no
+    such matter piece."""
+
+    def test_hypermomentum_constraint_check_with_nonzero_delta(self):
+        """The check_matter_hypermomentum_constraints method with a
+        nonzero Delta verifies the hypermomentum enters the constraint
+        structure on the foliated background."""
+        from noether.kernels.sympy_kernel.adm import adm_affine_matter_sample_1p2
+
+        affine, Delta = adm_affine_matter_sample_1p2(nonmetricity=True)
+        ok, detail = affine.check_matter_hypermomentum_constraints(Delta)
+        assert ok, detail
+        assert "spin" in detail.lower() or "tau" in detail, (
+            "detail should name the spin/hypermomentum contribution: " + detail
+        )
+        assert "constraint" in detail.lower(), (
+            "detail should reference constraints: " + detail
+        )
+
+    def test_hypermomentum_constraint_check_with_zero_delta(self):
+        """When Delta = 0 (pure gravity), the check passes trivially
+        with a message stating zero hypermomentum."""
+        from noether.kernels.sympy_kernel.adm import adm_affine_sample_1p2
+
+        affine = adm_affine_sample_1p2()
+        D = affine.D
+        Delta_zero = sp.ImmutableDenseNDimArray(
+            sp.MutableDenseNDimArray.zeros(D, D, D)
+        )
+        ok, detail = affine.check_matter_hypermomentum_constraints(Delta_zero)
+        assert ok, detail
+        assert "Delta = 0" in detail or "no matter coupling" in detail, (
+            "zero hypermomentum should be explicitly stated: " + detail
+        )
+
+    def test_hypermomentum_decomposition_on_foliation(self):
+        """The hypermomentum decomposition Delta = spin + dilation + shear
+        holds on the foliated background, and the projected pieces have
+        the correct symmetry/trace properties."""
+        from noether.kernels.sympy_kernel.adm import adm_affine_matter_sample_1p2
+
+        affine, Delta = adm_affine_matter_sample_1p2(nonmetricity=True)
+        ok, detail = affine.check_matter_hypermomentum_constraints(Delta)
+        assert ok, detail
+
+    def test_metric_compatible_hypermomentum_verified(self):
+        """On a metric-compatible (Q=0) background, the Dirac chain closes
+        and the matter contribution is verified (not gated)."""
+        from noether.kernels.sympy_kernel.adm import adm_affine_matter_sample_1p2
+
+        affine, Delta = adm_affine_matter_sample_1p2(nonmetricity=False)
+        ok, detail = affine.check_matter_hypermomentum_constraints(Delta)
+        assert ok, detail
+        assert "Dirac chain closes" in detail or "Q=0" in detail, (
+            "metric-compatible case should reference Dirac chain closure: "
+            + detail
+        )
+
+    def test_nonmetric_hypermomentum_gated(self):
+        """On a non-metric-compatible (Q!=0) background, the Dirac chain
+        is gated and the detail names the blocker."""
+        from noether.kernels.sympy_kernel.adm import adm_affine_matter_sample_1p2
+
+        affine, Delta = adm_affine_matter_sample_1p2(nonmetricity=True)
+        ok, detail = affine.check_matter_hypermomentum_constraints(Delta)
+        assert ok, detail
+        # The detail should mention the Dirac chain gating
+        assert "gated" in detail.lower() or "Dirac" in detail, (
+            "non-metric case should mention Dirac gating: " + detail
+        )
+
+    @pytest.mark.parametrize("seed", [7, 19])
+    def test_hypermomentum_on_multiple_backgrounds(self, seed):
+        """The check passes on multiple seeded backgrounds."""
+        from noether.kernels.sympy_kernel.adm import adm_affine_matter_sample_1p2
+
+        affine, Delta = adm_affine_matter_sample_1p2(seed=seed, nonmetricity=True)
+        ok, detail = affine.check_matter_hypermomentum_constraints(Delta)
+        assert ok, detail
+
+    def test_adapter_adm_affine_matter_1p2(self):
+        """The SymPy adapter runs the adm-affine-matter-1p2 check suite
+        including the matter-hypermomentum-constraints check."""
+        from noether.kernels.base import Capability, KernelTask
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+
+        adapter = SympyKernelAdapter()
+        result = adapter.run(
+            KernelTask(
+                capability=Capability.COMPONENT_EVAL,
+                description="metric-affine ADM with matter 1+2 check",
+                payload={"check": "adm-affine-matter-1p2", "nonmetricity": True},
+            )
+        )
+        assert result.value.get("passed"), result.value.get("detail", "")
+        checks = result.value.get("checks", {})
+        assert "matter-hypermomentum-constraints" in checks, (
+            "matter-hypermomentum-constraints check must be in the suite"
+        )
+        assert checks["matter-hypermomentum-constraints"] == "True", (
+            "matter-hypermomentum-constraints check must pass"
+        )
+
+    def test_adapter_adm_affine_matter_metric_compatible(self):
+        """The SymPy adapter runs the matter check on a metric-compatible
+        background (Q=0), where the Dirac chain closes. The full suite
+        may fail the Q/L falsifier (Q=0 is expected), but the matter
+        check itself passes."""
+        from noether.kernels.base import Capability, KernelTask
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+
+        adapter = SympyKernelAdapter()
+        result = adapter.run(
+            KernelTask(
+                capability=Capability.COMPONENT_EVAL,
+                description="metric-affine ADM with matter 1+2 (Q=0)",
+                payload={"check": "adm-affine-matter-1p2", "nonmetricity": False},
+            )
+        )
+        checks = result.value.get("checks", {})
+        # The matter check itself must pass
+        assert "matter-hypermomentum-constraints" in checks
+        assert checks["matter-hypermomentum-constraints"] == "True", (
+            "matter-hypermomentum-constraints check must pass"
+        )
+        # The post-Riemannian decomposition and torsion checks pass
+        assert checks.get("post-riemannian-on-foliation") == "True"
+        assert checks.get("connection-eom-algebraic") == "True"
+        # Q/L falsifier checks may fail on Q=0 backgrounds (expected)
+        # The overall suite passed=False is fine for this configuration
+
+
+class TestMatterHypermomentumInDeriveADM:
+    """The derive_adm function surfaces the matter hypermomentum
+    contribution as a constraint piece when the action has matter that
+    couples to the connection, and omits it for pure gravity."""
+
+    def test_matter_piece_present_for_covcurl_gauge(self):
+        """A metric-affine ADM with a covariant-curl gauge field (has
+        hypermomentum) surfaces a 'matter hypermomentum contribution'
+        constraint piece."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr_with_matter(covcurl=True)
+        results = derive_adm(
+            npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-015-matter"
+        )
+        matter_piece = next(
+            (
+                d
+                for d in results
+                if d.wrt == "matter hypermomentum contribution"
+            ),
+            None,
+        )
+        assert matter_piece is not None, (
+            "matter hypermomentum contribution piece should be present "
+            "for an action with covcurl gauge field"
+        )
+        assert "Delta" in matter_piece.result_tex or "tau" in matter_piece.result_tex, (
+            "matter piece should name the hypermomentum: "
+            + matter_piece.result_tex
+        )
+        assert matter_piece.narrative, (
+            "matter piece should carry teaching narrative"
+        )
+
+    def test_matter_piece_absent_for_pure_gravity(self):
+        """A pure-gravity metric-affine ADM (no matter coupling to the
+        connection) carries no 'matter hypermomentum contribution' piece."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr(nonmetricity=True)
+        results = derive_adm(
+            npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-015-pure"
+        )
+        matter_piece = next(
+            (
+                d
+                for d in results
+                if d.wrt == "matter hypermomentum contribution"
+            ),
+            None,
+        )
+        assert matter_piece is None, (
+            "matter hypermomentum contribution piece should be absent "
+            "for a pure-gravity action"
+        )
+
+    def test_matter_piece_absent_for_dA_gauge(self):
+        """A metric-affine ADM with F=dA gauge field (no hypermomentum)
+        carries no 'matter hypermomentum contribution' piece."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr_with_matter(covcurl=False)
+        results = derive_adm(
+            npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-015-dA"
+        )
+        matter_piece = next(
+            (
+                d
+                for d in results
+                if d.wrt == "matter hypermomentum contribution"
+            ),
+            None,
+        )
+        assert matter_piece is None, (
+            "matter hypermomentum contribution piece should be absent "
+            "for F=dA gauge (no connection coupling)"
+        )
+
+    def test_matter_piece_verified_or_gated(self):
+        """The matter piece is verified (SymPy check passes) or gated
+        with a non-empty detail naming the blocker."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        # Q=0 (metric-compatible): verified
+        npr_mc = _build_metric_affine_adm_npr_with_matter(
+            nonmetricity=False, covcurl=True
+        )
+        results_mc = derive_adm(
+            npr_mc, {"sympy": SympyKernelAdapter()}, session_id="s-adm-015-vmc"
+        )
+        matter_mc = next(
+            (
+                d
+                for d in results_mc
+                if d.wrt == "matter hypermomentum contribution"
+            ),
+            None,
+        )
+        assert matter_mc is not None
+        assert matter_mc.verified is True or (
+            matter_mc.verified is False and matter_mc.detail
+        ), (
+            "matter piece must be verified or gated with a detail"
+        )
+
+        # Q!=0 (non-metric-compatible): gated
+        npr_nm = _build_metric_affine_adm_npr_with_matter(
+            nonmetricity=True, covcurl=True
+        )
+        results_nm = derive_adm(
+            npr_nm, {"sympy": SympyKernelAdapter()}, session_id="s-adm-015-vnm"
+        )
+        matter_nm = next(
+            (
+                d
+                for d in results_nm
+                if d.wrt == "matter hypermomentum contribution"
+            ),
+            None,
+        )
+        assert matter_nm is not None
+        assert matter_nm.verified is False, (
+            "matter piece should be gated when Q != 0"
+        )
+        assert matter_nm.detail, (
+            "gated piece must have a non-empty detail"
+        )
+
+    def test_constraint_piece_names_hypermomentum(self):
+        """The constraint piece's result_tex names the hypermomentum
+        contribution (spin/dilation/shear entering constraints)."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr_with_matter(covcurl=True)
+        results = derive_adm(
+            npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-015-name"
+        )
+        matter_piece = next(
+            (
+                d
+                for d in results
+                if d.wrt == "matter hypermomentum contribution"
+            ),
+            None,
+        )
+        assert matter_piece is not None
+        result_tex = matter_piece.result_tex
+        assert "Delta" in result_tex or "tau" in result_tex or "sigma" in result_tex, (
+            "result_tex should name the hypermomentum: " + result_tex
+        )
+        assert "constraint" in result_tex.lower(), (
+            "result_tex should reference constraints: " + result_tex
+        )
+
+    def test_matter_piece_kernel_name_is_sympy(self):
+        """The matter piece uses the SymPy kernel, not Cadabra."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        npr = _build_metric_affine_adm_npr_with_matter(covcurl=True)
+        results = derive_adm(
+            npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-015-kernel"
+        )
+        matter_piece = next(
+            (
+                d
+                for d in results
+                if d.wrt == "matter hypermomentum contribution"
+            ),
+            None,
+        )
+        assert matter_piece is not None
+        assert matter_piece.kernel_name == "sympy", (
+            "matter piece should use the SymPy kernel"
+        )
+

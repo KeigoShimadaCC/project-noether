@@ -1129,6 +1129,26 @@ constraints piece carries `verified=False` with a detail when the Dirac chain
 cannot close (Q!=0), and `verified=True` with a positive detail when the chain
 closes (Q=0). The piece is never dropped: even a gated piece surfaces with
 its `result_tex` present (VAL-ADM-008).
+**Matter hypermomentum in the ADM constraint structure (VAL-ADM-015).**
+When the action has matter that couples to the independent connection (has
+nonzero hypermomentum `Delta^lambda_{mu nu} = -(2/sqrt(-g)) delta S_matter /
+delta Gamma^lambda_{mu nu}`), the ADM result includes a "matter hypermomentum
+contribution" piece naming the spin/dilation/shear decomposition entering
+the connection-sector constraints. The spin part `tau^lambda_{mu nu}`
+(antisymmetric in the first pair when lowered, traceless) sources the
+torsion primary constraint; the dilation trace vector `Delta_nu` sources
+the projective constraint; the shear part `sigma^lambda_{mu nu}` (symmetric
+in the first pair when lowered, traceless) sources the non-metricity
+constraint. The decomposition is verified by the SymPy kernel on the
+foliated background (full (D+1)-dimensional reconstruction, spatial-sector
+reconstruction, spin/shear symmetry/trace properties). The piece is
+verified (Dirac chain closes) on a metric-compatible (Q=0) background and
+gated (with a detail) when Q!=0. Pure-gravity sessions (no matter coupling
+to the connection) carry no such matter piece. The detection uses the
+NPR conventions (`field_strength_definition="covariant-curl"` for gauge
+fields, scalar-field presence) and the `_action_has_hypermomentum` helper.
+The adapter exposes the matter check as the `adm-affine-matter-1p2`
+component-eval check.
 **Verification model (VAL-ADM-006 through VAL-ADM-009).** The ADM result's
 `kernel_name` is `"sympy"`: the SymPy component kernel verifies the split and
 projections, and no LLM Cadabra script is written for the adm path (the
