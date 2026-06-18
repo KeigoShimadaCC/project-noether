@@ -30,7 +30,29 @@ covariant derivative. For the linear case f(Q) = Q, this means
 S_Q = S_GR + boundary, so the EOM is G_{mu nu} = 0 (identical to
 GR up to a boundary term).
 
-The general f(Q) field equation (metric form, coincident gauge):
+Two variational principles are at work in the tests below:
+
+  1. Coincident-gauge (Cadabra-verified): Gamma=0 is fixed and only the
+     metric is varied. The boundary-term identity Q = R + boundary makes
+     the f(Q) = Q variation reduce to the Einstein-Hilbert variation, so
+     the metric EOM is G_{mu nu} = 0. This is what the Cadabra template
+     eom_fq_linear_coincident checks (residue_zero == True).
+
+  2. Metric-affine (SymPy-verified): both g and Gamma are varied
+     independently. The metric EOM from the metric-affine variation is
+     E_{mu nu} = f'(Q)[G_{mu nu} - (1/2) g_{mu nu} Q] + ...,
+     which includes the -(1/2) f'(Q) g_{mu nu} Q term absent from the
+     coincident-gauge form (that term is absorbed by the boundary identity
+     when Gamma=0 is fixed). For the metric-affine metric EOM, "on shell"
+     means both the metric and connection equations are satisfied; the
+     boundary identity alone does not make the metric EOM vanish. The
+     SymPy oracle (fQ_eom_general) computes this metric-affine form.
+
+Both forms are individually correct; they test different variational
+principles. See library/geometry.md "f(Q) boundary-term identity" for
+the full derivation.
+
+The general f(Q) field equation (metric-affine metric-variation form):
   E_{mu nu} = f'(Q) [G_{mu nu} - (1/2) g_{mu nu} Q]
             + 2 f''(Q) P_{mu nu}^lambda partial_lambda Q
             + (1/2) g_{mu nu} [f(Q) - Q f'(Q)]
@@ -136,8 +158,13 @@ def boundary_term_identity_residual(
     where R(g) is the Levi-Civita Ricci scalar and nabla is the LC
     covariant derivative.
 
-    This identity implies that for the linear case f(Q) = Q, the EOM
-    is the same as the Einstein equations G_{mu nu} = 0.
+    This identity is the basis for the coincident-gauge EOM being
+    G_{mu nu} = 0 for f(Q) = Q (the boundary term variation drops out
+    when Gamma=0 is fixed). Note that this argument only works under
+    the coincident-gauge variational principle; for the metric-affine
+    formulation (Gamma varied independently), the boundary-term
+    variation produces a non-zero contribution from the connection
+    variation.
 
     Returns the residual: Q - R - nabla_mu(Q^mu - Qtilde^mu)
     (should be zero).
@@ -263,16 +290,26 @@ def fQ_eom_general(
     coords: list[sp.Symbol], g, g_inv,
     f: sp.Expr, fp: sp.Expr, fpp: sp.Expr, Q_val: sp.Expr,
 ) -> sp.ImmutableDenseNDimArray:
-    """General f(Q) EOM in coincident gauge.
+    """General f(Q) metric-affine metric-variation EOM.
 
     E_{mu nu} = f'(Q) [G_{mu nu} - (1/2) g_{mu nu} Q]
               + 2 f''(Q) P_{mu nu}^{lambda} partial_lambda Q
               + (1/2) g_{mu nu} [f(Q) - Q f'(Q)]
 
-    This form follows the standard f(Q) literature. For f(Q) = Q
-    (f'=1, f''=0, f-Qf'=0): E_{mu nu} = G_{mu nu} - (1/2) g_{mu nu} Q,
-    which vanishes on shell by the boundary-term identity.
-    All quantities are computed from the metric.
+    This is the metric EOM from varying g with an independent connection
+    (the metric-affine variational principle). It includes the
+    -(1/2) f'(Q) g_{mu nu} Q term, which is absent from the
+    coincident-gauge form where Gamma=0 is fixed and the boundary identity
+    absorbs Q into R. For f(Q) = Q (f'=1, f''=0, f-Qf'=0):
+    E_{mu nu} = G_{mu nu} - (1/2) g_{mu nu} Q. In the coincident gauge
+    this expression vanishes because Q = R + boundary reduces the action
+    to Einstein-Hilbert plus a boundary term. In the metric-affine
+    formulation the same expression is the metric EOM, but it does not
+    vanish by the boundary identity alone; "on shell" requires the
+    connection EOM as well.
+
+    All quantities are computed from the metric on a coincident-gauge
+    background (Gamma=0).
     """
     geom = ComponentGeometry(coords, sp.Matrix(g))
     G = geom.einstein  # G_{mu nu}
@@ -309,12 +346,16 @@ def fQ_eom_general(
 def fQ_eom_linear(
     coords: list[sp.Symbol], g, g_inv,
 ) -> sp.ImmutableDenseNDimArray:
-    """f(Q) = Q EOM in coincident gauge.
+    """f(Q) = Q metric-affine metric-variation EOM.
 
-    Since Q = R + boundary, the f(Q) = Q action equals the Einstein-
-    Hilbert action plus a boundary term, so the metric EOM is
-    G_{mu nu} = 0. Returns the Einstein tensor G_{mu nu} which
-    should vanish on-shell.
+    Returns the Einstein tensor G_{mu nu}. In coincident gauge (Gamma=0
+    fixed, metric-only variation), the boundary-term identity Q = R +
+    boundary makes the f(Q) = Q action equal to the Einstein-Hilbert
+    action plus a boundary term, so the metric EOM is G_{mu nu} = 0.
+    In the metric-affine formulation (g and Gamma varied independently),
+    the metric EOM is the same expression G_{mu nu}, but "on shell"
+    requires the connection EOM too; the boundary identity alone does
+    not make the metric EOM vanish.
     """
     geom = ComponentGeometry(coords, sp.Matrix(g))
     return geom.einstein

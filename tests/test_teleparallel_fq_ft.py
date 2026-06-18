@@ -8,9 +8,26 @@ cases (f(T)=T and f(Q)=Q) are equivalent to GR by the boundary-term
 identities T = -R + boundary and Q = R + boundary, and this equivalence
 is verified componentwise by the SymPy oracle on explicit metric backgrounds.
 
-For f(Q), the Cadabra template eom_fq_linear_coincident exercises the
-coincident-gauge variation via the boundary-term identity and passes the
-residue check (residue_zero == True), confirming the EOM G_{mu nu} = 0.
+Two variational principles are tested for f(Q):
+
+  1. Coincident-gauge (Cadabra-verified): Gamma=0 is fixed and only the
+     metric is varied. The boundary-term identity Q = R + boundary makes
+     the f(Q) = Q variation reduce to the Einstein-Hilbert variation, so
+     the EOM is G_{mu nu} = 0. The Cadabra template eom_fq_linear_coincident
+     exercises this path and passes the residue check (residue_zero == True).
+
+  2. Metric-affine (SymPy-verified): both g and Gamma are varied
+     independently. The metric EOM includes the term -(1/2) f'(Q) g_{mu nu} Q,
+     which is absorbed by the boundary identity when Gamma=0 is fixed but
+     persists in the metric-affine formulation. For f(Q) = Q the metric
+     EOM is E_{mu nu} = G_{mu nu} - (1/2) g_{mu nu} Q; this does not
+     vanish by the boundary identity alone because "on shell" also requires
+     the connection EOM. The SymPy cross-check computes this metric-affine
+     form via fQ_eom_general.
+
+Both forms are individually correct; they test different variational
+principles. See library/geometry.md "f(Q) boundary-term identity" for
+the derivation of both.
 
 For f(T), the Cadabra template eom_ft_linear_tetrad exercises the
 variation via the boundary-term identity T = -R + 2 nabla_mu T^mu,
@@ -423,12 +440,18 @@ class TestFQCoincidentGaugeCrossCheck:
 
     @pytest.mark.parametrize("seed", [7, 19])
     def test_linear_fq_eom_is_einstein_tensor(self, seed):
-        """For f(Q) = Q, the EOM E_{mu nu} = G_{mu nu} - (1/2) g_{mu nu} Q.
+        """For f(Q) = Q, the metric-affine metric EOM is G_{mu nu} - (1/2) g_{mu nu} Q.
 
         This verifies the general f(Q) EOM formula reduces correctly
         for the linear case: f'=1, f''=0, f-Qf'=0, giving
-        E = G - (1/2) g Q. On shell this equals zero by the
-        boundary-term identity.
+        E_{mu nu} = G_{mu nu} - (1/2) g_{mu nu} Q.
+
+        This is the metric-affine metric-variation EOM (both g and Gamma
+        varied independently), not the coincident-gauge EOM (Gamma=0 fixed).
+        In the coincident gauge, the boundary-term identity Q = R + boundary
+        absorbs the -(1/2) g Q term, yielding G_{mu nu} = 0. In the
+        metric-affine formulation, the boundary identity does not make the
+        metric EOM vanish alone; "on shell" also requires the connection EOM.
         """
         geom = random_diagonal_metric(seed, dim=3)
         Q_val = Q_scalar(geom.coords, geom.g, geom.g_inv)
@@ -498,8 +521,14 @@ class TestFQBoundaryTermIdentity:
 
     Parallel to f(T)'s test_boundary_term_identity, this verifies
     the identity Q - R - nabla_mu(Q^mu - Qtilde^mu) = 0 (De, Loo,
-    Saridakis 2023, eq 2.14) that underpins the f(Q) = Q EOM being
-    G_{mu nu} = 0.
+    Saridakis 2023, eq 2.14) that underpins the coincident-gauge
+    (Gamma=0 fixed) EOM for f(Q) = Q being G_{mu nu} = 0.
+
+    Note: this identity supports the coincident-gauge variational
+    principle only. In the metric-affine formulation (Gamma varied
+    independently), the boundary term's variation produces a
+    non-zero contribution from the connection variation, so the
+    identity does not by itself make the metric EOM vanish.
     """
 
     @pytest.mark.parametrize("seed", [7, 19, 37])
@@ -509,8 +538,11 @@ class TestFQBoundaryTermIdentity:
         The residual Q - R - nabla_mu(Q^mu - Qtilde^mu) should be
         zero, where z^mu = Q^mu - Qtilde^mu is the boundary vector
         built from the non-metricity traces. This identity implies
-        that for the linear case f(Q) = Q, the EOM is the Einstein
-        equation.
+        that in the coincident gauge (Gamma=0 fixed, metric-only
+        variation) the f(Q) = Q EOM is G_{mu nu} = 0. It does not
+        imply the same for the metric-affine formulation (Gamma varied
+        independently), where the boundary term's connection variation
+        contributes.
         """
         geom = random_diagonal_metric(seed, dim=4)
         residual = fq_boundary_residual(
@@ -556,15 +588,17 @@ class TestFQBoundaryTermIdentity:
 
 
 class TestFQCadabraVerification:
-    """Cadabra verification for f(Q) = Q EOM."""
+    """Cadabra verification for f(Q) = Q EOM (coincident-gauge variational principle)."""
 
     def test_fq_linear_cadabra_residue_zero(self):
         """The Cadabra template eom_fq_linear_coincident passes the residue check.
 
-        This template varies the f(Q) = Q action in coincident gauge using
-        the boundary-term identity Q = R + boundary, reducing to the
-        Einstein-Hilbert variation. The residue check confirms the EOM
-        G_{mu nu} = 0.
+        This template varies the f(Q) = Q action in coincident gauge (Gamma=0
+        fixed, metric-only variation). The boundary-term identity Q = R +
+        boundary reduces this to the Einstein-Hilbert variation. The residue
+        check confirms the EOM G_{mu nu} = 0. This tests the coincident-gauge
+        variational principle, distinct from the metric-affine form verified
+        by the SymPy cross-checks above.
         """
         try:
             from noether.kernels.base import Capability, KernelTask

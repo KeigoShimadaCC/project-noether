@@ -1228,6 +1228,98 @@ connection-sector constraints, GR regression, adapter integration).
 Eval: `evals/test_eval_adm_affine.py` (10 tests: elicitation gate, metric
 and connection sector checks, adapter check). CLI: `noether adm-affine`.
 
+### 6.6 Metric teleparallel f(T) gravity (VAL-EOM-023)
+
+The metric teleparallel formulation derives the gravitational field equation
+from the torsion scalar T rather than the Ricci scalar R. The connection is
+the Weitzenbock connection, built from the tetrad (vierbein) e^a_mu:
+
+  Gamma^rho_{mu nu} = E_a^rho partial_mu e^a_nu
+
+where E_a^mu is the inverse tetrad. This connection is flat (R=0), metric
+compatible (Q=0), and carries torsion (T!=0). The geometry is
+`ConnectionSpec(family="teleparallel", curvature_free=True,
+metric_compatible=True, torsion=True, nonmetricity=False)`. The
+tetrad e^a_mu is a first-class NPR field (`ObjectDecl(kind="tetrad")`).
+
+**Torsion scalar.** The Weitzenbock torsion scalar is:
+
+  T = (1/4) T_{rho mu nu} T^{rho mu nu}
+    + (1/2) T_{rho mu nu} T^{mu rho nu}
+    - T_mu T^{mu}
+
+where T_mu = T^rho_{rho mu} is the torsion trace vector. The modified
+superpotential S^{rho mu nu} = (1/2)(K^{rho mu nu} + g^{rho mu} T^nu -
+g^{rho nu} T^mu) contracts with f'(T) in the general EOM.
+
+**Boundary-term identity.** The torsion scalar and the Levi-Civita Ricci
+scalar are related by:
+
+  T = -R(g) + 2 nabla_mu^{LC} T^mu
+
+where nabla^{LC} is the Levi-Civita covariant derivative. The divergence
+2 nabla_mu T^mu is a total boundary term. For the linear case f(T) = T,
+this means the teleparallel action equals minus the Einstein-Hilbert action
+plus a boundary term, so the metric EOM is G_{mu nu} = 0 (the same as GR,
+up to sign conventions). The identity is verified componentwise by the SymPy
+oracle (`ft_boundary_residual` in `ft_tetrad.py`) on explicit Weitzenbock
+backgrounds.
+
+**Cadabra verification.** The template `eom_ft_linear_tetrad` varies the
+f(T) = T action via the boundary-term identity T = -R + 2 nabla_mu T^mu,
+reducing the variation to the Einstein-Hilbert path. It passes the residue
+check (residue_zero == True). The verified path detail records the
+boundary-term identity and the tetrad/Weitzenbock formulation.
+
+**SymPy cross-check.** The module `noether/kernels/sympy_kernel/ft_tetrad.py`
+constructs Weitzenbock connections from tetrads on explicit coordinate-dependent
+backgrounds and verifies:
+- The connection is flat (R=0) by construction.
+- The connection is metric compatible (Q=0).
+- The torsion is nonzero for non-diagonal tetrads.
+- The boundary-term identity holds (residual is zero).
+- The linear f(T) = T EOM via boundary identity gives G_{mu nu} = 0.
+- The general f(T) metric-form EOM formula is consistent on T!=0 backgrounds.
+- The superpotential S^{rho mu nu} is computable.
+
+The diagonal tetrad of a diagonal metric gives T=0; to get T!=0, the tests
+use a rotated (non-diagonal) tetrad with an off-diagonal timelike entry
+that mixes the -1 and +1 blocks of the Minkowski metric eta_{ab}. The metric
+for the rotated tetrad is computed from the tetrad itself (g_{mu nu} = e^a_mu
+e^b_nu eta_{ab}), rather than from the original diagonal metric.
+
+**General f(T) field equation (metric form):**
+
+  f'(T) [G_{mu nu} - (1/2) g_{mu nu} T]
+  + S_{mu nu}^{rho} nabla_rho f'(T)
+  + (1/2) g_{mu nu} [f(T) - T f'(T)] = 0
+
+For f(T) = T: f'=1, nabla f'=0, f-Tf'=0, giving E_{mu nu} = G_{mu nu} -
+(1/2) g_{mu nu} T. Via the boundary-term identity this is equivalent to
+G_{mu nu} = 0.
+
+**Convention block: tetrad-teleparallel-v1.**
+
+  Torsion: T^lambda_{mu nu} = Gamma^lambda_{mu nu} - Gamma^lambda_{nu mu}
+  Non-metricity: Q_{lambda mu nu} = 0 (metric compatible)
+  Curvature: R^rho_{sigma mu nu}(Gamma) = 0 (curvature free)
+  Minkowski: eta_{ab} = diag(-1, +1, +1, +1)
+  Metric: g_{mu nu} = e^a_mu e^b_nu eta_{ab}
+
+**NPR construction.** The eval module `evals/eval_ft_teleparallel.py` builds
+an NPR with `ConnectionSpec(type="independent", family="teleparallel",
+curvature_free=True, metric_compatible=True, torsion=True,
+nonmetricity=False)`, a metric object, a tetrad object
+(`ObjectDecl(kind="tetrad", name="e")`), a connection object, a torsion
+scalar shorthand T, and the coupling function f(T). The elicitation path
+asks the connection-type, torsion, non-metricity, metric-compatibility,
+and curvature-free questions, with the action's torsion cue (the presence
+of T) grounding the inference proposals.
+
+Tests: `tests/test_teleparallel_fq_ft.py` (f(T) and f(Q) tests together).
+Eval: `evals/test_eval_ft_teleparallel.py`. Cadabra template:
+`eom_ft_linear_tetrad` in `templates.py`.
+
 ## 7. Provenance bundles
 
 Every result is a directory (and a DB row pointing at it):
