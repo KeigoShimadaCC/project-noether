@@ -124,9 +124,14 @@ noether/             Python package
                      unverified; derive_eom includes connection fields in its
                      default list when geometry.connection.type is independent;
                      FieldDerivation carries a teaching field (pure prose,
-                     distinct from the failure-diagnostic detail and from
+                     distinct from the verdict-detail and from
                      result_tex) that narrates geometry tradeoffs for
-                     metric-affine derivations; generating teaching mutates no
+                     metric-affine derivations; detail is always non-empty
+                     (a confirmation reason when verified, a blocker when
+                     gated), so a gated result (verified=false, detail
+                     naming the blocker) is distinguishable from a verified
+                     one (verified=true, detail confirming the check);
+                     generating teaching mutates no
                      NPR and sets no result; /derive and /results expose
                      teaching as a top-level per-derivation key;
                      plus derive_adm, a SymPy-verified ADM split),
@@ -138,6 +143,9 @@ noether/             Python package
   mcp/               MCP stdio server (optional [mcp] extra): same session
                      surface as tools (incl. noether_derive and
                      noether_results); refusals are tool results, not guesses;
+                     derivations carry verified and non-empty detail matching
+                     the HTTP surface; blocked/refused calls return
+                     error/blocked dicts, never a fabricated verified result;
                      noether_derive with with_respect_to=['g','Gamma'] returns
                      both EOMs on a resolved Palatini session and a blocked
                      dict when the connection ambiguity is still open
@@ -264,7 +272,10 @@ the same history reloads across the server (`GET /sessions/{id}/results`), MCP
 (`noether_results`), and web. The cross-flow consistency is tested:
 derivations returned by `POST /derive` equal those reloaded by `GET /results`,
 MCP `noether_results`, and the bundle `derivations.json` field for field by
-`result_id`; a gated result reads identically across HTTP and MCP; a late
+`result_id`; every derivation carries a non-empty detail (a confirmation reason
+when verified, a blocker when gated) and the gated/verified distinction is
+visible through both verified and detail across all surfaces; a gated result
+reads identically across HTTP and MCP; a late
 resolution marks prior results stale on both surfaces; the full MCP tool chain
 (ingest->resolve->plan->derive) returns blocked dicts while open and never
 raises on the refusal path; and a metric-affine session resumes with geometry

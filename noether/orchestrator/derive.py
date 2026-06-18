@@ -326,8 +326,14 @@ def attempt_g4g5_eom(
     metric_residue_zero = metric_checks.get("residue_zero") == "True"
     both_verified = scalar_residue_zero and metric_residue_zero
 
-    # Construct the detail: empty when verified, naming the blocker when not.
-    detail = "" if both_verified else SORTCOVDS_BLOCKER
+    # Construct the detail: always non-empty so a gated result is
+    # distinguishable from a verified one by both verified and detail
+    # (VAL-GUIDE-012/013).
+    detail = (
+        "kernel verified the G4 scalar and metric EOMs (both residue checks passed)"
+        if both_verified
+        else SORTCOVDS_BLOCKER
+    )
 
     # Build FieldDerivation objects.
     scalar_derivation = FieldDerivation(

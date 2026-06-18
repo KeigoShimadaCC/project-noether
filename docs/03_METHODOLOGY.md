@@ -163,7 +163,11 @@ Two boundaries keep this honest:
 Every result climbs as far up the ladder as its class allows. Verdicts ship in
 `checks.json` and in the user-facing narrative. Teaching prose is carried on
 the `teaching` field of `FieldDerivation`, separate from both `detail`
-(diagnostic) and `checks` (kernel-verified). Failure at any rung blocks
+(verdict explanation) and `checks` (kernel-verified). The `detail` field is
+always non-empty: it names the blocker when `verified=False` and states the
+confirmation reason when `verified=True`, so a gated result is distinguishable
+from a verified one by both fields across HTTP, MCP, and CLI surfaces.
+Failure at any rung blocks
 PRESENT from labeling the result verified; Noether says plainly which checks ran,
 which passed, and which were not applicable.
 

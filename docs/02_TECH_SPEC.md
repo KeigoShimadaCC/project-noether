@@ -169,8 +169,13 @@ naming any result a later resolution invalidated) without re-running a kernel;
 the MCP `noether_results` tool returns the same shape. The cross-surface
 consistency is verified: derivations returned by `POST /derive` equal those
 reloaded by `GET /results`, MCP `noether_results`, and the bundle
-`derivations.json` field for field by `result_id`; a gated result reads
-identically (same `verified`, `detail`, `checks`) across HTTP and MCP; a late
+`derivations.json` field for field by `result_id`; every derivation carries a
+non-empty `detail` (a confirmation reason when `verified=True`, a blocker when
+`verified=False`), and a gated result is distinguishable from a verified one by
+both `verified` and `detail` across all surfaces; a gated result reads
+identically (same `verified`, `detail`, `checks`) across HTTP and MCP;
+blocked/refused MCP calls return error/blocked dicts, never a fabricated
+verified result; a late
 resolution marks prior results stale on both surfaces; and a metric-affine
 session resumes with geometry, NPR version history, and result ids intact.
 Sessions persist as JSON
@@ -1197,13 +1202,19 @@ of EOM, perturbation, and ADM results within the same session (VAL-CROSS-003).
 Changing the elicited Ricci-contraction is reflected in all results. Teaching
 narration about the geometry and its tradeoffs (torsion -> spin coupling,
 non-metricity -> length non-conservation, projective freedom) is on the
-`teaching` field of `FieldDerivation` (distinct from `detail` which is
-failure-diagnostic only, and from `result_tex` which carries the kernel output).
+`teaching` field of `FieldDerivation` (distinct from `detail` which carries
+the verdict explanation, and from `result_tex` which carries the kernel output).
+`detail` is always non-empty: it names the blocker when `verified=False` and
+states the confirmation reason when `verified=True`, so a gated result is
+distinguishable from a verified one by both fields across all surfaces.
 The teaching field is pure prose that never sets a result expression, never
 appears in `checks`, and never flips `verified`. Generating teaching mutates no
 NPR and adds no NPR version. /derive and /results expose teaching as a
 top-level per-derivation key. During elicitation (chat / HTTP elicit), the
 proposal's rationale is surfaced to the user alongside the on-menu choice.
+MCP `noether_derive`/`noether_results` return derivations whose `verified` and
+`detail` match the HTTP surface; blocked/refused calls return error/blocked
+dicts, never a fabricated verified result.
 
 Tests: `tests/test_adm_affine.py` (34 tests: reachability, metric-sector
 split, connection foliation decomposition, constraint/evolution separation,
