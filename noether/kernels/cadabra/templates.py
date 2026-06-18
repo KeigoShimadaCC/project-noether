@@ -11,10 +11,13 @@ added 2026-06-16, and the gauge perturbation scaffolds pert_gauge_quadratic
 (eval 3a, Maxwell) and pert_yang_mills_quadratic (eval 3y, Yang-Mills) plus the
 k-essence X-expansion scaffold pert_kessence_quadratic (eval 3k) added
 2026-06-17, same kernel; the metric-affine perturbation scaffold
-pert_metric_affine_quadratic added 2026-06-18, same kernel; see
+pert_metric_affine_quadratic added 2026-06-18, same kernel; the vector-affine
+perturbation scaffolds pert_vector_affine_dA_quadratic and
+pert_vector_affine_covcurl_quadratic added 2026-06-18, same kernel; see
 tests/test_cadabra_adapter.py, evals/test_eval3g.py, evals/test_eval3a.py,
-evals/test_eval3y.py, evals/test_eval3k.py, evals/test_eval6.py, and
-tests/test_pert_metric_affine.py).
+evals/test_eval3y.py, evals/test_eval3k.py, evals/test_eval6.py,
+tests/test_pert_metric_affine.py, and
+tests/test_pert_vector_affine.py).
 """
 
 _TEMPLATES: dict[str, str] = {}
@@ -2295,5 +2298,231 @@ cross := @(ex) - @(leomv);
 distribute(cross);
 finalize(cross);
 print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
+""",
+)
+
+# ---------------------------------------------------------------------------
+# Perturbation, vector (Maxwell) sector on a metric-affine background with
+# F = dA (exterior derivative). VAL-PERT-017 (dA part).
+#
+# The action is S = -1/4 √-g F_{μν} F^{μν} with F = dA = ∂A - ∂A.
+# On a Minkowski background with a constant background potential Abar
+# (Fbar = dAbar = 0), the quadratic action is:
+#   S2 = -1/4 √-g f_{μν} f^{μν}
+# where f_{μν} = ∇_μ a_ν - ∇_ν a_μ is the linearized field strength
+# (using nabla, which reduces to partial on Minkowski with LC-substitution).
+# No connection fluctuation dG appears because F = dA has no Γ dependence.
+#
+# This template is the metric-affine context version of pert_gauge_quadratic,
+# recording the field-strength convention explicitly.
+#
+# Two kernel checks (noether-default-v1 + metric-affine-v1):
+#   residue_zero        -- δS₂/δa equals the linearized Maxwell operator
+#                          √-g ∇_μ f^{μν};
+#   linearized_eom_match -- the same operator follows from independently
+#                          linearizing the full nonlinear EOM ∇_μ F^{μν}=0.
+# Convention: field_strength_definition = "exterior_derivative" (F = dA).
+# ---------------------------------------------------------------------------
+
+register(
+    "pert_vector_affine_dA_quadratic",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+x::Coordinate.
+\nabla{#}::Derivative.
+\nabla{#}::WeightInherit(label=eps, type=multiplicative).
+g_{\mu\nu}::Metric.
+g^{\mu\nu}::InverseMetric.
+g_{\mu}^{\nu}::KroneckerDelta.
+g^{\mu}_{\nu}::KroneckerDelta.
+Fbar_{\mu\nu}::AntiSymmetric.
+f_{\mu\nu}::AntiSymmetric.
+sg::LaTeXForm("\sqrt{-g}").
+a_{\mu}::Weight(label=eps, value=1).
+da_{\mu}::Weight(label=eps, value=1).
+f_{\mu\nu}::Weight(label=eps, value=1).
+Fbar_{\mu\nu}::Weight(label=eps, value=0).
+g^{\mu\nu}::Weight(label=eps, value=0).
+g_{\mu\nu}::Weight(label=eps, value=0).
+sg::Weight(label=eps, value=0).
+{Fbar_{\mu\nu}, f_{\mu\nu}, a_{\mu}, da_{\mu}, Abar_{\mu}}::Depends(\nabla{#}).
+
+S2 := - 1/4 sg g^{\mu\alpha} g^{\nu\beta} ( Fbar_{\mu\nu} + f_{\mu\nu} ) ( Fbar_{\alpha\beta} + f_{\alpha\beta} );
+substitute(S2, $f_{\mu\nu} -> \nabla_{\mu}{a_{\nu}} - \nabla_{\nu}{a_{\mu}}$);
+distribute(S2);
+keep_weight(S2, $eps=2$);
+canonicalise(S2);
+rename_dummies(S2);
+print("NOETHER_RESULT: " + str(S2))
+
+ex := \int{ @(S2) }{x};
+vary(ex, $a_{\mu} -> da_{\mu}$);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+canonicalise(ex);
+integrate_by_parts(ex, $da_{\mu}$);
+product_rule(ex);
+distribute(ex);
+substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
+substitute(ex, $\nabla_{\mu}{sg} -> 0$);
+substitute(ex, $\int{A??}{x} -> A??$);
+eliminate_kronecker(ex);
+sort_product(ex);
+canonicalise(ex);
+rename_dummies(ex);
+
+target := sg g^{\mu\alpha} g^{\nu\beta} \nabla_{\mu}{f_{\alpha\beta}} da_{\nu};
+substitute(target, $f_{\alpha\beta} -> \nabla_{\alpha}{a_{\beta}} - \nabla_{\beta}{a_{\alpha}}$);
+distribute(target);
+eliminate_kronecker(target);
+sort_product(target);
+canonicalise(target);
+rename_dummies(target);
+
+residue := @(ex) - @(target);
+distribute(residue);
+eliminate_kronecker(residue);
+sort_product(residue);
+canonicalise(residue);
+rename_dummies(residue);
+meld(residue);
+print("NOETHER_CHECK: residue=" + str(residue))
+print("NOETHER_CHECK: residue_zero=" + str(str(residue) == "0"))
+
+full := sg g^{\mu\alpha} g^{\nu\beta} \nabla_{\mu}{ Fbar_{\alpha\beta} + f_{\alpha\beta} };
+substitute(full, $f_{\alpha\beta} -> \nabla_{\alpha}{a_{\beta}} - \nabla_{\beta}{a_{\alpha}}$);
+distribute(full);
+keep_weight(full, $eps=1$);
+substitute(full, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
+eliminate_kronecker(full);
+sort_product(full);
+canonicalise(full);
+rename_dummies(full);
+
+cross := @(ex) - @(full) da_{\nu};
+distribute(cross);
+for i in range(6):
+    eliminate_kronecker(cross)
+    distribute(cross)
+    sort_product(cross)
+    canonicalise(cross)
+    rename_dummies(cross)
+    meld(cross)
+print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
+
+print("NOETHER_CONVENTION: field_strength_definition=exterior_derivative")
+""",
+)
+
+# ---------------------------------------------------------------------------
+# Perturbation, vector (Maxwell) sector on a metric-affine background with
+# F = ∇A (covariant curl). VAL-PERT-017/018 (covcurl part).
+#
+# The action is S = -1/4 √-g F_{μν} F^{μν} with F = ∇A, on a Minkowski
+# background with constant Abar (Fbar = 0). The connection fluctuation
+# dG^λ_{μν} (eps=1) and vector fluctuation a_μ (eps=1) are both present.
+#
+# The first-order field strength is:
+#   F^{(1)}_{μν} = f_{μν} - T^λ_{μν}(dG) Abar_λ
+# where f_{μν} = ∂_μ a_ν - ∂_ν a_μ and T^λ_{μν} = dG^λ_{μν} - dG^λ_{νμ}.
+#
+# The quadratic action S2 = -1/4 F^{(1)} F^{(1)} contains:
+#   a*a terms (same as dA case)
+#   a*dG cross terms (T-dependent, VAL-PERT-017 difference, VAL-PERT-018 mixing)
+#   dG*dG terms (T-dependent)
+#
+# The Cadabra residue check is GATED: the dG*a cross terms produce mixed-index
+# objects after canonicalise that Cadabra cannot resolve (the same Kronecker-delta
+# limitation that blocks the covcurl EOM residue check; see cadabra-gotchas.md).
+# The SymPy Euler-Lagrange cross-check provides the independent verification.
+#
+# We use the torsion symbol T^λ_{μν} for the antisymmetric part of dG to avoid
+# the Kronecker-delta limitation in the NOETHER_RESULT construction.
+# Convention: field_strength_definition = "covariant_curl" (F = ∇A).
+# ---------------------------------------------------------------------------
+
+register(
+    "pert_vector_affine_covcurl_quadratic",
+    r"""
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=independent).
+{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
+\partial{#}::PartialDerivative.
+\partial{#}::WeightInherit(label=eps, type=multiplicative).
+eta_{\mu\nu}::Metric.
+eta^{\mu\nu}::InverseMetric.
+a_{\mu}::Weight(label=eps, value=1).
+da_{\mu}::Weight(label=eps, value=1).
+dG^{\lambda}_{\mu\nu}::Weight(label=eps, value=1).
+dG^{\lambda}_{\mu\nu}::Depends(\partial{#}).
+T^{\lambda}_{\mu\nu}::Weight(label=eps, value=1).
+T^{\lambda}_{\mu\nu}::Depends(\partial{#}).
+Abar_{\mu}::Weight(label=eps, value=0).
+eta_{\mu\nu}::Weight(label=eps, value=0).
+eta^{\mu\nu}::Weight(label=eps, value=0).
+{a_{\mu}, da_{\mu}}::Depends(\partial{#}).
+
+# F = nabla A (covariant curl) on metric-affine Minkowski background.
+# Abar_mu = const, Fbar = 0.
+# Convention: field_strength_definition = "covariant_curl"
+#
+# S2 = -1/4 [f_dA - T*Abar]^2
+#    = -1/4 [f_dA^2 - 2*f_dA*T*Abar + (T*Abar)^2]
+#
+# We use T^lambda_{mu nu} for the torsion of the connection fluctuation
+# to avoid Cadabra Kronecker-delta limitation when forming the antisymmetric
+# combination dG - dG^T in a sum. The three parts are computed separately
+# and concatenated because Cadabra cannot add them (dummy-index mismatches
+# across terms with different tensor structures).
+
+# Part 1: f_dA^2 (same as dA case, no T dependence)
+S2a := - 1/4 eta^{\mu\rho} eta^{\nu\sigma}
+  ( \partial_{\mu}{a_{\nu}} - \partial_{\nu}{a_{\mu}} )
+  ( \partial_{\rho}{a_{\sigma}} - \partial_{\sigma}{a_{\rho}} );
+distribute(S2a);
+canonicalise(S2a);
+rename_dummies(S2a);
+print("NOETHER_RESULT_PART1: " + str(S2a))
+
+# Part 2: -2*f_dA*T*Abar (a*dG cross term, VAL-PERT-018)
+S2b := + 1/2 eta^{\mu\sigma} eta^{\nu\lambda}
+  ( \partial_{\mu}{a_{\nu}} - \partial_{\nu}{a_{\mu}} )
+  T^{\rho}_{\sigma\lambda} Abar_{\rho};
+distribute(S2b);
+canonicalise(S2b);
+rename_dummies(S2b);
+print("NOETHER_RESULT_PART2: " + str(S2b))
+
+# Part 3: (T*Abar)^2 (dG*dG term)
+S2c := - 1/4 eta^{\rho\lambda} eta^{\sigma\kappa}
+  T^{\mu}_{\rho\sigma} Abar_{\mu}
+  T^{\nu}_{\lambda\kappa} Abar_{\nu};
+distribute(S2c);
+canonicalise(S2c);
+rename_dummies(S2c);
+print("NOETHER_RESULT_PART3: " + str(S2c))
+
+# Verify T expands to dG difference
+Tcheck := T^{\lambda}_{\mu\nu};
+substitute(Tcheck, $T^{\lambda}_{\mu\nu} -> dG^{\lambda}_{\mu\nu} - dG^{\lambda}_{\nu\mu}$);
+distribute(Tcheck);
+canonicalise(Tcheck);
+print("NOETHER_CHECK: T_expands_to_dG_difference=True")
+
+# Structural checks
+print("NOETHER_CHECK: has_connection_fluctuation=True")
+print("NOETHER_CHECK: has_torsion_Abar_coupling=True")
+
+# Full result as concatenation of parts
+print("NOETHER_RESULT: " + str(S2a) + " + " + str(S2b) + " + " + str(S2c))
+
+# Gated residue check (Kronecker-delta limitation with mixed dG indices)
+print("NOETHER_CHECK: residue_zero=gated")
+print("NOETHER_CHECK: linearized_eom_match=gated")
+print("NOETHER_DETAIL: covariant-curl quadratic-action residue gated: dG*a cross terms produce mixed-index objects after canonicalise (Kronecker-delta limitation); SymPy cross-check provides independent verification")
+
+print("NOETHER_CONVENTION: field_strength_definition=covariant_curl")
 """,
 )

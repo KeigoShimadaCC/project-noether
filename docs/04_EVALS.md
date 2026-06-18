@@ -887,6 +887,50 @@ zero (dA) vs `−2AF` (covcurl).
 
 ---
 
+## Eval vector-affine perturbation — quadratic action under field-strength choice
+
+**Capabilities tested:** field-strength choice consequence at quadratic
+order (VAL-PERT-017); connection-matter cross-quadratic mixing
+(VAL-PERT-018).
+
+**Action:** `S = -1/4 int d^4x sqrt(-g) F_{mu nu} F^{mu nu}` on a
+Minkowski background with constant background gauge potential `Abar`
+and an independent connection carrying torsion `T`.
+
+**Two field-strength definitions:**
+
+1. **Exterior derivative F = dA** (`pert_vector_affine_dA_quadratic`):
+   The quadratic action is `S2 = -1/4 f_{mu nu} f^{mu nu}` (no
+   connection fluctuation).  Both Cadabra residue checks pass
+   (residue_zero, linearized_eom_match).  Convention recorded:
+   `field_strength_definition=exterior_derivative`.
+
+2. **Covariant curl F = nabla A** (`pert_vector_affine_covcurl_quadratic`):
+   The first-order field strength is `F^{(1)} = f - T(Abar)`, so the
+   quadratic action `S2 = -1/4 (f - T Abar)^2` contains three parts:
+   `f^2` (same as dA), `f T Abar` (a*dG cross term, VAL-PERT-018),
+   and `(T Abar)^2` (dG*dG).  The Cadabra residue is gated (Kronecker-
+   delta limitation with mixed-index dG objects); SymPy cross-check
+   provides independent verification.  Convention recorded:
+   `field_strength_definition=covariant_curl`.
+
+**VAL-PERT-017 verification:** The two quadratic actions differ by
+T-dependent terms (the `f T Abar` and `(T Abar)^2` parts) on a
+torsionful background with Abar nonzero; they agree at T=0.
+
+**VAL-PERT-018 verification:** The covcurl quadratic action retains the
+`a * dG` cross term (connection-matter mixing), not block-diagonalized
+away.  The linearized covcurl EOM carries a torsion source term absent
+in the dA case.
+
+### Tests
+
+`tests/test_pert_vector_affine.py` (22 tests: 9 Cadabra structural
+checks, 11 SymPy cross-checks on 3 random affine backgrounds,
+2 XOR gate checks).
+
+---
+
 ## Summary matrix
 
 | Eval | Theory class | Distinctive demand | Horizon gate |
@@ -908,6 +952,7 @@ zero (dA) vs `−2AF` (covcurl).
 | 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |
 | fT | metric teleparallel f(T) | boundary-term identity T = -R + B, tetrad/Weitzenbock formulation, Cadabra residue-zero | H3 |
 | vector-affine | Maxwell on metric-affine background | field-strength choice (dA vs nabla A), zero vs nonzero hypermomentum, T/Q correction | M3 |
+| vector-affine pert | quadratic action under field-strength choice | T-dependent difference (VAL-PERT-017), a*dG cross term (VAL-PERT-018), covcurl gated | M4 |
 | EC-algebraic | Einstein-Cartan algebraic torsion | Palatini connection EOM algebraic in K (no dK terms), SymPy cross-check on Q=0 T!=0 backgrounds | M3 |
 | ST-affine | Palatini scalar-tensor F(phi)R(Gamma) | three variations (g, Gamma, phi), dF non-metricity source, boundary assumption, LC limit, genuine residue-zero check on connection EOM via Euler-Lagrange target | M3 |
 | fQ | symmetric teleparallel f(Q) | coincident gauge, boundary-term identity Q = R + B (numerically verified), Cadabra residue-zero | H3 |

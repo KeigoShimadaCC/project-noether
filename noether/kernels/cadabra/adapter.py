@@ -25,6 +25,8 @@ from noether.kernels.cadabra import templates
 
 RESULT_SENTINEL = "NOETHER_RESULT:"
 CHECK_SENTINEL = "NOETHER_CHECK:"
+DETAIL_SENTINEL = "NOETHER_DETAIL:"
+CONVENTION_SENTINEL = "NOETHER_CONVENTION:"
 
 
 def _find_executable() -> str | None:
@@ -96,14 +98,14 @@ class CadabraAdapter:
 
         script = KernelScript(kernel_name=self.name, language="cadabra", source=source)
         raw = self._execute(source)
-        result_tex, checks = _parse_sentinels(raw.stdout)
+        result_tex, checks, detail, conventions = _parse_sentinels(raw.stdout)
         return ComputedResult(
             kernel_name=self.name,
             kernel_version=self.version(),
             script=script,
             raw=raw,
             expression_tex=result_tex,
-            value={"checks": checks, **value_extra},
+            value={"checks": checks, "detail": detail, "conventions": conventions, **value_extra},
             notes=[origin],
         )
 
@@ -128,10 +130,14 @@ class CadabraAdapter:
         )
 
 
-def _parse_sentinels(stdout: str) -> tuple[str | None, dict[str, str]]:
+def _parse_sentinels(
+    stdout: str,
+) -> tuple[str | None, dict[str, str], str, dict[str, str]]:
     """Only sentinel-marked lines count as results; everything else is noise."""
     result_tex: str | None = None
     checks: dict[str, str] = {}
+    detail: str = ""
+    conventions: dict[str, str] = {}
     for line in stdout.splitlines():
         line = line.strip()
         if line.startswith(RESULT_SENTINEL):
@@ -140,4 +146,10 @@ def _parse_sentinels(stdout: str) -> tuple[str | None, dict[str, str]]:
             body = line[len(CHECK_SENTINEL) :].strip()
             key, _, val = body.partition("=")
             checks[key.strip()] = val.strip()
-    return result_tex, checks
+        elif line.startswith(DETAIL_SENTINEL):
+            detail = line[len(DETAIL_SENTINEL) :].strip()
+        elif line.startswith(CONVENTION_SENTINEL):
+            body = line[len(CONVENTION_SENTINEL) :].strip()
+            key, _, val = body.partition("=")
+            conventions[key.strip()] = val.strip()
+    return result_tex, checks, detail, conventions

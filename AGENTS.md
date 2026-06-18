@@ -189,7 +189,14 @@ for scalars, `pert_kessence_quadratic` (eval 3k) for an `X`-dependent scalar
 (eval 3y) for a non-abelian one (selected by the object's `gauge_group`
 marker), expanding the action to quadratic order and
 checking the linearized EOM two ways; all checks must pass before a result is
-called verified. Other field kinds (the rank-2 field strength, say) are refused
+called verified. On a metric-affine (independent-connection) background,
+`pert_vector_affine_dA_quadratic` covers the F=dA field-strength choice
+(both checks pass, no connection fluctuation in the result) and
+`pert_vector_affine_covcurl_quadratic` covers the F=nabla A choice
+(residue gated due to the Kronecker-delta limitation with mixed-index dG
+objects; SymPy cross-check provides independent verification); the two
+choices differ by torsion-dependent terms (VAL-PERT-017) and the covcurl
+action retains a*dG cross terms (VAL-PERT-018). Other field kinds (the rank-2 field strength, say) are refused
 rather than guessed. The `adm` task is reachable the same way:
 `derive_adm` (`kind="adm"` on the server, MCP, and web clients) returns the
 ADM (3+1) decomposition of the gravitational sector, the Gauss-Codazzi split

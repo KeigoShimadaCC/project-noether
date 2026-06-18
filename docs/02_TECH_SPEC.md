@@ -979,6 +979,69 @@ via the registered template, 15 SymPy cross-checks on 3 random
 metric-compatible torsionful backgrounds).  The Cadabra template is
 registered as `ec_connection_algebraic_in_K` in `templates.py`.
 
+### 6.4 Vector perturbation on a metric-affine background (VAL-PERT-017/018)
+
+The quadratic perturbation of a gauge field on a metric-affine background
+exposes the field-strength choice consequence at quadratic order
+(VAL-PERT-017) and the connection-matter cross-quadratic mixing
+(VAL-PERT-018).  Two templates are registered:
+
+1. **`pert_vector_affine_dA_quadratic`** (F = dA, exterior derivative):
+   The quadratic action is the standard Maxwell fluctuation
+   `S2 = -1/4 sqrt(-g) f_{mu nu} f^{mu nu}` where
+   `f_{mu nu} = nabla_mu a_nu - nabla_nu a_mu`.  Because F = dA has
+   no Gamma dependence, no connection fluctuation dG appears: the action
+   is purely in the gauge sector.  Both Cadabra residue checks pass:
+   `residue_zero=True` (the variation of S2 equals the linearized Maxwell
+   operator) and `linearized_eom_match=True` (the same operator follows
+   from independently linearizing the full nonlinear EOM).  Convention
+   recorded: `field_strength_definition=exterior_derivative`.
+
+2. **`pert_vector_affine_covcurl_quadratic`** (F = nabla A, covariant curl):
+   The quadratic action on a Minkowski background with constant Abar is
+   `S2 = -1/4 (f - T Abar)^2` where `T^lambda_{mu nu}` is the torsion
+   of the connection fluctuation.  Expanding:
+   - Part 1: `f_dA^2` (same as dA case, no T dependence)
+   - Part 2: `f_dA * T * Abar` (a*dG cross term, VAL-PERT-018 mixing)
+   - Part 3: `(T Abar)^2` (dG*dG term)
+
+   The dA and covcurl quadratic actions differ by T-dependent terms
+   (Parts 2 and 3), confirming VAL-PERT-017.  The a*dG cross term
+   (Part 2) confirms VAL-PERT-018: the connection and matter fluctuations
+   mix at quadratic order, not block-diagonalized away.
+
+   The Cadabra residue check is gated: the dG*a cross terms produce
+   mixed-index objects after `canonicalise` that Cadabra cannot resolve
+   (the same Kronecker-delta limitation that blocks the covcurl EOM
+   residue check; see cadabra-gotchas.md).  The template uses the
+   torsion symbol `T^lambda_{mu nu}` (avoiding the Kronecker-delta
+   limitation in the NOETHER_RESULT construction) and prints three parts
+   separately.  The SymPy cross-check provides the independent
+   verification, computing the dA and covcurl quadratic actions on
+   explicit random affine backgrounds and confirming:
+   - The two actions differ on torsionful backgrounds (VAL-PERT-017)
+   - The covcurl action contains a*dG cross terms (VAL-PERT-018)
+   - The two actions agree at T=0 (T=0 limit)
+   - The covcurl linearized EOM contains a torsion source term absent in
+     the dA case
+
+   Convention recorded: `field_strength_definition=covariant_curl`.
+   Detail: `"covariant-curl quadratic-action residue gated: dG*a cross
+   terms produce mixed-index objects after canonicalise (Kronecker-delta
+   limitation); SymPy cross-check provides independent verification"`.
+
+The adapter now parses three additional sentinel markers:
+`NOETHER_DETAIL:` (gating explanation) and `NOETHER_CONVENTION:`
+(convention key=value pairs), in addition to the existing
+`NOETHER_RESULT:` and `NOETHER_CHECK:`.  These are returned in the
+`ComputedResult.value` dict as `detail` (string) and `conventions`
+(dict[str, str]).
+
+Tests: `tests/test_pert_vector_affine.py` (22 tests: 9 Cadabra
+structural checks, 11 SymPy cross-checks on 3 random affine backgrounds,
+2 XOR gate checks).  Routing: `perturb-vector-affine-dA` and
+`perturb-vector-affine-covcurl` in `generate.py`.
+
 ## 7. Provenance bundles
 
 Every result is a directory (and a DB row pointing at it):

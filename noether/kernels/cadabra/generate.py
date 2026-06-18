@@ -42,6 +42,8 @@ _EXAMPLE_TEMPLATE: dict[str, str] = {
     "perturb-gauge": "pert_gauge_quadratic",
     "perturb-yang-mills": "pert_yang_mills_quadratic",
     "perturb-metric-affine": "pert_metric_affine_quadratic",
+    "perturb-vector-affine-dA": "pert_vector_affine_dA_quadratic",
+    "perturb-vector-affine-covcurl": "pert_vector_affine_covcurl_quadratic",
 }
 
 _ABELIAN_GROUPS = frozenset({"", "u(1)", "abelian", "none"})
