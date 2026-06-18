@@ -36,6 +36,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from noether.kernels.base import Capability, KernelTask
+
 # The curvature primitives below are listed as available for future
 # normal-ordering passes but are not yet used in the assembly functions.
 # They will be needed when the SortCovDs gap is closed (xAct kernel).

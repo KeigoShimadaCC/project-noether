@@ -789,8 +789,13 @@ third derivative to zero and confirms the difference vanishes.
 Then comes the harder metric equation (the full `delta R` with an `X`-dependent
 coefficient), then G5. The gate is both equations of motion or neither: a quartic
 term ships only when its scalar and metric equations both residue-check, so until
-that normal-ordering pass is built and audited, `G4(phi, X) R` and G5 fall back
-to the model path or are refused rather than added as a partial result. By contrast the
+that normal-ordering pass is built and audited, `G4(phi, X) R` and G5 are
+routed to the best-effort G4/G5 derivation path (not the generic model path),
+which runs the hand-audited diagnostic scripts and returns `verified=False`
+with a non-empty `detail` naming the SortCovDs blocker (VAL-EOM-013), rather
+than added as a partial result. The detection function `has_g4g5_terms` in
+`blocks.py` identifies Lagrangians containing these terms so the derive path
+can intercept them before the model-written fallback. By contrast the
 `perturb` path does expand `X`: the k-essence scaffold (eval 3k) carries the
 quadratic action and sound speed of a general `K(phi, X)`, on a
 covariantly-constant-gradient background. The ADM split verifies for any metric
@@ -799,18 +804,27 @@ Hamiltonian.
 
 The best-effort G4(phi,X)R / G5 closure attempt now exists as a dedicated module,
 `noether/kernels/cadabra/horndeski_g4g5.py`, exercised by
-`tests/test_horndeski_g4g5.py` (VAL-GEOM-015). The module constructs Cadabra
-scripts for both the scalar and metric EOM variations, applies the available M2
-primitives, and checks whether the result is second order. The scalar EOM is
-second order (no third derivatives of phi survive the IBP); the metric EOM
-carries third derivatives in wrapped `nabla_mu(G4_X nabla_nu nabla_rho phi
-nabla^rho phi)` terms that, upon expansion via `product_rule`, produce
-`G4_X nabla_mu nabla_nu nabla_rho phi nabla^rho phi`. Without the
+`tests/test_horndeski_g4g5.py` (VAL-GEOM-015, VAL-EOM-013). The module
+constructs Cadabra scripts for both the scalar and metric EOM variations, applies
+the available M2 primitives, and checks whether the result is second order. The
+scalar EOM is second order (no third derivatives of phi survive the IBP); the
+metric EOM carries third derivatives in wrapped `nabla_mu(G4_X nabla_nu
+nabla_rho phi nabla^rho phi)` terms that, upon expansion via `product_rule`,
+produce `G4_X nabla_mu nabla_nu nabla_rho phi nabla^rho phi`. Without the
 normal-ordering pass (SortCovDs), these cannot be systematically driven through
 the commutator, Ricci folds, and Bianchi, so the closure is gated
 (`verified=False` with a non-empty `detail` naming the blocker). The result
 satisfies the XOR condition: it is either fully verified (residue 0 and SymPy
 agrees) or gated with a named blocker; never verified with a gate unmet.
+
+The M3 integration wires this best-effort attempt into the general EOM
+derivation path. When `derive_field` detects G4(phi,X)R terms in the Lagrangian
+(via `has_g4g5_terms` in `blocks.py`), it routes to `attempt_g4g5_eom` in
+`derive.py`, which runs the hand-audited scripts and produces
+`FieldDerivation` objects for the scalar and metric EOMs. Each derivation
+carries the diagnostic checks and the gated verdict, satisfying VAL-EOM-013:
+if `verified==True` then `residue_zero=="True"`, else `verified==False` with
+a non-empty `detail`.
 
 ### 6.2 Vector (Maxwell) EOM on a metric-affine background
 

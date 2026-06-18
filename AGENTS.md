@@ -164,7 +164,10 @@ nonminimal `F(phi) R`, kinetic, potential, and cubic Galileon `G(phi) box phi`
 Galileon yield both equations of motion this way. It expands `X` to
 its primitive in the kernel and collapses it back for display, and refuses
 (falls back to the model path) on any term that matches no block, including the
-held-out higher Horndeski densities (`G4(phi, X) R`, G5). The `perturb` task runs through the
+held-out higher Horndeski densities (`G4(phi, X) R`, G5), which route to the
+best-effort G4/G5 path (`attempt_g4g5_eom` in `derive.py`) instead of the
+generic model-written script, returning `verified=False` with a non-empty
+`detail` naming the SortCovDs blocker (VAL-EOM-013). The `perturb` task runs through the
 same path for scalar fields, the metric, and rank-1 gauge potentials:
 `derive_perturbation`, reachable as `kind="perturbation"` on the server, MCP,
 and web clients, drives the frozen `pert_scalar_quadratic` scaffold (eval 3p)

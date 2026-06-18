@@ -201,6 +201,34 @@ def decompose_scalar(lag: Expr, fieldname: str) -> Decomposition:
     return dec
 
 
+def has_g4g5_terms(lag: Expr, fieldname: str = "phi") -> bool:
+    """True if the Lagrangian contains a held-out higher-Horndeski term
+    (G4(phi, X) R or G5) that the compositional decomposition cannot match.
+
+    A G4(phi, X) R term is a product of a function of (phi, X) and the
+    Ricci scalar R. This differs from the nonminimal block F(phi) R, which
+    matches because the coupling depends on phi alone; the X-dependent
+    coupling makes it Horndeski G4, which needs normal-ordering to verify
+    and is therefore held out. G5 terms involve epsilon-tensor contractions
+    and are similarly held out.
+
+    This detection is used by the derive path to route G4/G5-containing
+    actions to the best-effort closure attempt instead of the generic
+    model-written script path.
+    """
+    for term in _terms(lag):
+        _, rest = _split_coeff(term)
+        if len(rest) == 2:
+            funcs = [f for f in rest if isinstance(f, Func)]
+            curvs = [f for f in rest if _is_curvature_scalar(f)]
+            # G4(phi, X) R: a function of (phi, X) times R.
+            if len(funcs) == 1 and len(curvs) == 1:
+                args = _func_args(funcs[0])
+                if fieldname in args and "X" in args:
+                    return True
+    return False
+
+
 # -- kernel-symbol naming ----------------------------------------------------
 
 

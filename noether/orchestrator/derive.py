@@ -33,8 +33,14 @@ from noether.kernels.cadabra.blocks import (
     compose_metric_display_tex,
     decompose_metric,
     decompose_scalar,
+    has_g4g5_terms,
 )
 from noether.kernels.cadabra.generate import generate_script
+from noether.kernels.cadabra.horndeski_g4g5 import (
+    SORTCOVDS_BLOCKER,
+    assemble_g4_metric_eom_script,
+    assemble_g4_scalar_eom_script,
+)
 from noether.llm.base import LLMAdapter
 from noether.npr.schema import NPR
 from noether.orchestrator.planner import build_plan
@@ -193,6 +199,106 @@ def _verdict(kind: str, checks: dict[str, str]) -> bool:
     return checks.get("residue_zero") == "True"
 
 
+def attempt_g4g5_eom(
+    cadabra_adapter,
+    *,
+    session_id: str = "",
+    results_root: Path | None = None,
+) -> list[FieldDerivation]:
+    """Attempt the held G4(phi,X)R / G5 Horndeski EOM as best-effort,
+    producing ``FieldDerivation`` objects for the scalar and metric equations.
+
+    This runs the hand-audited Cadabra scripts for the scalar and metric EOM
+    variations and constructs ``FieldDerivation`` objects from the results.
+    The result is always honest: either fully verified (residue 0 on both
+    EOMs, ``verified=True``) or gated (``verified=False`` with a non-empty
+    ``detail`` naming the blocker). It is never ``verified=True`` with a gate
+    unmet, satisfying VAL-EOM-013.
+
+    The scalar EOM script checks that no third derivatives of phi survive the
+    IBP (``scalar_eom_second_order``). The metric EOM script checks that
+    third derivatives are present after expanding wrapped terms
+    (``metric_eom_has_third_derivs``), confirming the SortCovDs blocker is
+    real. Neither script produces a ``residue_zero`` check because there is
+    no target equation to compare against; the full closure requires both the
+    scalar and metric EOMs to residue-check, and the metric EOM cannot close
+    without normal-ordering.
+
+    Returns:
+        List of two ``FieldDerivation`` objects: one for the scalar EOM
+        (wrt="phi") and one for the metric EOM (wrt="g").
+
+    The result satisfies the XOR condition from VAL-EOM-013:
+        (verified and residue_zero=="True")
+        XOR
+        (not verified and detail != "")
+    """
+    # Run the scalar EOM script.
+    scalar_script = assemble_g4_scalar_eom_script()
+    scalar_computed = cadabra_adapter.run(
+        KernelTask(
+            capability=Capability.SUBSTITUTE,
+            description="G4 scalar EOM best-effort",
+            payload={"script": scalar_script},
+        )
+    )
+    scalar_checks = scalar_computed.value.get("checks", {})
+
+    # Run the metric EOM script.
+    metric_script = assemble_g4_metric_eom_script()
+    metric_computed = cadabra_adapter.run(
+        KernelTask(
+            capability=Capability.SUBSTITUTE,
+            description="G4 metric EOM best-effort",
+            payload={"script": metric_script},
+        )
+    )
+    metric_checks = metric_computed.value.get("checks", {})
+
+    # Both EOMs must residue-check for the closure to be verified.
+    scalar_residue_zero = scalar_checks.get("residue_zero") == "True"
+    metric_residue_zero = metric_checks.get("residue_zero") == "True"
+    both_verified = scalar_residue_zero and metric_residue_zero
+
+    # Construct the detail: empty when verified, naming the blocker when not.
+    detail = "" if both_verified else SORTCOVDS_BLOCKER
+
+    # Build FieldDerivation objects.
+    scalar_derivation = FieldDerivation(
+        wrt="phi",
+        kind="eom",
+        capability=Capability.VARY,
+        result_id=(
+            f"g4g5-scalar-{hashlib.sha1(scalar_script.encode()).hexdigest()[:8]}"
+        ),
+        result_tex=scalar_computed.expression_tex,
+        verified=both_verified,
+        checks=scalar_checks,
+        kernel_name=scalar_computed.kernel_name,
+        kernel_version=scalar_computed.kernel_version,
+        script=scalar_script,
+        detail=detail,
+    )
+
+    metric_derivation = FieldDerivation(
+        wrt="g",
+        kind="eom",
+        capability=Capability.VARY,
+        result_id=(
+            f"g4g5-metric-{hashlib.sha1(metric_script.encode()).hexdigest()[:8]}"
+        ),
+        result_tex=metric_computed.expression_tex,
+        verified=both_verified,
+        checks=metric_checks,
+        kernel_name=metric_computed.kernel_name,
+        kernel_version=metric_computed.kernel_version,
+        script=metric_script,
+        detail=detail,
+    )
+
+    return [scalar_derivation, metric_derivation]
+
+
 def derive_field(
     npr: NPR,
     wrt: str,
@@ -256,6 +362,41 @@ def derive_field(
         result_tex = display_tex if verified else computed.expression_tex
         source = script
         llm_name, llm_version = "compositional", "blocks-v1"
+    elif (
+        kind == "eom"
+        and wrt in ("g", "phi")
+        and has_g4g5_terms(npr.action.lagrangian, "phi")
+    ):
+        # Best-effort G4(phi,X)R / G5 Horndeski path (VAL-EOM-013).
+        # The compositional decomposition cannot match these terms (they
+        # need normal-ordering to verify), so the model-written path would
+        # also fail to produce a verified result. Instead, use the
+        # hand-audited G4/G5 scripts from horndeski_g4g5.py, which run the
+        # diagnostic checks and return an honest gated result.
+        derivations = attempt_g4g5_eom(
+            cadabra,
+            session_id=session_id,
+            results_root=results_root,
+        )
+        by_wrt = {d.wrt: d for d in derivations}
+        if wrt in by_wrt:
+            return by_wrt[wrt]
+        # wrt is not in the G4/G5 results (e.g. a connection field);
+        # fall through to the model-written script path.
+        generated = generate_script(npr, wrt, llm, kind=kind)
+        computed = cadabra.run(
+            KernelTask(
+                capability=capability,
+                description=f"{label} wrt {wrt}",
+                payload={"script": generated.source},
+            )
+        )
+        checks = computed.value.get("checks", {})
+        verified = _verdict(kind, checks)
+        detail = _result_detail(kind, verified, checks, computed)
+        result_tex = computed.expression_tex
+        source = generated.source
+        llm_name, llm_version = generated.llm_name, generated.llm_version
     else:
         generated = generate_script(npr, wrt, llm, kind=kind)
         computed = cadabra.run(

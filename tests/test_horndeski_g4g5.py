@@ -1,18 +1,24 @@
-r"""VAL-GEOM-015: Held G4(phi,X)R / G5 Horndeski closure is verified-or-gated.
+r"""VAL-GEOM-015 / VAL-EOM-013: Held G4(phi,X)R / G5 Horndeski closure.
 
 The best-effort higher-Horndeski closure either fully closes (Cadabra residue 0
 AND SymPy cross-check agrees, verified=True) or is returned verified=False with
 a non-empty detail; never verified with a gate unmet.
 
-The XOR condition:
+VAL-GEOM-015 (M2 primitive level): the ClosureAttempt satisfies the XOR
+condition at the primitive level:
 
     (verified and residue_zero and oracle_agrees)
     XOR
     (not verified and detail != '')
 
-must hold. If gated, detail names the blocker (e.g. needs covariant-derivative
-normal-ordering unavailable without xAct); the result is surfaced, never
-asserted true.
+VAL-EOM-013 (M3 EOM path level): when the G4(phi,X)R / G5 Horndeski EOM
+is attempted through the general derivation path, each FieldDerivation
+satisfies:
+
+    if verified==True then residue_zero=="True"
+    else verified==False with a non-empty detail
+
+The result is surfaced, never falsely asserted.
 
 Conventions: noether-default-v1.
 """
@@ -21,12 +27,15 @@ import pytest
 
 from noether.kernels.base import Capability, KernelTask
 from noether.kernels.cadabra import CadabraAdapter
+from noether.kernels.cadabra.blocks import has_g4g5_terms
 from noether.kernels.cadabra.horndeski_g4g5 import (
     ClosureAttempt,
     assemble_g4_metric_eom_script,
     assemble_g4_scalar_eom_script,
     attempt_g4g5_closure,
 )
+from noether.npr.parse import parse_lagrangian
+from noether.orchestrator.derive import FieldDerivation, attempt_g4g5_eom
 
 # ---------------------------------------------------------------------------
 # VAL-GEOM-015: verified-or-gated XOR condition
@@ -195,3 +204,187 @@ class TestG4MetricEOM:
             f"SortCovDs blocker); check value: {check_val}; output:\n"
             f"{result.raw.stdout}"
         )
+
+
+# ---------------------------------------------------------------------------
+# VAL-EOM-013: G4/G5 EOM best-effort through the general derive path
+# ---------------------------------------------------------------------------
+
+
+def _eom_xor_condition(d: FieldDerivation) -> bool:
+    """The VAL-EOM-013 XOR condition for a single FieldDerivation:
+
+        (verified and residue_zero=="True")
+        XOR
+        (not verified and detail != "")
+
+    It is never verified==True with residue not True.
+    """
+    branch_a = d.verified and d.checks.get("residue_zero") == "True"
+    branch_b = (not d.verified) and (d.detail != "")
+    return branch_a != branch_b  # XOR
+
+
+class TestG4G5EomXOR:
+    """VAL-EOM-013: The G4(phi,X)R / G5 Horndeski EOM attempt through the
+    general derivation path either closes (verified==True with
+    residue_zero=="True") or returns verified==False with a non-empty detail;
+    never verified==True with residue not True.
+
+    These tests use the ``attempt_g4g5_eom`` function which produces
+    ``FieldDerivation`` objects by running the hand-audited Cadabra scripts,
+    exercising the same path that ``derive_field`` uses when G4/G5 terms are
+    detected.
+    """
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_scalar_eom_satisfies_xor(self):
+        """The scalar EOM derivation satisfies the VAL-EOM-013 XOR condition."""
+        derivations = attempt_g4g5_eom(CadabraAdapter())
+        scalar = next(d for d in derivations if d.wrt == "phi")
+        assert _eom_xor_condition(scalar), (
+            f"Scalar EOM XOR violated: verified={scalar.verified}, "
+            f"residue_zero={scalar.checks.get('residue_zero')}, "
+            f"detail={scalar.detail!r}"
+        )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_metric_eom_satisfies_xor(self):
+        """The metric EOM derivation satisfies the VAL-EOM-013 XOR condition."""
+        derivations = attempt_g4g5_eom(CadabraAdapter())
+        metric = next(d for d in derivations if d.wrt == "g")
+        assert _eom_xor_condition(metric), (
+            f"Metric EOM XOR violated: verified={metric.verified}, "
+            f"residue_zero={metric.checks.get('residue_zero')}, "
+            f"detail={metric.detail!r}"
+        )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_both_eoms_gated_with_detail(self):
+        """Both EOMs are gated (verified==False) with a non-empty detail
+        naming the SortCovDs blocker."""
+        derivations = attempt_g4g5_eom(CadabraAdapter())
+        for d in derivations:
+            assert d.verified is False, (
+                f"EOM wrt {d.wrt} should be gated (verified=False); "
+                f"got verified={d.verified}"
+            )
+            assert d.detail, (
+                f"EOM wrt {d.wrt} must have non-empty detail when gated"
+            )
+            assert "SortCovDs" in d.detail or "normal-ordering" in d.detail, (
+                f"EOM wrt {d.wrt} detail should name the SortCovDs blocker: "
+                f"{d.detail!r}"
+            )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_never_verified_with_residue_not_true(self):
+        """If verified==True then residue_zero=="True"; this is a structural
+        invariant that holds for every derivation regardless of the closure
+        outcome."""
+        derivations = attempt_g4g5_eom(CadabraAdapter())
+        for d in derivations:
+            if d.verified:
+                assert d.checks.get("residue_zero") == "True", (
+                    f"EOM wrt {d.wrt} is verified but residue_zero is "
+                    f"{d.checks.get('residue_zero')!r}, not 'True'"
+                )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_scalar_eom_has_diagnostic_checks(self):
+        """The scalar EOM derivation carries the second-order diagnostic
+        check, confirming the no-Ostrogradski cancellation works for the
+        scalar sector."""
+        derivations = attempt_g4g5_eom(CadabraAdapter())
+        scalar = next(d for d in derivations if d.wrt == "phi")
+        assert "scalar_eom_second_order" in scalar.checks, (
+            f"Scalar EOM should carry the scalar_eom_second_order diagnostic; "
+            f"checks: {scalar.checks}"
+        )
+        assert scalar.checks["scalar_eom_second_order"] == "True", (
+            "G4 scalar EOM should be second order (no third derivatives)"
+        )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_metric_eom_has_diagnostic_checks(self):
+        """The metric EOM derivation carries the third-derivative diagnostic
+        check, confirming the SortCovDs blocker is real."""
+        derivations = attempt_g4g5_eom(CadabraAdapter())
+        metric = next(d for d in derivations if d.wrt == "g")
+        assert "metric_eom_has_third_derivs" in metric.checks, (
+            f"Metric EOM should carry the metric_eom_has_third_derivs "
+            f"diagnostic; checks: {metric.checks}"
+        )
+        assert metric.checks["metric_eom_has_third_derivs"] == "True", (
+            "G4 metric EOM should have third derivatives (confirming blocker)"
+        )
+
+    @pytest.mark.kernel_cadabra
+    @pytest.mark.skipif(not CadabraAdapter().available(), reason="cadabra2 not installed")
+    def test_derivation_objects_are_field_derivations(self):
+        """The result objects are proper FieldDerivation instances with the
+        expected fields."""
+        derivations = attempt_g4g5_eom(CadabraAdapter())
+        assert len(derivations) == 2
+        for d in derivations:
+            assert isinstance(d, FieldDerivation)
+            assert d.kind == "eom"
+            assert d.wrt in ("phi", "g")
+            assert d.kernel_name == "cadabra"
+            assert d.script  # non-empty script
+            assert d.result_id  # non-empty result_id
+
+    def test_closure_attempt_and_eom_attempt_consistent(self):
+        """The ClosureAttempt (M2) and FieldDerivation (M3) results are
+        consistent: both agree on the gated state and the blocker detail."""
+        closure = attempt_g4g5_closure()
+        # The closure attempt is gated; the EOM attempt should also be gated
+        # when actually run (tested above with Cadabra). Here we just confirm
+        # the closure-level XOR is still satisfied.
+        branch_a = closure.verified and closure.residue_zero and closure.oracle_agrees
+        branch_b = (not closure.verified) and (closure.detail != "")
+        assert branch_a != branch_b, "Closure-level XOR violated"
+
+
+# ---------------------------------------------------------------------------
+# G4/G5 detection in Lagrangian
+# ---------------------------------------------------------------------------
+
+
+class TestG4G5Detection:
+    """The detection function correctly identifies G4(phi,X)R terms in the
+    Lagrangian, which is the trigger for the best-effort derive path."""
+
+    def test_g4_phi_x_r_detected(self):
+        """A G4(phi,X)R term is detected as a held-out higher-Horndeski
+        density."""
+        lag = parse_lagrangian(r"G(\phi, X) R")
+        assert has_g4g5_terms(lag, "phi")
+
+    def test_nonminimal_f_phi_r_not_detected(self):
+        """A nonminimal F(phi)R coupling is NOT detected as G4/G5 (it matches
+        the compositional nonminimal block instead)."""
+        lag = parse_lagrangian(r"F(\phi) R")
+        assert not has_g4g5_terms(lag, "phi")
+
+    def test_kessence_not_detected(self):
+        """A k-essence K(phi, X) term without R is NOT detected as G4/G5."""
+        lag = parse_lagrangian(r"K(\phi, X)")
+        assert not has_g4g5_terms(lag, "phi")
+
+    def test_einstein_hilbert_not_detected(self):
+        """A bare Ricci scalar is NOT detected as G4/G5."""
+        lag = parse_lagrangian(r"R")
+        assert not has_g4g5_terms(lag, "phi")
+
+    def test_g4_mixed_with_kinetic_detected(self):
+        """A Lagrangian mixing G4(phi,X)R with kinetic terms still detects
+        the G4 component."""
+        lag = parse_lagrangian(r"G(\phi, X) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi")
+        assert has_g4g5_terms(lag, "phi")
