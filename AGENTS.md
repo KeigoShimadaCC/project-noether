@@ -151,7 +151,15 @@ the `vary` task across the metric, scalar, connection, and gauge-field classes;
 see `docs/02_TECH_SPEC.md` section 6, item 7. Connection variation routes to
 the `vary-connection` worked example (the audited `eval2_palatini_connection`
 template) and carries `Capability.INDEPENDENT_CONNECTION`, so a connection field
-is never silently routed to the metric worked example. A scalar action with a `box`-coupling
+is never silently routed to the metric worked example. For the pure Palatini
+Einstein-Hilbert action (no matter fields other than the metric and the
+independent connection), the connection EOM routes directly to the frozen
+`eval2_palatini_connection` template, surfacing the verified projective-family
+result (checks `solution_zero` and `ricci_shift_is_dA`) with a payload that
+states the projective freedom (`Gamma = LC(g) + delta^lambda_nu A_mu`,
+`A_mu` arbitrary) and never presents the connection as uniquely fixed
+(VAL-EOM-004). Non-pure-EH connection variations (Palatini scalar-tensor,
+Einstein-Cartan) still route through the general LLM-written script path. A scalar action with a `box`-coupling
 (the Horndeski G3 term `K(phi) box phi`) routes to the audited
 `eom_cubic_galileon_scalar` scaffold (eval 6), the first verified member past
 scalar-tensor; see `docs/02_TECH_SPEC.md` section 6.1 for the representation

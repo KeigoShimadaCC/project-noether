@@ -153,6 +153,66 @@ def _compositional_detail(
     return f"unverified: the kernel computed a nonzero residue for the assembled action ({blocks})"
 
 
+def _is_palatini_eh_connection_variation(npr: NPR, wrt: str) -> bool:
+    """True when the derivation is a connection variation of the pure
+    Palatini Einstein-Hilbert action (g^{mu nu} R_{mu nu}(Gamma) with no
+    other matter fields). In this case, the verified projective-family
+    result from the eval2_palatini_connection template is available, so
+    we route directly to it rather than the unverified general LLM path.
+
+    The detection checks:
+      1. wrt names a connection object;
+      2. the connection type is independent;
+      3. there are no dynamical scalar, vector, or tensor matter fields
+         (only the metric g, the connection Gamma, and curvature shorthands);
+      4. the Lagrangian involves curvature (R).
+
+    This is intentionally narrow: Palatini scalar-tensor F(phi)R(Gamma),
+    Einstein-Cartan with spin sources, and other metric-affine theories
+    have different physics and must still route through the general path
+    (or their own templates) rather than being silently routed to the
+    pure-EH result.
+    """
+    by_name = {o.name: o for o in npr.objects}
+    wrt_obj = by_name.get(wrt)
+    if wrt_obj is None or wrt_obj.kind != "connection":
+        return False
+    if npr.geometry.connection.type != "independent":
+        return False
+    # No dynamical matter fields other than g and Gamma.
+    _matter_kinds = {"scalar-field", "tensor-field"}
+    matter_objects = [
+        o for o in npr.objects if o.kind in _matter_kinds and o.role == "dynamical"
+    ]
+    if matter_objects:
+        return False
+    # No coupling functions that would make this non-pure-EH.
+    coupling_objects = [o for o in npr.objects if o.kind == "function"]
+    if coupling_objects:
+        return False
+    # The Lagrangian involves curvature (R or similar shorthand).
+    has_curvature = any(o.name in ("R", "G", "C", "W") for o in npr.objects)
+    if not has_curvature:
+        return False
+    return True
+
+
+_PROJECTIVE_FAMILY_TEX = (
+    r"\Gamma^{\lambda}_{\mu\nu}"
+    r" = \{^{\lambda}_{\mu\nu}\}_g"
+    r" + \delta^{\lambda}_{\nu} A_{\mu}"
+)
+
+_PROJECTIVE_FREEDOM_DETAIL = (
+    "The connection is determined only up to the projective mode: "
+    r"\Gamma = \mathrm{LC}(g) + \delta^{\lambda}_{\nu} A_{\mu}"
+    r" with A_{\mu} arbitrary. The projective family annihilates the "
+    "connection equation (solution_zero=True) and the Ricci shift "
+    r"is exactly dA (ricci_shift_is_dA=True), so the metric equation "
+    r"reduces to G_{\mu\nu}(g)=0. The connection is never uniquely fixed."
+)
+
+
 def _compositional_decomposition(npr: NPR, wrt: str, kind: str) -> Decomposition | None:
     """Decompose the Lagrangian into building blocks, when the compositional
     path applies: an EOM for a dynamical scalar field rendered as phi, or the
@@ -364,6 +424,45 @@ def derive_field(
         llm_name, llm_version = "compositional", "blocks-v1"
     elif (
         kind == "eom"
+        and _is_palatini_eh_connection_variation(npr, wrt)
+    ):
+        # Palatini Einstein-Hilbert connection variation: route to the
+        # verified projective-family result from the eval2_palatini_connection
+        # template (VAL-EOM-004). The general LLM-written script path
+        # produces verified=false with a nonzero residue; the template
+        # carries the genuine solution_zero and ricci_shift_is_dA checks.
+        # Do NOT fabricate verification: the surfaced result must carry the
+        # genuine checks from the template run.
+        from noether.kernels.cadabra import templates as _templates
+
+        template_name = "eval2_palatini_connection"
+        source = _templates.get(template_name)
+        computed = cadabra.run(
+            KernelTask(
+                capability=Capability.INDEPENDENT_CONNECTION,
+                description="Palatini EH connection variation (template)",
+                payload={"template": template_name},
+            )
+        )
+        checks = computed.value.get("checks", {})
+        solution_zero = checks.get("solution_zero") == "True"
+        ricci_shift = checks.get("ricci_shift_is_dA") == "True"
+        verified = solution_zero and ricci_shift
+        if verified:
+            detail = _PROJECTIVE_FREEDOM_DETAIL
+            result_tex = _PROJECTIVE_FAMILY_TEX
+        else:
+            # The template checks failed (should not happen on a correct
+            # kernel, but be honest about it).
+            detail = (
+                "unverified: the Palatini connection template checks did "
+                f"not both pass (solution_zero={checks.get('solution_zero')}, "
+                f"ricci_shift_is_dA={checks.get('ricci_shift_is_dA')})"
+            )
+            result_tex = computed.expression_tex
+        llm_name, llm_version = "template", template_name
+    elif (
+        kind == "eom"
         and wrt in ("g", "phi")
         and has_g4g5_terms(npr.action.lagrangian, "phi")
     ):
@@ -445,6 +544,13 @@ def derive_field(
                 f"{label} wrt {wrt}. Assembled compositionally from building "
                 f"blocks ({blocks}) and residue-checked by the kernel; "
                 f"verified={verified}."
+            )
+        elif llm_name == "template":
+            narrative = (
+                f"{label} wrt {wrt}. Run from frozen template "
+                f"{llm_version}; verified={verified} "
+                f"(kernel checks: {', '.join(f'{k}={v}' for k, v in checks.items())}). "
+                f"{detail}"
             )
         else:
             narrative = (

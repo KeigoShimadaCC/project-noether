@@ -425,6 +425,15 @@ perturbative expansion (xPert), Young projection.
    routes to the `vary-connection` worked example (`eval2_palatini_connection`)
    and uses `Capability.INDEPENDENT_CONNECTION` rather than the generic `VARY`,
    so a connection field is never silently routed to the metric worked example.
+   For the pure Palatini Einstein-Hilbert action (no matter fields other than
+   the metric and the independent connection), the derive path routes directly
+   to the frozen `eval2_palatini_connection` template, surfacing the verified
+   projective-family result (checks `solution_zero` and `ricci_shift_is_dA`)
+   with a payload that states the projective freedom (`Gamma = LC(g) +
+   delta^lam_nu A_mu`, `A_mu` arbitrary) and never presents the connection as
+   uniquely fixed (VAL-EOM-004). Non-pure-EH connection variations (Palatini
+   scalar-tensor, Einstein-Cartan) still route through the general LLM-written
+   script path.
    When the connection is independent and the metric is varied, the metric
    variation routes to the `vary-metric-palatini` worked example
    (`eval2_palatini_metric`) instead of the standard `vary-metric` one, because
