@@ -788,6 +788,63 @@ covariant equations of motion verify; they are held rather than added partially.
 
 ---
 
+## Eval vector-affine — Maxwell on a metric-affine background
+
+**Capabilities tested:** field-strength choice consequence (exterior derivative
+vs covariant curl); hypermomentum from the covariant-curl choice; full-
+connection divergence carrying T/Q contributions; the two definitions differ
+exactly in the connection-equation source.
+
+### Input
+
+```latex
+S = -\tfrac{1}{4}\int d^4x \sqrt{-g}\, F_{\mu\nu}F^{\mu\nu}
+```
+
+on an independent-connection background (torsion and non-metricity allowed).
+Dynamical: `A_μ` and `Γ^λ_{μν}`. `g_{μν}` is a fixed background.
+
+### Field-strength choices
+
+1. **F = dA** (exterior derivative, the default):
+   `F_{μν} = ∂_μ A_ν - ∂_ν A_μ`.  No Γ dependence.  EOM:
+   `∇^{LC}_μ F^{μν} = 0`.  Hypermomentum: zero (no Γ dependence in the
+   action).  When expressed with the full-connection divergence:
+   `∇^{aff}_μ F^{μν} = (K^ρ_{ρμ} + L^ρ_{ρμ}) F^{μν} + ½ T^ν_{μρ} F^{μρ}`
+   (T/Q correction terms present).
+
+2. **F = ∇A** (covariant curl, elicited under independent connection):
+   `F_{μν} = ∇_μ A_ν - ∇_ν A_μ = dA_{μν} - T^λ_{μν} A_λ`.  EOM:
+   `(1/√{-g}) ∂_μ(√{-g} F^{μν}) + ½ T^ν_{μρ} F^{μρ} = 0`
+   (full-connection divergence with torsion term).  Hypermomentum:
+   `Δ^λ_{μν} = -2 A_λ F^{μν}` (nonzero, purely spin-type, antisymmetric in
+   μ,ν).  This couples the gauge and connection sectors.
+
+The two derivations differ exactly in the connection-equation source:
+zero (dA) vs `−2AF` (covcurl).
+
+### Verification checks
+
+- Cadabra residue: dA EOM residue zero (nabla + LC-substitution approach);
+  dA hypermomentum zero (no dG terms); covcurl hypermomentum nonzero (dG
+  terms present).
+- SymPy cross-check: affine-LC divergence difference equals T/Q correction
+  on random affine backgrounds; dA hypermomentum zero structurally; covcurl
+  hypermomentum antisymmetric and equal to `−2AF` via exact symbolic
+  derivative; Euler-Lagrange decomposition of the covcurl EOM verified
+  (explicit A-derivative = torsion term, ∂A-derivative = `−√{-g} F`).
+- Covcurl EOM Cadabra residue: gated (mixed-index G terms that canonicalise
+  cannot resolve, per cadabra-gotchas.md); SymPy Euler-Lagrange
+  cross-check provides independent verification.
+
+### Tests
+
+`tests/test_vector_eom_affine.py` (31 tests: 3 Cadabra residue checks,
+28 SymPy cross-checks on 3 random affine backgrounds).  Eval module:
+`evals/eval_vector_affine.py`, `evals/test_eval_vector_affine.py`.
+
+---
+
 ## Summary matrix
 
 | Eval | Theory class | Distinctive demand | Horizon gate |
@@ -808,6 +865,7 @@ covariant equations of motion verify; they are held rather than added partially.
 | 7 | k-essence / general scalar Horndeski | X-dependent coupling, block decomposition, no per-theory template | H3 |
 | 8 | nonminimal scalar-tensor by composition | curvature block F(phi)R, metric EOM compositional, both EOMs, no template | H3 |
 | fT | metric teleparallel f(T) | curvature-free constraint, boundary-term identity T = -R + B, gated derivation | H3 |
+| vector-affine | Maxwell on metric-affine background | field-strength choice (dA vs nabla A), zero vs nonzero hypermomentum, T/Q correction | M3 |
 | fQ | symmetric teleparallel f(Q) | curvature-free constraint, boundary-term identity Q = -R + B, gated derivation | H3 |
 
 Each eval ships in two forms: this document (human-auditable worked target) and

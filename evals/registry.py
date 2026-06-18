@@ -415,6 +415,72 @@ def _eval5() -> EvalSpec:
     )
 
 
+def _vector_affine() -> EvalSpec:
+    from evals import eval_vector_affine as m
+    from noether.verify.checks import WellFormedCheck
+
+    return EvalSpec(
+        key="vector-affine",
+        title="Vector (Maxwell) EOM on metric-affine background",
+        build_npr=lambda resolved=True: m.build_npr("exterior-derivative"),
+        answers=m.ELICITATION_ANSWERS,
+        cadabra_runs=(
+            CadabraRun(
+                "dA Maxwell EOM with LC divergence (metric-affine)",
+                "vector_affine_dA_eom",
+                ("dA_eom_residue_zero",),
+            ),
+            CadabraRun(
+                "dA hypermomentum (zero, no Gamma dependence)",
+                "vector_affine_dA_hypermomentum",
+                ("dA_hypermomentum_zero",),
+            ),
+            CadabraRun(
+                "covcurl hypermomentum (nonzero, spin-type)",
+                "vector_affine_covcurl_hypermomentum",
+                ("covcurl_hypermomentum_nonzero",),
+            ),
+        ),
+        results=(
+            PresentedResult(
+                result_id="eom-gauge",
+                expr=m.target_eom_dA,
+                tex_suffix=r" = 0",
+                ladder=lambda: [WellFormedCheck(expected_free=[m.NU])],
+                component_tasks=(
+                    (
+                        "affine-LC divergence difference equals T/Q correction",
+                        {
+                            "check": "identity",
+                            "lhs": "affine_div_F - lc_div_F",
+                            "rhs": "TQ_correction",
+                        },
+                    ),
+                    (
+                        "dA hypermomentum is zero",
+                        {"check": "zero", "expr": "dA_hypermomentum"},
+                    ),
+                    (
+                        "covcurl hypermomentum is -2AF (antisymmetric)",
+                        {"check": "antisymmetric", "expr": "covcurl_hypermomentum"},
+                    ),
+                ),
+            ),
+        ),
+        notes=(
+            "VAL-EOM-020: the vector EOM uses the full-connection divergence "
+            "(T/Q terms present); verified by Cadabra residue (dA) and SymPy "
+            "cross-check (affine-LC divergence identity). "
+            "VAL-EOM-021: dA choice yields zero hypermomentum (no Gamma "
+            "dependence); covcurl choice yields Delta=-2AF (spin-type); both "
+            "verified by Cadabra and SymPy. The covcurl EOM Cadabra residue "
+            "check is gated (mixed-index G terms per cadabra-gotchas.md); "
+            "the SymPy Euler-Lagrange cross-check provides independent "
+            "verification of the EOM form.",
+        ),
+    )
+
+
 _BUILDERS: dict[str, Callable[[], EvalSpec]] = {
     "eval1": _eval1,
     "eval1s": _eval1s,
@@ -423,6 +489,7 @@ _BUILDERS: dict[str, Callable[[], EvalSpec]] = {
     "eval3s": _eval3s,
     "eval4": _eval4,
     "eval5": _eval5,
+    "vector-affine": _vector_affine,
 }
 
 

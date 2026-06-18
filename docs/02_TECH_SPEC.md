@@ -795,6 +795,55 @@ the commutator, Ricci folds, and Bianchi, so the closure is gated
 satisfies the XOR condition: it is either fully verified (residue 0 and SymPy
 agrees) or gated with a named blocker; never verified with a gate unmet.
 
+### 6.2 Vector (Maxwell) EOM on a metric-affine background
+
+The gauge kinetic term `S = -1/4 int sqrt(-g) F_{mu nu} F^{mu nu}` on an
+independent-connection background highlights the field-strength choice
+consequence (VAL-EOM-020, VAL-EOM-021). Two definitions of `F` are elicited:
+
+- **Exterior derivative** `F = dA` (the default, `F_{mu nu} = 2 partial_{[mu}
+  A_{nu]}`): the action has no Gamma dependence (F involves only partial
+  derivatives of A), so the EOM is the LC divergence
+  `nabla^{LC}_mu F^{mu nu} = 0`.  When this is expressed with the
+  full-connection divergence `nabla^{aff}_mu`, T/Q correction terms appear:
+  `nabla^{aff}_mu F^{mu nu} = (K^rho_{rho mu} + L^rho_{rho mu}) F^{mu nu}
+  + (1/2) T^nu_{mu rho} F^{mu rho}`.  The hypermomentum is zero.
+
+- **Covariant curl** `F = nabla A` (`F_{mu nu} = 2 nabla_{[mu} A_{nu]}`):
+  the action depends on Gamma through the covariant derivative, so the
+  EOM naturally involves the full-connection divergence with a torsion term:
+  `(1/sqrt(-g)) partial_mu(sqrt(-g) F^{mu nu}) + (1/2) T^nu_{mu rho}
+  F^{mu rho} = 0`.  The hypermomentum is nonzero, purely spin-type:
+  `Delta^lambda_{mu nu} = -2 A_lambda F^{mu nu}` (antisymmetric in mu, nu).
+  The connection equation of motion has this source term, coupling the gauge
+  and connection sectors.
+
+The two derivations differ exactly in the connection-equation source: zero vs
+`-2AF`.  Both are verified:
+
+1. **dA EOM**: Cadabra residue zero (nabla + LC-substitution approach, valid
+   because F=dA has no connection dependence).  The T/Q correction identity
+   (affine divergence = LC divergence + correction) is verified by SymPy on
+   random affine backgrounds.
+2. **dA hypermomentum = 0**: Cadabra check (no dG terms in the connection
+   variation).  SymPy structural verification (dA has no Gamma dependence).
+3. **Covcurl hypermomentum != 0**: Cadabra check (dG terms present).  SymPy
+   exact symbolic derivative verification (connection variation gives
+   `sqrt(-g) A_sigma F^{alpha beta}`, confirmed by perturbing one Gamma
+   component with symbolic epsilon and extracting the linear coefficient).
+4. **Covcurl EOM form**: Euler-Lagrange decomposition verified by SymPy:
+   `partial L/partial A_sigma = 1/2 sqrt(-g) T^sigma_{mu nu} F^{mu nu}`
+   (explicit A dependence from the Gamma*A terms in F) and
+   `partial L/partial(partial_mu A_sigma) = -sqrt(-g) F^{mu sigma}`
+   (partial-derivative dependence).  The Cadabra residue check for the
+   covcurl EOM is gated: the expansion produces mixed-index G terms that
+   `canonicalise` cannot resolve (known limitation per cadabra-gotchas.md).
+
+Tests: `tests/test_vector_eom_affine.py` (31 tests: 3 Cadabra residue, 28
+SymPy cross-checks on 3 random affine backgrounds).  Eval module:
+`evals/eval_vector_affine.py`, `evals/test_eval_vector_affine.py`, registered
+as `vector-affine` in `evals/registry.py`.
+
 ## 7. Provenance bundles
 
 Every result is a directory (and a DB row pointing at it):
