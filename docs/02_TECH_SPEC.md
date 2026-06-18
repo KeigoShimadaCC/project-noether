@@ -232,10 +232,21 @@ plumbing deterministic in tests. The LLM gets tools, not freedom:
   connection opens a follow-up Ricci-contraction convention question and, if
   a vector/gauge potential is present, a field-strength-definition question
   (`F = dA` vs `F = nabla A`, differing by torsion per VAL-GEOM-020) before
-  planning can continue. Reachable as `noether elicit "<lagrangian>"`; the
-  explicit `--accept-llm` flag delegates confirmation to the model. Tested
+  planning can continue. Geometry inference is exercised deterministically with
+  `StubLLMAdapter`: every non-null proposed choice is in the ambiguity's
+  options, off-menu suggestions yield `choice is None` (rationale may survive),
+  and after `propose_resolutions` the NPR is unchanged (not well-posed,
+  geometry ambiguities unresolved, `geometry.connection` unchanged). Only a
+  human-confirmed on-menu answer mutates geometry via `apply_resolutions`;
+  off-menu and unknown-ambiguity-id confirmations raise `ValueError` and never
+  mutate the NPR. On the HTTP surface, `POST /elicit` returns
+  `confirmed: false` with proposals (off-menu nulled) leaving the ambiguity
+  unresolved; mutation happens only after an on-menu `POST /resolve`; an
+  off-menu resolve returns 400. Reachable as `noether elicit "<lagrangian>"`;
+  the explicit `--accept-llm` flag delegates confirmation to the model. Tested
   against all five acceptance actions (`tests/test_llm.py`,
-  `tests/test_elicit.py`).
+  `tests/test_elicit.py`) and the geometry-specific inference contract
+  (`tests/test_geometry_inference.py`, VAL-GUIDE-001..007).
 - `plan(task, npr) -> computation plan` (a DAG of kernel-task nodes)
 - `run_kernel(kernel, task, npr) -> npr_expression + raw artifacts`
 - `verify(result, checks) -> verdicts`

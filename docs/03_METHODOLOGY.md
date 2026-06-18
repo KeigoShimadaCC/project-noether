@@ -48,6 +48,19 @@ vs connection-covariant curl `nabla A`, which differ by torsion per
 VAL-GEOM-020). A curvature-free scalar action does not open that questionnaire
 and stays on the default Levi-Civita draft.
 
+The inference contract for geometry ambiguities mirrors the general
+propose-then-confirm flow: the model proposes one option per open geometry
+ambiguity, constrained to the menu; off-menu suggestions are nulled (choice is
+`None`) while rationale may survive; and after `propose_resolutions` the NPR is
+unchanged (not well-posed, geometry ambiguities unresolved, `geometry.connection`
+unchanged). Only a human-confirmed on-menu answer, routed through
+`apply_resolutions`, mutates `geometry.connection`. Off-menu and unknown-id
+confirmations raise `ValueError` and never mutate the NPR. The HTTP surface
+enforces this identically: `POST /elicit` returns `confirmed: false` with
+proposals (off-menu nulled), and `POST /resolve` with an off-menu geometry
+answer returns 400. Inference is exercised deterministically with
+`StubLLMAdapter` (VAL-GUIDE-001..007, `tests/test_geometry_inference.py`).
+
 ### 1.2 Question discipline
 
 - Batch related questions; one elicitation round should usually suffice for EOM

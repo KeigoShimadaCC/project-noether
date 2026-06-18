@@ -105,7 +105,12 @@ noether/             Python package
                      the Ricci-contraction question that opens for an
                      independent connection, and the field-strength-definition
                      question that opens when a vector/gauge potential exists
-                     on an independent-connection background), definitions (propose readability
+                     on an independent-connection background; geometry
+                     inference is exercised deterministically with
+                     StubLLMAdapter: propose_resolutions returns one proposal
+                     per open geometry ambiguity with every non-null choice in
+                     the menu, off-menu suggestions yield choice=None, and the
+                     NPR is unchanged after proposing), definitions (propose readability
                      shorthands like F_phi for dF/dphi and, on metric-affine
                      NPRs, K(T), L(Q), and the f(Q) scalar Q; human adopts),
                      derive (general EOM / perturbation path: model writes a
@@ -139,7 +144,12 @@ evals/               Executable evals 1-5, 1s, 3s, 3p, 3g, 3a, 3y, 3k, 6 (cubic 
 tests/               Unit and adapter tests (cadabra golden test included;
                      test_cross_flows.py covers metric-affine cross-surface
                      consistency: HTTP/MCP/bundle round-trip, stale marking,
-                     session resume, and the MCP blocked/refusal path)
+                     session resume, and the MCP blocked/refusal path;
+                     test_geometry_inference.py covers the geometry inference
+                     contract: propose_resolutions for geometry ambiguities,
+                     off-menu nulled, never auto-applied, apply_resolutions
+                     on-menu mutates, off-menu raises, HTTP /elicit and
+                     /resolve surface enforcement)
 frontend/            Web client (Next.js + KaTeX) over the HTTP session API;
                      /api/* proxied to `noether serve`, no client-side physics
 pyproject.toml       Package, deps, ruff, pytest config
