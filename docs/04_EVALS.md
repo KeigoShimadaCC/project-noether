@@ -921,7 +921,7 @@ and an independent connection carrying torsion `T`.
    The quadratic action is `S2 = -1/4 f_{mu nu} f^{mu nu}` (no
    connection fluctuation).  Both Cadabra residue checks pass
    (residue_zero, linearized_eom_match).  Convention recorded:
-   `field_strength_definition=exterior_derivative`.
+   `field_strength_definition=exterior-derivative`.
 
 2. **Covariant curl F = nabla A** (`pert_vector_affine_covcurl_quadratic`):
    The first-order field strength is `F^{(1)} = f - T(Abar)`, so the
@@ -930,7 +930,7 @@ and an independent connection carrying torsion `T`.
    and `(T Abar)^2` (dG*dG).  The Cadabra residue is gated (Kronecker-
    delta limitation with mixed-index dG objects); SymPy cross-check
    provides independent verification.  Convention recorded:
-   `field_strength_definition=covariant_curl`.
+   `field_strength_definition=covariant-curl`.
 
 **VAL-PERT-017 verification:** The two quadratic actions differ by
 T-dependent terms (the `f T Abar` and `(T Abar)^2` parts) on a

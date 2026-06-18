@@ -2365,7 +2365,7 @@ print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
 #                          √-g ∇_μ f^{μν};
 #   linearized_eom_match -- the same operator follows from independently
 #                          linearizing the full nonlinear EOM ∇_μ F^{μν}=0.
-# Convention: field_strength_definition = "exterior_derivative" (F = dA).
+# Convention: field_strength_definition = "exterior-derivative" (F = dA).
 # ---------------------------------------------------------------------------
 
 register(
@@ -2465,7 +2465,7 @@ for i in range(6):
     meld(cross)
 print("NOETHER_CHECK: linearized_eom_match=" + str(str(cross) == "0"))
 
-print("NOETHER_CONVENTION: field_strength_definition=exterior_derivative")
+
 """,
 )
 
@@ -2493,7 +2493,7 @@ print("NOETHER_CONVENTION: field_strength_definition=exterior_derivative")
 #
 # We use the torsion symbol T^λ_{μν} for the antisymmetric part of dG to avoid
 # the Kronecker-delta limitation in the NOETHER_RESULT construction.
-# Convention: field_strength_definition = "covariant_curl" (F = ∇A).
+# Convention: field_strength_definition = "covariant-curl" (F = ∇A).
 # ---------------------------------------------------------------------------
 
 register(
@@ -2526,7 +2526,7 @@ print("NOETHER_CONVENTION: field_strength_definition=covariant-curl")
 
 # F = nabla A (covariant curl) on metric-affine Minkowski background.
 # Abar_mu = const, Fbar = 0.
-# Convention: field_strength_definition = "covariant_curl"
+# Convention: field_strength_definition = "covariant-curl"
 #
 # S2 = -1/4 [f_dA - T*Abar]^2
 #    = -1/4 [f_dA^2 - 2*f_dA*T*Abar + (T*Abar)^2]
@@ -2583,6 +2583,6 @@ print("NOETHER_CHECK: residue_zero=gated")
 print("NOETHER_CHECK: linearized_eom_match=gated")
 print("NOETHER_DETAIL: covariant-curl quadratic-action residue gated: dG*a cross terms produce mixed-index objects after canonicalise (Kronecker-delta limitation); SymPy cross-check provides independent verification")
 
-print("NOETHER_CONVENTION: field_strength_definition=covariant_curl")
+
 """,
 )

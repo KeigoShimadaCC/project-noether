@@ -1013,7 +1013,7 @@ exposes the field-strength choice consequence at quadratic order
    `residue_zero=True` (the variation of S2 equals the linearized Maxwell
    operator) and `linearized_eom_match=True` (the same operator follows
    from independently linearizing the full nonlinear EOM).  Convention
-   recorded: `field_strength_definition=exterior_derivative`.
+   recorded: `field_strength_definition=exterior-derivative`.
 
 2. **`pert_vector_affine_covcurl_quadratic`** (F = nabla A, covariant curl):
    The quadratic action on a Minkowski background with constant Abar is
@@ -1043,7 +1043,7 @@ exposes the field-strength choice consequence at quadratic order
    - The covcurl linearized EOM contains a torsion source term absent in
      the dA case
 
-   Convention recorded: `field_strength_definition=covariant_curl`.
+   Convention recorded: `field_strength_definition=covariant-curl`.
    Detail: `"covariant-curl quadratic-action residue gated: dG*a cross
    terms produce mixed-index objects after canonicalise (Kronecker-delta
    limitation); SymPy cross-check provides independent verification"`.

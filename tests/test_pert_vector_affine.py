@@ -153,7 +153,7 @@ class TestVectorAffineDAPerturbation:
         result = _run_cadabra(DA_TEMPLATE)
         assert result.raw.returncode == 0, result.raw.stderr
         conventions = result.value.get("conventions", {})
-        assert conventions.get("field_strength_definition") == "exterior_derivative", (
+        assert conventions.get("field_strength_definition") == "exterior-derivative", (
             f"dA template missing field-strength convention: {conventions}"
         )
 
@@ -230,7 +230,7 @@ class TestVectorAffineCovCurlPerturbation:
         result = _run_cadabra(COVCURL_TEMPLATE)
         assert result.raw.returncode == 0, result.raw.stderr
         conventions = result.value.get("conventions", {})
-        assert conventions.get("field_strength_definition") == "covariant_curl", (
+        assert conventions.get("field_strength_definition") == "covariant-curl", (
             f"covcurl template missing field-strength convention: {conventions}"
         )
 
