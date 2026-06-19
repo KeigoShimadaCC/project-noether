@@ -576,8 +576,13 @@ class TestContractedBianchiNonmetricSymPyCrossCheck:
         Q = nonmetricity_of_connection(geom.coords, gamma, geom.g)
         T_nonzero = any(sp.simplify(c) != 0 for c in components(T))
         Q_nonzero = any(sp.simplify(c) != 0 for c in components(Q))
-        assert Q_nonzero, "Background MUST have nonzero non-metricity (Q != 0) for this test"
-        assert T_nonzero or Q_nonzero, "Background should have nonzero torsion or non-metricity"
+        assert Q_nonzero, (
+            "Background MUST have nonzero non-metricity (Q != 0) for this test"
+        )
+        assert T_nonzero, (
+            "Background MUST have nonzero torsion (T != 0) "
+            "for a genuine joint T,Q background"
+        )
 
         residual = contracted_second_bianchi_nonmetric_residual(
             geom.coords, gamma, geom.g, geom.g_inv
@@ -648,6 +653,12 @@ class TestContractedBianchiNonmetricSymPyCrossCheck:
                     )
                     assert simp_val == 0, (
                         f"seed={seed}: Simplified nonzero at [{sig},{mu},{nu}]: {simp_val}"
+                    )
+                    diff_val = sp.simplify(num_val - simp_val)
+                    assert diff_val == 0, (
+                        f"seed={seed}: Numerical and simplified residuals differ at "
+                        f"[{sig},{mu},{nu}]: num={num_val}, simp={simp_val}, "
+                        f"diff={diff_val}"
                     )
 
     @pytest.mark.parametrize("seed", [7, 19, 37])
