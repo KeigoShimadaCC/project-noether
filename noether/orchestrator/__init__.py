@@ -8,6 +8,7 @@ not depend on any model.
 from noether.orchestrator.elicit import (
     ElicitationProposal,
     ProposedResolution,
+    UnhandledASTNodeError,
     apply_resolutions,
     propose_resolutions,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "ProposedResolution",
     "Session",
     "SessionState",
+    "UnhandledASTNodeError",
     "apply_resolutions",
     "build_plan",
     "ingest_action",

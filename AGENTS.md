@@ -362,6 +362,13 @@ Changing any of them changes the result; no field is assumed silently.
 - Formatting and linting: `ruff` (format + lint). Keep CI green.
 - Commits: small, imperative subject lines, body explains the why.
 - Secrets: API keys only via environment, never committed, never logged.
+- AST node / geometric-cue coupling: `noether/npr/ast.py` defines the `Expr` node
+  types (Num, Sym, Func, Tensor, Deriv, Pow, Prod, Sum) that make up the action AST.
+  `noether/orchestrator/elicit.py` `_detect_geometric_cues` walks the AST with a
+  match statement covering every current node type. Adding a new node type to
+  `ast.py` without adding a corresponding case in the match statement of
+  `_detect_geometric_cues` raises `UnhandledASTNodeError` at runtime. This is
+  fail-loud by design (no silent skip); the fix is to add the case.
 
 ## 7. Documentation conventions
 

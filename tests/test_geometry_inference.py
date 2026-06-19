@@ -15,6 +15,8 @@ import pytest
 
 from noether.llm import StubLLMAdapter, stub_reply
 from noether.orchestrator.elicit import (
+    UnhandledASTNodeError,
+    _detect_geometric_cues,
     apply_resolutions,
     build_elicitation_prompt,
     propose_resolutions,
@@ -811,3 +813,100 @@ class TestConventionProposalOnMenu:
         convention_ids = {amb.id for amb in npr.ambiguities}
         assert "amb-ricci-contraction" not in convention_ids
         assert "amb-field-strength-definition" not in convention_ids
+
+
+# ---------------------------------------------------------------------------
+# AST node / geometric-cue coupling robustness
+# ---------------------------------------------------------------------------
+
+
+class TestUnhandledASTNodeError:
+    """Adding a new AST node type to npr/ast.py without updating
+    _detect_geometric_cues must raise UnhandledASTNodeError, not a bare
+    TypeError.  The error identifies the unhandled node type and points at
+    _detect_geometric_cues.  The behavior remains fail-loud (no silent skip).
+    """
+
+    def test_unknown_node_raises_unhandled_ast_node_error(self):
+        """An AST node type not covered by the match statement raises
+        UnhandledASTNodeError (not a bare TypeError)."""
+        from pydantic import BaseModel
+
+        class NovelNode(BaseModel):
+            node: str = "novel"
+            payload: str = "test"
+
+        novel = NovelNode()
+        with pytest.raises(UnhandledASTNodeError) as exc_info:
+            _detect_geometric_cues(novel)  # type: ignore[arg-type]
+
+        assert exc_info.value.node_type == "novel"
+
+    def test_error_message_identifies_unhandled_type_and_function(self):
+        """The error message names the unhandled node type and points at
+        _detect_geometric_cues."""
+        from pydantic import BaseModel
+
+        class NovelNode(BaseModel):
+            node: str = "novel"
+            payload: str = "test"
+
+        novel = NovelNode()
+        with pytest.raises(UnhandledASTNodeError) as exc_info:
+            _detect_geometric_cues(novel)  # type: ignore[arg-type]
+
+        msg = str(exc_info.value)
+        assert "novel" in msg, "error message must name the unhandled node type"
+        assert "_detect_geometric_cues" in msg, (
+            "error message must point at _detect_geometric_cues"
+        )
+        assert "noether/orchestrator/elicit.py" in msg, (
+            "error message must name the module"
+        )
+
+    def test_error_is_subclass_of_type_error(self):
+        """UnhandledASTNodeError is a TypeError subclass, preserving
+        behavioral compatibility with the former bare TypeError."""
+        assert issubclass(UnhandledASTNodeError, TypeError)
+
+    def test_fail_loud_no_silent_skip(self):
+        """An unhandled node crashes elicitation rather than being silently
+        skipped.  The match statement has no pass-through default."""
+        from pydantic import BaseModel
+
+        class NovelNode(BaseModel):
+            node: str = "novel"
+            payload: str = "test"
+
+        novel = NovelNode()
+        # Must raise, not return
+        with pytest.raises(UnhandledASTNodeError):
+            _detect_geometric_cues(novel)  # type: ignore[arg-type]
+
+    def test_existing_nodes_do_not_raise(self):
+        """All current AST node types are handled without error."""
+        from noether.npr.ast import (
+            Func,
+            Num,
+            Pow,
+            Prod,
+            Sum,
+            Sym,
+            Tensor,
+            cov,
+            down,
+        )
+
+        # Build a representative expression using every node type
+        expr = Prod(factors=[
+            Num(p=1, q=1),
+            Sym(name="phi"),
+            Func(name="V", args=[Sym(name="phi")]),
+            Tensor(name="R", indices=[down("mu"), down("nu")]),
+            cov(down("mu"), Sym(name="phi")),
+            Pow(base=Sym(name="phi"), exp=2),
+            Sum(terms=[Sym(name="a"), Sym(name="b")]),
+        ])
+        # Should not raise
+        cues = _detect_geometric_cues(expr)
+        assert cues.has_curvature is True  # R tensor detected

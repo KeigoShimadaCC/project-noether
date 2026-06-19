@@ -23,6 +23,33 @@ from noether.llm.base import LLMAdapter, LLMError
 from noether.npr.ast import Deriv, Expr, Func, Num, Pow, Prod, Sum, Sym, Tensor
 from noether.npr.schema import NPR, Ambiguity
 
+
+class UnhandledASTNodeError(TypeError):
+    """Raised when _detect_geometric_cues encounters an AST node type it
+    does not handle.
+
+    This is a fail-loud error: adding a new node type to ``noether/npr/ast.py``
+    without adding a corresponding case in ``_detect_geometric_cues``
+    (``noether/orchestrator/elicit.py``) will crash elicitation rather than
+    silently skipping the unknown node.  The fix is to add the case.
+
+    The no-guessing contract requires that every AST node is accounted for;
+    an unhandled node means the geometric-cue walk is incomplete and
+    inference may miss structural cues that ground geometry proposals.
+    """
+
+    def __init__(self, node_type: str, node_repr: str = "") -> None:
+        self.node_type = node_type
+        self.node_repr = node_repr
+        msg = (
+            f"Unhandled AST node type '{node_type}' in _detect_geometric_cues "
+            f"(noether/orchestrator/elicit.py). "
+            f"Add a corresponding case in the match statement."
+        )
+        if node_repr:
+            msg += f" Node: {node_repr}"
+        super().__init__(msg)
+
 SYSTEM_PROMPT = (
     "You assist a physicist using Noether, a symbolic-physics tool. You do not "
     "make final decisions. For each tagged question, PROPOSE exactly one of the "
@@ -114,7 +141,8 @@ def _detect_geometric_cues(expr: Expr) -> _GeometricCues:
                 for term in terms:
                     walk(term)
             case _:
-                raise TypeError(f"unhandled expr node {node!r}")
+                node_type = getattr(node, "node", type(node).__name__)
+                raise UnhandledASTNodeError(node_type, repr(node))
 
     walk(expr)
     # Curvature-free cue: torsion or non-metricity present, curvature absent.
