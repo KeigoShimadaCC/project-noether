@@ -93,6 +93,7 @@ class TestTeachingFieldDistinctFromDetail:
             kind="eom",
             capability=Capability.VARY,
             result_id="test-008",
+            detail="kernel confirmed the variation matches the candidate equation",
         )
         assert hasattr(d, "teaching"), "FieldDerivation must have a teaching field"
         assert d.teaching == "", "teaching defaults to empty string"
@@ -120,6 +121,7 @@ class TestTeachingFieldDistinctFromDetail:
             capability=Capability.VARY,
             result_id="test-008",
             result_tex=result_tex,
+            detail="kernel confirmed",
             teaching="The independent connection introduces projective freedom.",
         )
         assert d.teaching != d.result_tex, "teaching must not equal result_tex"
@@ -184,6 +186,7 @@ class TestTeachingMutatesNoNPR:
             result_id="test-009a",
             result_tex=r"G_{\mu\nu} = 0",
             verified=True,
+            detail="kernel confirmed",
             teaching="",
         )
         d2 = FieldDerivation(
@@ -193,6 +196,7 @@ class TestTeachingMutatesNoNPR:
             result_id="test-009b",
             result_tex=r"G_{\mu\nu} = 0",
             verified=True,
+            detail="kernel confirmed",
             teaching="The independent connection introduces projective freedom.",
         )
         assert d1.result_tex == d2.result_tex, "teaching must not alter result_tex"
@@ -206,6 +210,7 @@ class TestTeachingMutatesNoNPR:
             result_id="test-009c",
             verified=True,
             checks={"residue_zero": "True"},
+            detail="kernel confirmed",
             teaching="",
         )
         d2 = FieldDerivation(
@@ -215,6 +220,7 @@ class TestTeachingMutatesNoNPR:
             result_id="test-009d",
             verified=True,
             checks={"residue_zero": "True"},
+            detail="kernel confirmed",
             teaching="Torsion introduces spin-current coupling.",
         )
         assert d1.verified == d2.verified, "teaching must not alter verified"
@@ -243,6 +249,7 @@ class TestTeachingMutatesNoNPR:
             result_id="test-009e",
             verified=True,
             checks={"residue_zero": "True"},
+            detail="kernel confirmed",
             teaching="",
         )
         # A verified derivation with teaching
@@ -253,6 +260,7 @@ class TestTeachingMutatesNoNPR:
             result_id="test-009f",
             verified=True,
             checks={"residue_zero": "True"},
+            detail="kernel confirmed",
             teaching="The metric equation involves the symmetric Ricci tensor.",
         )
         # Both are verified because checks are the same
@@ -362,6 +370,7 @@ class TestVerifiedVsReasonedBoundary:
             result_id="test-016a",
             verified=True,
             checks={"residue_zero": "True", "solution_zero": "True"},
+            detail="kernel confirmed",
             teaching="Torsion couples to spin current.",
         )
         assert "teaching" not in d.checks, "teaching must not appear in checks"
@@ -382,6 +391,7 @@ class TestVerifiedVsReasonedBoundary:
                 result_id="test-016b",
                 verified=True,
                 checks={"residue_zero": "True"},
+                detail="kernel confirmed",
                 teaching=teaching_text,
             )
             assert d.verified is True, (
@@ -417,6 +427,7 @@ class TestVerifiedVsReasonedBoundary:
             result_id="test-016c",
             verified=True,
             checks={"residue_zero": "True"},
+            detail="kernel confirmed",
             teaching=custom_rationale,
         )
         for check_val in d.checks.values():
@@ -434,6 +445,7 @@ class TestVerifiedVsReasonedBoundary:
             result_id="test-016d",
             verified=True,
             checks={"residue_zero": "True", "solution_zero": "True"},
+            detail="kernel confirmed",
             teaching=teaching_str,
         )
         for check_val in d.checks.values():

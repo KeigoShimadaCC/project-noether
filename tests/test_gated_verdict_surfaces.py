@@ -313,6 +313,56 @@ class TestGatedVerdictFlagAndReason:
 
 
 # ---------------------------------------------------------------------------
+# Structural safeguard: detail is always non-empty (Pydantic validator)
+# ---------------------------------------------------------------------------
+
+
+class TestDetailNonemptyValidator:
+    """FieldDerivation.detail must be non-empty and not whitespace-only;
+    the Pydantic model_validator rejects construction with empty detail."""
+
+    def test_empty_detail_raises_validation_error(self) -> None:
+        """Constructing a FieldDerivation with empty detail raises
+        ValidationError."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="detail must be non-empty"):
+            FieldDerivation(
+                wrt="g",
+                kind="eom",
+                capability=Capability.VARY,
+                result_id="test-empty-detail",
+                detail="",
+            )
+
+    def test_whitespace_only_detail_raises_validation_error(self) -> None:
+        """Constructing a FieldDerivation with whitespace-only detail raises
+        ValidationError."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="detail must be non-empty"):
+            FieldDerivation(
+                wrt="g",
+                kind="eom",
+                capability=Capability.VARY,
+                result_id="test-whitespace-detail",
+                detail="   \t  ",
+            )
+
+    def test_nonempty_detail_passes_validation(self) -> None:
+        """Constructing a FieldDerivation with a non-empty detail succeeds."""
+        d = FieldDerivation(
+            wrt="g",
+            kind="eom",
+            capability=Capability.VARY,
+            result_id="test-valid-detail",
+            verified=True,
+            detail="kernel confirmed the variation matches the candidate equation",
+        )
+        assert d.detail  # detail is non-empty
+
+
+# ---------------------------------------------------------------------------
 # VAL-GUIDE-013: HTTP surfaces the verified flag and reason; verified is
 # distinct from gated
 # ---------------------------------------------------------------------------

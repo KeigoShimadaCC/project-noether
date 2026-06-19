@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from noether.kernels.base import Capability, ComputedResult, KernelTask
 from noether.kernels.cadabra.blocks import (
@@ -72,6 +72,19 @@ class FieldDerivation(BaseModel):
     # through the results payload so the consumer can see which conventions
     # produced the result.
     conventions: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _detail_must_be_nonempty(self) -> FieldDerivation:
+        """Structural safeguard: detail is always non-empty (a confirmation
+        reason when verified, a blocker when gated).  Per AGENTS.md, every
+        derivation path populates detail; this validator catches any future
+        path that forgets."""
+        if not self.detail.strip():
+            raise ValueError(
+                "FieldDerivation.detail must be non-empty (a confirmation "
+                "reason when verified, a blocker when gated)"
+            )
+        return self
 
 
 def _ladder_from_kernel(computed: ComputedResult, verified: bool, detail: str) -> LadderReport:
