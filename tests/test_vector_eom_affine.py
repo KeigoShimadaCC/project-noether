@@ -42,6 +42,7 @@ import sympy as sp
 
 from noether.kernels.base import Capability, KernelTask
 from noether.kernels.cadabra import CadabraAdapter
+from noether.kernels.cadabra.templates import get as get_template
 from noether.kernels.sympy_kernel.geometry import (
     _clean,
     christoffel_of_metric,
@@ -55,111 +56,13 @@ from noether.kernels.sympy_kernel.geometry import (
 )
 
 # ---------------------------------------------------------------------------
-# Cadabra script: Maxwell EOM with F = dA (exterior derivative)
+# Cadabra scripts: registered in templates.py, retrieved via get_template().
+#   _DA_EOM_SCRIPT         -> "vector_affine_dA_eom"
+#   _DA_HYPERMOMENTUM_SCRIPT -> "vector_affine_dA_hypermomentum"
+#   _COVCURL_HYPERMOMENTUM_SCRIPT -> "vector_affine_covcurl_hypermomentum"
+# Following the pattern established in misc-m3-inline-script-to-template-refactor
+# (test_hypermomentum.py, test_palatini_scalar_tensor_affine.py).
 # ---------------------------------------------------------------------------
-
-_DA_EOM_SCRIPT = r"""
-{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
-{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
-x::Coordinate.
-\nabla{#}::Derivative.
-g_{\mu\nu}::Metric.
-g^{\mu\nu}::InverseMetric.
-g_{\mu}^{\nu}::KroneckerDelta.
-g^{\mu}_{\nu}::KroneckerDelta.
-F_{\mu\nu}::AntiSymmetric.
-sg::LaTeXForm("\sqrt{-g}").
-{F_{\mu\nu}, A_{\mu}, dA_{\mu}}::Depends(\nabla{#}).
-
-ex := \int{ - 1/4 sg g^{\mu\alpha} g^{\nu\beta} F_{\mu\nu} F_{\alpha\beta} }{x};
-vary(ex, $F_{\mu\nu} -> \nabla_{\mu}{dA_{\nu}} - \nabla_{\nu}{dA_{\mu}}$);
-distribute(ex);
-canonicalise(ex);
-integrate_by_parts(ex, $dA_{\mu}$);
-product_rule(ex);
-distribute(ex);
-substitute(ex, $\nabla_{\mu}{g^{\alpha\beta}} -> 0$);
-substitute(ex, $\nabla_{\mu}{g_{\alpha\beta}} -> 0$);
-substitute(ex, $\nabla_{\mu}{sg} -> 0$);
-substitute(ex, $\int{A??}{x} -> A??$);
-eliminate_kronecker(ex);
-sort_product(ex);
-canonicalise(ex);
-rename_dummies(ex);
-print("NOETHER_RESULT: " + str(ex))
-
-target := sg g^{\mu\alpha} g^{\nu\beta} \nabla_{\mu}{F_{\alpha\beta}} dA_{\nu};
-distribute(target);
-eliminate_kronecker(target);
-sort_product(target);
-canonicalise(target);
-rename_dummies(target);
-
-residue := @(ex) - @(target);
-distribute(residue);
-eliminate_kronecker(residue);
-sort_product(residue);
-canonicalise(residue);
-rename_dummies(residue);
-meld(residue);
-print("NOETHER_CHECK: dA_eom_residue_zero=" + str(str(residue) == "0"))
-"""
-
-# ---------------------------------------------------------------------------
-# Cadabra script: Hypermomentum with F = dA (should be zero)
-# ---------------------------------------------------------------------------
-
-_DA_HYPERMOMENTUM_SCRIPT = r"""
-{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
-{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
-x::Coordinate.
-\partial{#}::PartialDerivative.
-g_{\mu\nu}::Metric.
-g^{\mu\nu}::InverseMetric.
-g_{\mu}^{\nu}::KroneckerDelta.
-g^{\mu}_{\nu}::KroneckerDelta.
-sg::LaTeXForm("\sqrt{-g}").
-{g_{\mu\nu}, g^{\mu\nu}, sg, A_{\mu}, dG^{\lambda}_{\mu\nu}}::Depends(\partial{#}).
-
-# Action with F = dA (no connection dependence)
-ex := \int{ - 1/4 sg g^{\mu\alpha} g^{\nu\beta}
-  (\partial_{\mu}{A_{\nu}} - \partial_{\nu}{A_{\mu}})
-  (\partial_{\alpha}{A_{\beta}} - \partial_{\beta}{A_{\alpha}}) }{x};
-vary(ex, $G^{\lambda}_{\mu\nu} -> dG^{\lambda}_{\mu\nu}$);
-distribute(ex);
-canonicalise(ex);
-has_dG = "dG" in str(ex);
-print("NOETHER_CHECK: dA_hypermomentum_zero=" + str(not has_dG))
-"""
-
-# ---------------------------------------------------------------------------
-# Cadabra script: Hypermomentum with F = nabla A (should be nonzero)
-# ---------------------------------------------------------------------------
-
-_COVCURL_HYPERMOMENTUM_SCRIPT = r"""
-{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Indices(position=fixed).
-{\mu,\nu,\rho,\sigma,\lambda,\kappa,\alpha,\beta,\gamma,\chi}::Integer(range=0..3).
-x::Coordinate.
-\partial{#}::PartialDerivative.
-g_{\mu\nu}::Metric.
-g^{\mu\nu}::InverseMetric.
-g_{\mu}^{\nu}::KroneckerDelta.
-g^{\mu}_{\nu}::KroneckerDelta.
-sg::LaTeXForm("\sqrt{-g}").
-{g_{\mu\nu}, g^{\mu\nu}, sg, A_{\mu}, dG^{\lambda}_{\mu\nu}}::Depends(\partial{#}).
-
-# Action with F = nabla A (connection-dependent)
-ex := \int{ - 1/4 sg g^{\mu\alpha} g^{\nu\beta}
-  (\partial_{\mu}{A_{\nu}} - G^{\lambda}_{\mu\nu} A_{\lambda}
-   - \partial_{\nu}{A_{\mu}} + G^{\lambda}_{\nu\mu} A_{\lambda})
-  (\partial_{\alpha}{A_{\beta}} - G^{\rho}_{\alpha\beta} A_{\rho}
-   - \partial_{\beta}{A_{\alpha}} + G^{\rho}_{\beta\alpha} A_{\rho}) }{x};
-vary(ex, $G^{\lambda}_{\mu\nu} -> dG^{\lambda}_{\mu\nu}$);
-distribute(ex);
-canonicalise(ex);
-has_dG = "dG" in str(ex);
-print("NOETHER_CHECK: covcurl_hypermomentum_nonzero=" + str(has_dG))
-"""
 
 
 def _run_cadabra(script: str):
@@ -236,7 +139,7 @@ class TestVectorEomDAResidue:
     def test_dA_eom_lc_divergence_residue_zero(self):
         """The dA Maxwell EOM equals nabla^{LC}_mu F^{mu nu} = 0.
         VAL-EOM-020."""
-        result = _run_cadabra(_DA_EOM_SCRIPT)
+        result = _run_cadabra(get_template("vector_affine_dA_eom"))
         assert result.raw.returncode == 0, result.raw.stderr
         checks = result.value.get("checks", {})
         assert checks.get("dA_eom_residue_zero") == "True", (
@@ -255,7 +158,7 @@ class TestHypermomentumDA:
     def test_dA_hypermomentum_zero(self):
         """Varying the dA action w.r.t. G^lambda_{mu nu} gives zero.
         VAL-EOM-021."""
-        result = _run_cadabra(_DA_HYPERMOMENTUM_SCRIPT)
+        result = _run_cadabra(get_template("vector_affine_dA_hypermomentum"))
         assert result.raw.returncode == 0, result.raw.stderr
         checks = result.value.get("checks", {})
         assert checks.get("dA_hypermomentum_zero") == "True", (
@@ -276,7 +179,7 @@ class TestHypermomentumCovCurl:
     def test_covcurl_hypermomentum_nonzero(self):
         """Varying the nabla-A action w.r.t. G^lambda_{mu nu} gives
         nonzero hypermomentum.  VAL-EOM-021."""
-        result = _run_cadabra(_COVCURL_HYPERMOMENTUM_SCRIPT)
+        result = _run_cadabra(get_template("vector_affine_covcurl_hypermomentum"))
         assert result.raw.returncode == 0, result.raw.stderr
         checks = result.value.get("checks", {})
         assert checks.get("covcurl_hypermomentum_nonzero") == "True", (
