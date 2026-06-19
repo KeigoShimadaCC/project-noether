@@ -66,7 +66,13 @@ class FieldDerivation(BaseModel):
     script: str = ""
     bundle_path: str | None = None
     detail: str = ""
-    teaching: str = ""  # teaching narration (reasoned, not verified; distinct from detail)
+    teaching: str = ""  # Geometry teaching channel: prose explaining what the
+                        # user's geometric choices imply for this derivation
+                        # (torsion -> spin coupling, projective freedom -> no
+                        # unique connection, etc.). Reasoned, not kernel-verified;
+                        # never mutates the NPR or sets result_tex. Distinct from
+                        # ResultBundle.narrative, which is the provenance summary
+                        # of what the kernel computed and which checks passed.
     # The active convention block at derivation time. Explicit and named;
     # never silently assumed. Populated for ADM derivations and threaded
     # through the results payload so the consumer can see which conventions

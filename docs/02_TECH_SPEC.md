@@ -1346,6 +1346,23 @@ results/<session>/<result-id>/
 Reproduction contract: `noether reproduce <result-id>` reruns `scripts/` against
 pinned kernel versions and diffs canonical forms. CI runs this for the eval corpus.
 
+Two narration-like string fields exist in the provenance layer and serve
+different roles:
+
+- **ResultBundle.narrative** is the provenance summary: it records what the
+  kernel computed, which checks passed, and how the result was derived. It is
+  written to `narrative.md` in the bundle directory. The field name is
+  persisted in on-disk bundles and must not be renamed.
+
+- **FieldDerivation.teaching** is the geometry teaching channel: prose that
+  explains the physical consequences of the user's geometric choices (what
+  torsion implies for spin coupling, what projective freedom means for the
+  connection equation, and so on). It is reasoned, not kernel-verified; it
+  never mutates the NPR or sets a result expression.
+
+They are not interchangeable. `narrative` answers "what happened in this
+run"; `teaching` answers "why do the geometry choices matter for this result."
+
 ## 8. Technology stack summary
 
 | Concern | Choice | Notes |

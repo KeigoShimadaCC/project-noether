@@ -25,7 +25,13 @@ class ResultBundle(BaseModel):
     plan: list[dict] = Field(default_factory=list)
     computed: list[ComputedResult] = Field(default_factory=list)
     ladder: LadderReport
-    narrative: str = ""
+    narrative: str = ""  # Provenance summary: what was computed, which kernel
+                         # checks passed, and how the result was derived. Written
+                         # to narrative.md in the bundle directory. Not the same
+                         # as FieldDerivation.teaching (which explains geometry
+                         # tradeoffs); this field records what happened, not why
+                         # it matters. The field name is persisted in on-disk
+                         # bundles and must not be renamed.
     # The presentation-shaped FieldDerivation dicts backed by this bundle.
     # Stored so result history can be reloaded without re-running the kernel.
     derivations: list[dict] = Field(default_factory=list)
