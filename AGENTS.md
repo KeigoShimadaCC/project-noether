@@ -321,6 +321,37 @@ every computation.
 
 `docs/04_EVALS.md` is written in these conventions.
 
+### Metric-affine extensions (metric-affine-v1)
+
+When the connection is independent the convention block carries these fields on top
+of the `noether-default-v1` base. The authoritative source is
+`noether/npr/conventions.py` (the `Conventions` model and `NOETHER_DEFAULT_V1`);
+the values below reproduce its defaults.
+
+- `torsion_sign="+1"`: `T^λ_{μν} = Γ^λ_{μν} − Γ^λ_{νμ}` (the definition already
+  listed above). Sign `"−1"` flips the order.
+- `nonmetricity_definition="nabla-g"`: `Q_{λμν} = ∇_λ g_{μν}` where `∇` is the full
+  affine connection. The alternative `"minus-nabla-g"` gives `Q_{λμν} = −∇_λ g_{μν}`.
+- `contortion_sign="+1"`: `K^λ_{μν} = +(½)(T^λ_{μν} + g^{λσ} g_{μτ} T^τ_{σν}
+  + g^{λσ} g_{ντ} T^τ_{σμ})`. Sign `"−1"` flips the leading factor to `−(½)`.
+- `disformation_sign="+1"`: `L^λ_{μν} = +(½) g^{λρ}(−Q_{μνρ} − Q_{νρμ} + Q_{ρμν})`.
+  Sign `"−1"` flips the leading factor to `−(½)`.
+- `ricci_contraction="first-third"`: `R_{μν} = R^λ_{μλν}` (the base default). The
+  alternative `"first-fourth"` gives `R_{μν} = R^λ_{μνλ}`. This becomes an elicited
+  choice under an independent connection because Ricci is then non-symmetric.
+- `field_strength_definition="exterior-derivative"`: `F_{μν} = 2∂_{[μ}A_{ν]}` (the `dA`
+  form listed above). The alternative `"covariant-curl"` gives `F_{μν} = 2∇_{[μ}A_{ν]}`.
+  The two differ by `T^λ_{μν}A_λ` under torsion, so the choice is elicited when a
+  vector field exists on a non-Levi-Civita background.
+- `K_sign="+1"`: `K_{ij} = +∇_i n_j` (expansion-positive). Sign `"−1"` gives
+  `K_{ij} = −∇_i n_j` (MTW convention).
+- `foliation_normal="future-directed"`: `n_μ` is the future-pointing timelike normal
+  (`n_μ = (−N, 0, …, 0)` for mostly-plus signature). The alternative
+  `"past-directed"` gives `n_μ = (+N, 0, …, 0)`.
+
+Every metric-affine derivation records these fields in its convention block.
+Changing any of them changes the result; no field is assumed silently.
+
 ## 6. Engineering conventions
 
 - Language: Python 3.12+, full type annotations, `pydantic` for the NPR schema.
