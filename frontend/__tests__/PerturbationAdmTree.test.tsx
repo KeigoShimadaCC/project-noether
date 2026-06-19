@@ -251,8 +251,6 @@ describe("DerivationTree: perturbation derivation", () => {
 
   it("renders the quadratic-action result LaTeX", () => {
     const d = makePerturbationDerivation();
-    render(<DerivationTree derivation={d} action={baseAction} plan={perturbationPlan} />);
-
     // The result node exists
     const { container } = render(
       <DerivationTree derivation={d} action={baseAction} plan={perturbationPlan} />,
