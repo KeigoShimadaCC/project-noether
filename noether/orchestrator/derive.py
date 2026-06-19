@@ -66,7 +66,7 @@ class FieldDerivation(BaseModel):
     llm_version: str = ""
     script: str = ""
     bundle_path: str | None = None
-    detail: str = ""
+    detail: str
     teaching: str = ""  # Geometry teaching channel: prose explaining what the
                         # user's geometric choices imply for this derivation
                         # (torsion -> spin coupling, projective freedom -> no
@@ -937,11 +937,6 @@ _ADM_SPLIT_TEX = (
 )
 _ADM_HAMILTONIAN_TEX = r"2\,G_{\mu\nu}\,n^{\mu}n^{\nu} = R^{(3)} + K^{2} - K_{ab}K^{ab}"
 _ADM_MOMENTUM_TEX = r"G_{\mu i}\,n^{\mu} = D_{a}\!\left(K^{a}{}_{i} - \delta^{a}{}_{i}\,K\right)"
-_ADM_K_TEX = (
-    r"K_{ij} = \tfrac{1}{2N}\left(\partial_{t}h_{ij} - D_{i}N_{j} - D_{j}N_{i}\right)"
-    r" = \nabla_{i}n_{j}"
-)
-
 _ADM_OUTPUTS: list[tuple[str, str]] = [
     ("Gauss-Codazzi split of the gravitational Lagrangian", _ADM_SPLIT_TEX),
     ("Hamiltonian (normal-normal) projection", _ADM_HAMILTONIAN_TEX),
