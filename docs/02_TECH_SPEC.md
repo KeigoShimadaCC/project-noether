@@ -942,7 +942,10 @@ if `verified==True` then `residue_zero=="True"`, else `verified==False` with
 a non-empty `detail`. The G4/G5 derivations carry their convention block
 (via `_convention_block(npr)`) just like every other derivation path (EOM,
 perturbation, ADM), so even the gated result identifies the conventions that
-produced the (unverified) expression.
+produced the (unverified) expression. The G4/G5 derivations persist via
+`write_bundle` (one provenance bundle per result_id) exactly like the general
+and compositional paths, so they reload via `GET /sessions/{id}/results`,
+MCP `noether_results`, and the on-disk `derivations.json` (VAL-CROSS-021).
 
 ### 6.2 Vector (Maxwell) EOM on a metric-affine background
 

@@ -2608,3 +2608,256 @@ def _build_metric_affine_adm_npr_helper():
         task=Task(type="adm", with_respect_to=["g"]),
         ambiguities=[],
     )
+
+
+# ---------------------------------------------------------------------------
+# VAL-CROSS-021: Gated derivations persist and reload like verified ones
+# ---------------------------------------------------------------------------
+
+
+G4_LAGRANGIAN = r"G(\phi, X) R"
+G4_MEASURE = r"d^4x \sqrt{-g}"
+
+
+def _resolve_all_g4(
+    body: dict,
+    resolve_fn,
+    *,
+    connection: str = "levi-civita",
+    conventions: str = "noether-default-v1",
+) -> dict:
+    """Resolve ambiguities for a scalar G4 session via the supplied resolve
+    function (HTTP POST or MCP tools.resolve). The G4 action is a scalar
+    theory on a Levi-Civita background, so no geometry questions are raised
+    (only convention and vary-wrt questions)."""
+    sid = body["session_id"]
+    resolutions: dict[str, str] = {}
+    for q in body["questions"]:
+        if q["id"] == "amb-conventions":
+            resolutions[q["id"]] = conventions
+        elif q["id"] == "amb-vary-wrt":
+            # Pick the option that includes both g and phi
+            if "g and phi" in q["options"]:
+                resolutions[q["id"]] = "g and phi"
+            else:
+                resolutions[q["id"]] = q["options"][0]
+        elif q.get("resolution") is None:
+            # Resolve any remaining open ambiguity with the first option
+            resolutions[q["id"]] = q["options"][0]
+    if resolutions:
+        result = resolve_fn(sid, resolutions)
+    else:
+        result = body
+    return result
+
+
+class TestG4G5GatedPersistence:
+    """VAL-CROSS-021: A gated derivation (verified==false with a non-empty
+    detail, e.g. a best-effort G4(phi,X)R Horndeski EOM) returned by POST
+    /derive is recorded into the session and persisted, so it reloads with
+    the same result_id, verified==false, and the same non-empty detail via
+    GET /sessions/{id}/results, MCP noether_results, and the provenance
+    bundle derivations.json, exactly like a verified result. A gated result
+    is never silently dropped from history.
+
+    This exercises the G4/G5 best-effort path through the HTTP surface,
+    which previously returned the gated result correctly from POST /derive
+    but did NOT persist it (the g4g5 branch in derive_field early-returned
+    before the shared write_bundle block).
+    """
+
+    @requires_cadabra
+    def test_g4_derive_returns_gated_result(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """POST /derive on a G4 action yields a gated result
+        (verified=False with non-empty detail)."""
+        client = TestClient(
+            create_app(store=store, results_root=results_root)
+        )
+
+        resp = client.post("/sessions", json={"lagrangian": G4_LAGRANGIAN})
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        sid = body["session_id"]
+
+        def _resolve(session_id: str, resolutions: dict) -> dict:
+            r = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert r.status_code == 200, r.text
+            return r.json()
+
+        _resolve_all_g4(body, _resolve)
+
+        # Derive the scalar EOM (wrt phi) - triggers the g4g5 path
+        derive_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "eom", "with_respect_to": ["phi"]},
+        )
+        assert derive_resp.status_code == 200, derive_resp.text
+        derivations = derive_resp.json()["derivations"]
+        assert len(derivations) >= 1, "must return at least one derivation"
+        phi_d = next(d for d in derivations if d["wrt"] == "phi")
+        assert phi_d["verified"] is False, (
+            f"G4 scalar EOM must be gated (verified=False); "
+            f"got verified={phi_d['verified']}"
+        )
+        assert phi_d["detail"], (
+            "Gated G4 scalar EOM must have non-empty detail"
+        )
+
+    @requires_cadabra
+    def test_g4_gated_result_persists_and_reloads_via_http(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """GET /sessions/{id}/results returns the same gated result_id with
+        verified=False and the same non-empty detail."""
+        client = TestClient(
+            create_app(store=store, results_root=results_root)
+        )
+
+        resp = client.post("/sessions", json={"lagrangian": G4_LAGRANGIAN})
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        sid = body["session_id"]
+
+        def _resolve(session_id: str, resolutions: dict) -> dict:
+            r = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert r.status_code == 200, r.text
+            return r.json()
+
+        _resolve_all_g4(body, _resolve)
+
+        # Derive (triggers g4g5 path)
+        derive_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "eom", "with_respect_to": ["phi"]},
+        )
+        assert derive_resp.status_code == 200
+        derive_d = derive_resp.json()["derivations"]
+        phi_d = next(d for d in derive_d if d["wrt"] == "phi")
+        result_id = phi_d["result_id"]
+
+        # GET /results must return the same result_id with the same verdict
+        results_resp = client.get(f"/sessions/{sid}/results")
+        assert results_resp.status_code == 200
+        results = results_resp.json()["results"]
+        reloaded = next(
+            (r for r in results if r["result_id"] == result_id), None
+        )
+        assert reloaded is not None, (
+            f"result_id {result_id} not found in GET /results; "
+            f"available: {[r['result_id'] for r in results]}"
+        )
+        assert reloaded["verified"] is False, (
+            "reloaded G4 result must be verified=False"
+        )
+        assert reloaded["detail"] == phi_d["detail"], (
+            f"reloaded detail must match live; "
+            f"live={phi_d['detail']!r}, reloaded={reloaded['detail']!r}"
+        )
+
+    @requires_cadabra
+    def test_g4_gated_result_persists_and_reloads_via_mcp(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """MCP noether_results returns the same gated result with
+        verified=False and the same detail as HTTP."""
+        client = TestClient(
+            create_app(store=store, results_root=results_root)
+        )
+        tools = NoetherTools(store, results_root=results_root)
+
+        resp = client.post("/sessions", json={"lagrangian": G4_LAGRANGIAN})
+        assert resp.status_code == 201
+        body = resp.json()
+        sid = body["session_id"]
+
+        def _resolve(session_id: str, resolutions: dict) -> dict:
+            r = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert r.status_code == 200, r.text
+            return r.json()
+
+        _resolve_all_g4(body, _resolve)
+
+        # Derive
+        derive_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "eom", "with_respect_to": ["phi"]},
+        )
+        assert derive_resp.status_code == 200
+        derive_d = derive_resp.json()["derivations"]
+        phi_d = next(d for d in derive_d if d["wrt"] == "phi")
+        result_id = phi_d["result_id"]
+
+        # MCP noether_results must return the same gated result
+        mcp_results = tools.results(sid)
+        mcp_d = next(
+            (r for r in mcp_results["results"] if r["result_id"] == result_id),
+            None,
+        )
+        assert mcp_d is not None, (
+            f"result_id {result_id} not found in MCP results; "
+            f"available: {[r['result_id'] for r in mcp_results['results']]}"
+        )
+        assert mcp_d["verified"] is False
+        assert mcp_d["detail"] == phi_d["detail"]
+
+    @requires_cadabra
+    def test_g4_gated_result_bundle_derivations_json_agrees(
+        self, store: SessionStore, results_root: Path
+    ) -> None:
+        """The on-disk provenance bundle derivations.json agrees with the
+        HTTP reload for the gated G4 result."""
+        client = TestClient(
+            create_app(store=store, results_root=results_root)
+        )
+
+        resp = client.post("/sessions", json={"lagrangian": G4_LAGRANGIAN})
+        assert resp.status_code == 201
+        body = resp.json()
+        sid = body["session_id"]
+
+        def _resolve(session_id: str, resolutions: dict) -> dict:
+            r = client.post(
+                f"/sessions/{session_id}/resolve",
+                json={"resolutions": resolutions},
+            )
+            assert r.status_code == 200, r.text
+            return r.json()
+
+        _resolve_all_g4(body, _resolve)
+
+        # Derive
+        derive_resp = client.post(
+            f"/sessions/{sid}/derive",
+            json={"kind": "eom", "with_respect_to": ["phi"]},
+        )
+        assert derive_resp.status_code == 200
+        derive_d = derive_resp.json()["derivations"]
+        phi_d = next(d for d in derive_d if d["wrt"] == "phi")
+        result_id = phi_d["result_id"]
+
+        # Bundle derivations.json
+        session = store.get(sid)
+        bundle_derivations = read_results(results_root, sid, session.result_ids)
+        bundle_d = next(
+            (r for r in bundle_derivations if r["result_id"] == result_id),
+            None,
+        )
+        assert bundle_d is not None, (
+            f"result_id {result_id} not found in bundle derivations.json; "
+            f"available: {[r['result_id'] for r in bundle_derivations]}"
+        )
+        assert bundle_d["verified"] is False
+        assert bundle_d["detail"] == phi_d["detail"]
+        assert bundle_d["wrt"] == "phi"
+        assert bundle_d["kind"] == "eom"

@@ -291,6 +291,11 @@ def attempt_g4g5_eom(
     scalar and metric EOMs to residue-check, and the metric EOM cannot close
     without normal-ordering.
 
+    When ``results_root`` is not None, a provenance bundle is written for each
+    derivation (one per result_id), mirroring the general path's persistence
+    block so the gated result reloads via GET /sessions/{id}/results, MCP
+    noether_results, and derivations.json (VAL-CROSS-021).
+
     Returns:
         List of two ``FieldDerivation`` objects: one for the scalar EOM
         (wrt="phi") and one for the metric EOM (wrt="g").
@@ -373,6 +378,44 @@ def attempt_g4g5_eom(
         detail=detail,
         conventions=conv_block,
     )
+
+    # Persist each derivation's provenance bundle, mirroring the general
+    # path's shared persistence block.  This is the fix for VAL-CROSS-021:
+    # gated G4/G5 best-effort EOM derivations must be persisted so they
+    # reload via GET /sessions/{id}/results, MCP noether_results, and the
+    # provenance bundle derivations.json.  Without this, the g4g5 branch
+    # in derive_field early-returns before the shared write_bundle section,
+    # and _record (server/app.py, mcp/server.py) already records the id
+    # but read_results skips results whose bundle is missing.
+    if results_root is not None:
+        for derivation, computed in [
+            (scalar_derivation, scalar_computed),
+            (metric_derivation, metric_computed),
+        ]:
+            derivation.bundle_path = str(
+                results_root / session_id / derivation.result_id
+            )
+            ladder = _ladder_from_kernel(computed, both_verified, detail)
+            narrative = (
+                f"best-effort G4/G5 EOM wrt {derivation.wrt}. "
+                f"Script from hand-audited horndeski_g4g5; "
+                f"verified={both_verified} "
+                f"(kernel diagnostic checks: "
+                f"{', '.join(f'{k}={v}' for k, v in derivation.checks.items())}). "
+                f"{detail}"
+            )
+            bundle = ResultBundle(
+                session_id=session_id,
+                result_id=derivation.result_id,
+                result_tex=derivation.result_tex or "",
+                npr_snapshot=npr,
+                plan=[],
+                computed=[computed],
+                ladder=ladder,
+                narrative=narrative,
+                derivations=[derivation.model_dump(mode="json")],
+            )
+            write_bundle(results_root, bundle)
 
     return [scalar_derivation, metric_derivation]
 

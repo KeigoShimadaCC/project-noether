@@ -443,3 +443,248 @@ class TestG4G5Detection:
         the G4 component."""
         lag = parse_lagrangian(r"G(\phi, X) R - \tfrac12 \nabla_\mu\phi \nabla^\mu\phi")
         assert has_g4g5_terms(lag, "phi")
+
+
+# ---------------------------------------------------------------------------
+# VAL-CROSS-021: Gated G4/G5 derivations persist and reload
+# ---------------------------------------------------------------------------
+
+
+class _StubCadabraForG4G5:
+    """A minimal stub cadabra adapter that returns pre-built ComputedResult
+    objects mimicking what the real g4g5 scripts produce, without needing
+    the cadabra2 binary. Used to test the persistence path in
+    attempt_g4g5_eom independently of the kernel."""
+
+    def __init__(self, *, gated: bool = True) -> None:
+        self._gated = gated
+
+    def available(self) -> bool:
+        return True
+
+    def run(self, task):
+        from noether.kernels.base import ComputedResult, KernelRawOutput, KernelScript
+
+        script_source = task.payload.get("script", "# stub")
+        is_scalar = "scalar" in task.description.lower()
+        checks = {}
+        if is_scalar:
+            checks["scalar_eom_second_order"] = "True"
+        else:
+            checks["metric_eom_has_third_derivs"] = "True"
+        if not self._gated:
+            checks["residue_zero"] = "True"
+        return ComputedResult(
+            kernel_name="cadabra",
+            kernel_version="stub",
+            script=KernelScript(
+                kernel_name="cadabra", language="cadabra", source=script_source
+            ),
+            raw=KernelRawOutput(stdout="stub", returncode=0),
+            expression_tex="stub_expr" if not is_scalar else "stub_scalar_expr",
+            value={"checks": checks},
+        )
+
+
+class TestG4G5Persistence:
+    """VAL-CROSS-021: Gated G4/G5 best-effort EOM derivations are persisted
+    to history, so they reload via GET /sessions/{id}/results, MCP
+    noether_results, and the provenance bundle derivations.json.
+
+    Before the fix, the g4g5 branch in derive_field called
+    attempt_g4g5_eom and early-returned before the shared persistence
+    block (write_bundle), so gated results were returned by POST /derive
+    but never persisted. This test verifies the fix: attempt_g4g5_eom
+    writes a provenance bundle for each derivation when results_root is
+    provided.
+    """
+
+    def test_attempt_g4g5_eom_writes_bundles_when_results_root_provided(
+        self, tmp_path
+    ) -> None:
+        """attempt_g4g5_eom writes a provenance bundle for each derivation
+        (scalar and metric) when results_root is not None."""
+        from noether.provenance.bundle import read_results
+
+        results_root = tmp_path / "results"
+        results_root.mkdir()
+        npr = _g4g5_npr()
+        stub = _StubCadabraForG4G5(gated=True)
+
+        derivations = attempt_g4g5_eom(
+            stub,
+            npr=npr,
+            session_id="test-session",
+            results_root=results_root,
+        )
+
+        assert len(derivations) == 2
+
+        # Each derivation must have bundle_path set
+        for d in derivations:
+            assert d.bundle_path is not None, (
+                f"G4/G5 derivation wrt {d.wrt} must have bundle_path set "
+                f"when results_root is provided"
+            )
+            assert d.bundle_path.endswith(d.result_id), (
+                f"bundle_path must end with result_id; "
+                f"got bundle_path={d.bundle_path}, result_id={d.result_id}"
+            )
+
+        # Each derivation's derivations.json must exist on disk
+        for d in derivations:
+            bundle_dir = results_root / "test-session" / d.result_id
+            derivations_json = bundle_dir / "derivations.json"
+            assert derivations_json.exists(), (
+                f"derivations.json must exist for result_id={d.result_id}; "
+                f"expected path: {derivations_json}"
+            )
+
+        # read_results must reload the derivations
+        result_ids = [d.result_id for d in derivations]
+        reloaded = read_results(results_root, "test-session", result_ids)
+        assert len(reloaded) >= 2, (
+            f"read_results must return at least 2 derivations; got {len(reloaded)}"
+        )
+        reloaded_ids = {r["result_id"] for r in reloaded}
+        for rid in result_ids:
+            assert rid in reloaded_ids, (
+                f"result_id {rid} not found in reloaded derivations; "
+                f"available: {reloaded_ids}"
+            )
+
+    def test_attempt_g4g5_eom_persists_gated_verdict_and_detail(
+        self, tmp_path
+    ) -> None:
+        """The persisted derivations carry the same verified=False verdict
+        and non-empty detail as the live derivations."""
+        from noether.provenance.bundle import read_results
+
+        results_root = tmp_path / "results"
+        results_root.mkdir()
+        npr = _g4g5_npr()
+        stub = _StubCadabraForG4G5(gated=True)
+
+        derivations = attempt_g4g5_eom(
+            stub,
+            npr=npr,
+            session_id="test-session",
+            results_root=results_root,
+        )
+
+        result_ids = [d.result_id for d in derivations]
+        reloaded = read_results(results_root, "test-session", result_ids)
+
+        # Build map by result_id for comparison
+        live_by_id = {d.result_id: d for d in derivations}
+        reloaded_by_id: dict[str, dict] = {}
+        for r in reloaded:
+            rid = r.get("result_id", "")
+            if rid in live_by_id:
+                reloaded_by_id[rid] = r
+
+        for rid, live in live_by_id.items():
+            assert rid in reloaded_by_id, f"result_id {rid} missing from reloaded"
+            reloaded_d = reloaded_by_id[rid]
+            assert reloaded_d["verified"] is False, (
+                f"reloaded derivation {rid} must be verified=False"
+            )
+            assert reloaded_d["verified"] == live.verified, (
+                f"reloaded verified must match live for {rid}"
+            )
+            assert reloaded_d["detail"] == live.detail, (
+                f"reloaded detail must match live for {rid}; "
+                f"live={live.detail!r}, reloaded={reloaded_d['detail']!r}"
+            )
+            assert reloaded_d["detail"], (
+                f"reloaded derivation {rid} must have non-empty detail"
+            )
+
+    def test_attempt_g4g5_eom_no_bundles_when_results_root_none(
+        self, tmp_path
+    ) -> None:
+        """When results_root is None, attempt_g4g5_eom still returns
+        derivations but does not write bundles (matching the general path)."""
+        npr = _g4g5_npr()
+        stub = _StubCadabraForG4G5(gated=True)
+
+        derivations = attempt_g4g5_eom(
+            stub,
+            npr=npr,
+            session_id="test-session",
+            results_root=None,
+        )
+
+        assert len(derivations) == 2
+        for d in derivations:
+            assert d.bundle_path is None, (
+                f"bundle_path must be None when results_root is None; "
+                f"got {d.bundle_path}"
+            )
+
+    def test_attempt_g4g5_eom_persists_conventions_in_bundle(
+        self, tmp_path
+    ) -> None:
+        """The persisted derivation carries the named convention block,
+        consistent with every other derivation path."""
+        from noether.provenance.bundle import read_results
+
+        results_root = tmp_path / "results"
+        results_root.mkdir()
+        npr = _g4g5_npr()
+        stub = _StubCadabraForG4G5(gated=True)
+
+        derivations = attempt_g4g5_eom(
+            stub,
+            npr=npr,
+            session_id="test-session",
+            results_root=results_root,
+        )
+
+        result_ids = [d.result_id for d in derivations]
+        reloaded = read_results(results_root, "test-session", result_ids)
+
+        for r in reloaded:
+            if r.get("result_id", "").startswith("g4g5-"):
+                conv = r.get("conventions", {})
+                assert conv, (
+                    f"persisted G4/G5 derivation must carry a non-empty "
+                    f"convention block; got {conv!r}"
+                )
+                assert "signature" in conv, (
+                    f"convention block must include 'signature'; "
+                    f"got keys: {sorted(conv.keys())}"
+                )
+                assert "convention_id" in conv, (
+                    f"convention block must include 'convention_id'; "
+                    f"got keys: {sorted(conv.keys())}"
+                )
+
+    def test_attempt_g4g5_eom_bundle_narrative_mentions_g4g5(
+        self, tmp_path
+    ) -> None:
+        """The bundle narrative mentions the best-effort G4/G5 nature,
+        so a consumer can distinguish it from a general-path derivation."""
+        results_root = tmp_path / "results"
+        results_root.mkdir()
+        npr = _g4g5_npr()
+        stub = _StubCadabraForG4G5(gated=True)
+
+        derivations = attempt_g4g5_eom(
+            stub,
+            npr=npr,
+            session_id="test-session",
+            results_root=results_root,
+        )
+
+        for d in derivations:
+            bundle_dir = results_root / "test-session" / d.result_id
+            narrative_path = bundle_dir / "narrative.md"
+            assert narrative_path.exists(), (
+                f"narrative.md must exist for result_id={d.result_id}"
+            )
+            narrative = narrative_path.read_text()
+            assert "G4/G5" in narrative or "best-effort" in narrative, (
+                f"narrative must mention the G4/G5 or best-effort nature; "
+                f"got: {narrative!r}"
+            )
