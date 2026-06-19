@@ -42,6 +42,7 @@ from noether.kernels.cadabra.horndeski_g4g5 import (
     assemble_g4_scalar_eom_script,
 )
 from noether.llm.base import LLMAdapter
+from noether.npr.conventions import Conventions
 from noether.npr.schema import NPR
 from noether.orchestrator.planner import build_plan
 from noether.provenance.bundle import ResultBundle, write_bundle
@@ -969,6 +970,33 @@ _ADM_NONMETRICITY_FOLIATION_TEX = (
 _ADM_K_SIGN_TEX = (
     r"K_{ij} = +\nabla_i n_j\;\text{(expansion-positive, }n_\mu = (-N,0,\ldots,0)\text{)}"
 )
+
+
+def _adm_k_sign_tex(c: Conventions) -> str:
+    """Build the extrinsic-curvature convention display from the active
+    convention, consistent with _convention_block().
+
+    The display shows both the K_sign relation and the foliation-normal
+    direction, so that the ADM result_tex is consistent with the
+    convention block even when K_sign or foliation_normal are overridden.
+    """
+    if c.K_sign == "+1":
+        sign_part = r"K_{ij} = +\nabla_i n_j"
+        sign_label = "expansion-positive"
+    else:
+        sign_part = r"K_{ij} = -\nabla_i n_j"
+        sign_label = "expansion-negative"
+    if c.foliation_normal == "future-directed":
+        if c.signature == "mostly-plus":
+            normal_part = r"n_\mu = (-N,0,\ldots,0)"
+        else:
+            normal_part = r"n_\mu = (+N,0,\ldots,0)"
+    else:  # past-directed
+        if c.signature == "mostly-plus":
+            normal_part = r"n_\mu = (+N,0,\ldots,0)"
+        else:
+            normal_part = r"n_\mu = (-N,0,\ldots,0)"
+    return sign_part + r"\;\text{(" + sign_label + ", }" + normal_part + r"\text{)}"
 _ADM_CONNECTION_CONSTRAINTS_TEX = (
     r"\text{Primary: }\delta S/\delta\Gamma\;\text{algebraic}"
     r"\;\Rightarrow\;\Gamma\;\text{non-dynamical}"
@@ -1205,6 +1233,14 @@ def derive_adm(
             piece_checks = affine_checks
             piece_teaching = default_teaching
 
+            # Derive the extrinsic-curvature convention display from the
+            # active convention (c.K_sign, c.foliation_normal), consistent
+            # with _convention_block(). The module-level _ADM_K_SIGN_TEX
+            # is the default-convention value; an overridden K_sign or
+            # foliation_normal must be reflected in the result_tex.
+            if label == "extrinsic curvature convention":
+                tex = _adm_k_sign_tex(npr.conventions)
+
             # The connection-sector constraints piece carries a more
             # specific verdict depending on the Dirac chain closure.
             if label == "connection-sector constraints":
@@ -1330,11 +1366,18 @@ def derive_adm(
         all_computed = [computed]
         if affine_computed is not None:
             all_computed.append(affine_computed)
+        # The K-sign convention label in the narrative must match the
+        # active convention, consistent with _convention_block().
+        k_label = (
+            "K_{ij} = +nabla_i n_j"
+            if npr.conventions.K_sign == "+1"
+            else "K_{ij} = -nabla_i n_j"
+        )
         narrative = (
             "ADM (3+1) decomposition of the gravitational sector. The split "
             f"and projections were verified by {computed.kernel_name} "
             f"{computed.kernel_version} on a nondegenerate 1+2 background; "
-            f"K_{{ij}} = nabla_i n_j and the lapse Euler-Lagrange equation are "
+            f"{k_label} and the lapse Euler-Lagrange equation are "
             f"part of the same suite. verified={verified}."
         )
         if has_independent_connection:

@@ -1235,3 +1235,171 @@ class TestMatterHypermomentumInDeriveADM:
             "matter piece should use the SymPy kernel"
         )
 
+
+# ---------------------------------------------------------------------------
+# Convention-aware K-sign / foliation-normal display
+# ---------------------------------------------------------------------------
+
+
+class TestADMConventionAwareDisplay:
+    """The ADM extrinsic-curvature display derives from the active convention
+    (c.K_sign, c.foliation_normal), consistent with _convention_block().
+
+    A session that overrides K_sign='-1' or foliation_normal='past-directed'
+    must see the ADM result_tex reflect the override, not the default.
+    No physics change for the default convention (the display matches the
+    old hardcoded _ADM_K_SIGN_TEX)."""
+
+    @pytest.fixture()
+    def _npr_default(self):
+        """A metric-affine NPR with default conventions."""
+        return _build_metric_affine_adm_npr()
+
+    @pytest.fixture()
+    def _npr_ksign_minus(self):
+        """A metric-affine NPR with K_sign='-1' (MTW convention)."""
+        from noether.npr import NOETHER_DEFAULT_V1
+
+        npr = _build_metric_affine_adm_npr()
+        return npr.model_copy(
+            update={"conventions": NOETHER_DEFAULT_V1.model_copy(update={"K_sign": "-1"})}
+        )
+
+    @pytest.fixture()
+    def _npr_past_directed(self):
+        """A metric-affine NPR with foliation_normal='past-directed'."""
+        from noether.npr import NOETHER_DEFAULT_V1
+
+        npr = _build_metric_affine_adm_npr()
+        return npr.model_copy(
+            update={
+                "conventions": NOETHER_DEFAULT_V1.model_copy(
+                    update={"foliation_normal": "past-directed"}
+                )
+            }
+        )
+
+    @pytest.fixture()
+    def _npr_both_overridden(self):
+        """A metric-affine NPR with K_sign='-1' and foliation_normal='past-directed'."""
+        from noether.npr import NOETHER_DEFAULT_V1
+
+        npr = _build_metric_affine_adm_npr()
+        return npr.model_copy(
+            update={
+                "conventions": NOETHER_DEFAULT_V1.model_copy(
+                    update={"K_sign": "-1", "foliation_normal": "past-directed"}
+                )
+            }
+        )
+
+    def _get_k_sign_piece(self, npr):
+        """Run derive_adm and return the 'extrinsic curvature convention' piece."""
+        from noether.kernels.sympy_kernel import SympyKernelAdapter
+        from noether.orchestrator.derive import derive_adm
+
+        results = derive_adm(npr, {"sympy": SympyKernelAdapter()}, session_id="s-adm-kconv")
+        return next(
+            (d for d in results if d.wrt == "extrinsic curvature convention"),
+            None,
+        )
+
+    def test_default_k_sign_unchanged(self, _npr_default):
+        """With the default convention, the K-sign display matches the old
+        hardcoded _ADM_K_SIGN_TEX (no regression)."""
+        from noether.orchestrator.derive import _ADM_K_SIGN_TEX
+
+        piece = self._get_k_sign_piece(_npr_default)
+        assert piece is not None, "extrinsic curvature convention piece must exist"
+        assert piece.result_tex == _ADM_K_SIGN_TEX, (
+            f"default convention result_tex should match the hardcoded constant; "
+            f"got {piece.result_tex!r}, expected {_ADM_K_SIGN_TEX!r}"
+        )
+
+    def test_overridden_k_sign_reflected_in_result_tex(self, _npr_ksign_minus):
+        """An overridden K_sign='-1' is reflected in the ADM result_tex:
+        the display shows 'K_{ij} = -nabla_i n_j' (expansion-negative)."""
+        piece = self._get_k_sign_piece(_npr_ksign_minus)
+        assert piece is not None, "extrinsic curvature convention piece must exist"
+        tex = piece.result_tex
+        # The minus sign must appear in the geometric relation
+        assert r"-\nabla_i n_j" in tex, (
+            f"K_sign='-1' must produce K_{{ij}} = -nabla_i n_j; got {tex!r}"
+        )
+        # The label must say expansion-negative
+        assert "expansion-negative" in tex, (
+            f"K_sign='-1' must label as expansion-negative; got {tex!r}"
+        )
+        # The default plus sign must NOT appear
+        assert r"+\nabla_i n_j" not in tex, (
+            f"K_sign='-1' must not show +nabla_i n_j; got {tex!r}"
+        )
+
+    def test_past_directed_normal_reflected_in_result_tex(self, _npr_past_directed):
+        """An overridden foliation_normal='past-directed' is reflected in the
+        ADM result_tex: the normal shows n_mu = (+N,0,...,0)."""
+        piece = self._get_k_sign_piece(_npr_past_directed)
+        assert piece is not None, "extrinsic curvature convention piece must exist"
+        tex = piece.result_tex
+        # For mostly-plus signature with past-directed normal: n_mu = (+N,...)
+        assert r"n_\mu = (+N,0,\ldots,0)" in tex, (
+            f"past-directed must show n_mu=(+N,0,...,0); got {tex!r}"
+        )
+
+    def test_both_overrides_reflected_in_result_tex(self, _npr_both_overridden):
+        """When both K_sign and foliation_normal are overridden, both are
+        reflected in the ADM result_tex."""
+        piece = self._get_k_sign_piece(_npr_both_overridden)
+        assert piece is not None, "extrinsic curvature convention piece must exist"
+        tex = piece.result_tex
+        assert r"-\nabla_i n_j" in tex, (
+            f"K_sign='-1' must produce K_{{ij}} = -nabla_i n_j; got {tex!r}"
+        )
+        assert "expansion-negative" in tex, (
+            f"K_sign='-1' must label as expansion-negative; got {tex!r}"
+        )
+        assert r"n_\mu = (+N,0,\ldots,0)" in tex, (
+            f"past-directed must show n_mu=(+N,0,...,0); got {tex!r}"
+        )
+
+    def test_convention_block_consistent_with_result_tex(self, _npr_ksign_minus):
+        """The convention block and the result_tex are consistent: both
+        reflect the overridden K_sign."""
+        piece = self._get_k_sign_piece(_npr_ksign_minus)
+        assert piece is not None
+        conv = piece.conventions
+        # The convention block should say K_sign is -1
+        assert conv.get("K_sign", "").startswith("-1"), (
+            f"convention block K_sign should start with '-1'; got {conv.get('K_sign')!r}"
+        )
+        # And the result_tex should match
+        assert r"-\nabla_i n_j" in piece.result_tex, (
+            "result_tex and convention block must be consistent on K_sign"
+        )
+
+    def test_adm_k_sign_tex_function_default(self):
+        """The _adm_k_sign_tex function with default conventions
+        reproduces the old hardcoded _ADM_K_SIGN_TEX exactly."""
+        from noether.npr.conventions import NOETHER_DEFAULT_V1
+        from noether.orchestrator.derive import _ADM_K_SIGN_TEX, _adm_k_sign_tex
+
+        assert _adm_k_sign_tex(NOETHER_DEFAULT_V1) == _ADM_K_SIGN_TEX, (
+            "_adm_k_sign_tex with default conventions must match the "
+            "hardcoded constant (no regression)"
+        )
+
+    def test_adm_k_sign_tex_function_minus_sign(self):
+        """The _adm_k_sign_tex function with K_sign='-1' produces the
+        minus-sign display."""
+        from noether.npr.conventions import NOETHER_DEFAULT_V1
+        from noether.orchestrator.derive import _adm_k_sign_tex
+
+        c = NOETHER_DEFAULT_V1.model_copy(update={"K_sign": "-1"})
+        result = _adm_k_sign_tex(c)
+        assert r"-\nabla_i n_j" in result, (
+            f"K_sign='-1' should produce minus sign; got {result!r}"
+        )
+        assert "expansion-negative" in result, (
+            f"K_sign='-1' should label expansion-negative; got {result!r}"
+        )
+
