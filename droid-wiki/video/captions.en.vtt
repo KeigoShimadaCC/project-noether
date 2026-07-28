@@ -1,0 +1,617 @@
+WEBVTT
+
+1
+00:00:00.600 --> 00:00:02.710
+A physicist can describe a whole theory
+
+2
+00:00:02.720 --> 00:00:05.421
+of gravity in one line of LaTeX.
+
+3
+00:00:05.980 --> 00:00:08.470
+Getting the field equations back out of
+
+4
+00:00:08.480 --> 00:00:10.564
+a computer algebra system can take weeks.
+
+5
+00:00:11.340 --> 00:00:13.530
+Project Noether is built to close
+
+6
+00:00:13.540 --> 00:00:13.990
+that gap.
+
+7
+00:00:14.380 --> 00:00:17.010
+It is a symbolic physics collaborator,
+
+8
+00:00:17.020 --> 00:00:19.100
+about forty three thousand lines
+
+9
+00:00:19.110 --> 00:00:19.560
+of Python.
+
+10
+00:00:20.060 --> 00:00:21.880
+The hard part here is not
+
+11
+00:00:21.890 --> 00:00:22.829
+the mathematics.
+
+12
+00:00:23.129 --> 00:00:26.430
+Kernels like Cadabra, xAct, and SymPy are
+
+13
+00:00:26.440 --> 00:00:28.078
+already rigorous and powerful.
+
+14
+00:00:28.720 --> 00:00:31.620
+Using them means hand translating notation
+
+15
+00:00:31.630 --> 00:00:33.861
+and declaring every symmetry yourself.
+
+16
+00:00:34.360 --> 00:00:36.500
+Then you read the answer back out
+
+17
+00:00:36.510 --> 00:00:37.467
+of a machine dialect.
+
+18
+00:00:38.120 --> 00:00:40.670
+Noether takes over that translation layer,
+
+19
+00:00:40.680 --> 00:00:42.503
+and leaves the algebra to the kernels.
+
+20
+00:00:43.160 --> 00:00:44.940
+The tool runs a four beat loop,
+
+21
+00:00:44.950 --> 00:00:47.405
+the way a careful collaborator would.
+
+22
+00:00:47.705 --> 00:00:50.500
+First, you state the action in LaTeX.
+
+23
+00:00:50.800 --> 00:00:53.070
+Next, Noether interrogates you, and you
+
+24
+00:00:53.080 --> 00:00:55.109
+answer the questions that matter.
+
+25
+00:00:55.600 --> 00:00:57.320
+Then the kernels compute, and a
+
+26
+00:00:57.330 --> 00:00:59.548
+verification layer checks the result.
+
+27
+00:00:59.848 --> 00:01:02.700
+Underneath, this is a state machine that
+
+28
+00:01:02.710 --> 00:01:04.670
+runs from ingest all the way
+
+29
+00:01:04.680 --> 00:01:05.130
+to present.
+
+30
+00:01:05.640 --> 00:01:07.929
+Four layers sit behind that loop.
+
+31
+00:01:08.400 --> 00:01:10.940
+Thin frontends, a Python orchestrator,
+
+32
+00:01:10.950 --> 00:01:13.455
+kernel adapters, and a verification layer.
+
+33
+00:01:13.880 --> 00:01:16.401
+Two hard boundaries cut across them.
+
+34
+00:01:16.800 --> 00:01:19.040
+The key point is that each boundary
+
+35
+00:01:19.050 --> 00:01:21.501
+enforces exactly one product promise.
+
+36
+00:01:21.900 --> 00:01:24.550
+They are enforced mechanically, in code,
+
+37
+00:01:24.560 --> 00:01:26.046
+not by reviewer discipline.
+
+38
+00:01:26.700 --> 00:01:29.600
+The first boundary is the Noether Problem
+
+39
+00:01:29.610 --> 00:01:31.097
+Representation, the NPR.
+
+40
+00:01:31.520 --> 00:01:34.110
+It is a versioned pydantic schema holding
+
+41
+00:01:34.120 --> 00:01:36.560
+geometry, objects, the action, and
+
+42
+00:01:36.570 --> 00:01:37.020
+the task.
+
+43
+00:01:37.420 --> 00:01:40.150
+It is the only language the orchestrator
+
+44
+00:01:40.160 --> 00:01:40.999
+speaks to a kernel.
+
+45
+00:01:41.299 --> 00:01:44.200
+Kernels never see raw user LaTeX, and
+
+46
+00:01:44.210 --> 00:01:46.205
+results never carry kernel syntax.
+
+47
+00:01:46.720 --> 00:01:48.860
+That is what keeps the system from
+
+48
+00:01:48.870 --> 00:01:50.815
+marrying a single algebra backend.
+
+49
+00:01:51.440 --> 00:01:53.910
+The second promise is that the tool
+
+50
+00:01:53.920 --> 00:01:54.586
+never guesses.
+
+51
+00:01:55.160 --> 00:01:57.820
+Every open question lands in an ambiguity
+
+52
+00:01:57.830 --> 00:01:59.686
+ledger attached to the problem.
+
+53
+00:02:00.120 --> 00:02:02.400
+While that ledger is not empty, the
+
+54
+00:02:02.410 --> 00:02:04.317
+planner simply refuses to plan.
+
+55
+00:02:04.700 --> 00:02:07.020
+The model may propose answers, and it
+
+56
+00:02:07.030 --> 00:02:08.713
+always shows its reasoning.
+
+57
+00:02:09.160 --> 00:02:11.630
+But only a confirmed human answer can
+
+58
+00:02:11.640 --> 00:02:12.789
+change the problem.
+
+59
+00:02:13.200 --> 00:02:15.670
+An off menu answer is rejected, and
+
+60
+00:02:15.680 --> 00:02:17.462
+the session is left untouched.
+
+61
+00:02:18.012 --> 00:02:20.980
+Physics conventions are never implied in
+
+62
+00:02:20.990 --> 00:02:21.596
+this codebase.
+
+63
+00:02:22.670 --> 00:02:24.590
+Signature, curvature sign, torsion sign,
+
+64
+00:02:24.600 --> 00:02:26.600
+and ten more fields travel with
+
+65
+00:02:26.610 --> 00:02:27.592
+every expression.
+
+66
+00:02:28.120 --> 00:02:30.590
+Under an independent connection, some of
+
+67
+00:02:30.600 --> 00:02:32.110
+those stop being defaults and
+
+68
+00:02:32.120 --> 00:02:32.991
+become questions.
+
+69
+00:02:33.360 --> 00:02:35.880
+The Ricci contraction is one, because
+
+70
+00:02:35.890 --> 00:02:37.963
+Ricci is no longer symmetric there.
+
+71
+00:02:38.590 --> 00:02:41.350
+Change one field and the answer changes,
+
+72
+00:02:41.360 --> 00:02:43.020
+so nothing is assumed silently.
+
+73
+00:02:43.840 --> 00:02:46.084
+Here is a single derivation, end
+
+74
+00:02:46.094 --> 00:02:46.706
+to end.
+
+75
+00:02:47.100 --> 00:02:49.810
+The orchestrator asks the model to write
+
+76
+00:02:49.820 --> 00:02:50.675
+a kernel script.
+
+77
+00:02:51.160 --> 00:02:53.877
+That script carries no authority at all.
+
+78
+00:02:54.280 --> 00:02:56.800
+It runs sandboxed, and the kernel checks
+
+79
+00:02:56.810 --> 00:02:58.635
+its own residue inside the script.
+
+80
+00:02:59.240 --> 00:03:01.380
+Only that check can set the
+
+81
+00:03:01.390 --> 00:03:02.050
+verified flag.
+
+82
+00:03:02.620 --> 00:03:04.680
+Remember it this way: the model
+
+83
+00:03:04.690 --> 00:03:06.531
+orchestrates, and the kernel decides.
+
+84
+00:03:07.200 --> 00:03:09.663
+Two kernels do the computing today.
+
+85
+00:03:09.963 --> 00:03:13.070
+Cadabra 2 runs as a sandboxed subprocess,
+
+86
+00:03:13.080 --> 00:03:15.211
+driving frozen audited scripts.
+
+87
+00:03:15.511 --> 00:03:18.280
+SymPy runs in process as an independent
+
+88
+00:03:18.290 --> 00:03:20.375
+oracle on explicit backgrounds.
+
+89
+00:03:20.720 --> 00:03:23.190
+The planner chooses between them by
+
+90
+00:03:23.200 --> 00:03:24.792
+capability, never by name.
+
+91
+00:03:25.240 --> 00:03:27.450
+There is also a compute path that
+
+92
+00:03:27.460 --> 00:03:28.783
+needs no model at all.
+
+93
+00:03:29.180 --> 00:03:31.480
+When an action decomposes into known
+
+94
+00:03:31.490 --> 00:03:34.190
+building blocks, the kernel assembles and
+
+95
+00:03:34.200 --> 00:03:34.650
+checks it.
+
+96
+00:03:35.140 --> 00:03:37.290
+Every answer climbs a five rung
+
+97
+00:03:37.300 --> 00:03:38.657
+verification ladder.
+
+98
+00:03:39.040 --> 00:03:41.510
+It starts at well formedness and ends
+
+99
+00:03:41.520 --> 00:03:43.330
+at independent recomputation.
+
+100
+00:03:43.720 --> 00:03:46.320
+For metric affine geometry, two kernels
+
+101
+00:03:46.330 --> 00:03:48.190
+must agree before anything is
+
+102
+00:03:48.200 --> 00:03:49.070
+called verified.
+
+103
+00:03:49.520 --> 00:03:51.740
+That dual gate exists to catch one
+
+104
+00:03:51.750 --> 00:03:53.231
+specific failure mode.
+
+105
+00:03:53.531 --> 00:03:56.300
+A Levi Civita shortcut can silently drop
+
+106
+00:03:56.310 --> 00:03:58.410
+a torsion term and still report a
+
+107
+00:03:58.420 --> 00:03:59.291
+zero residue.
+
+108
+00:03:59.640 --> 00:04:02.080
+The repository calls that the
+
+109
+00:04:02.090 --> 00:04:02.685
+torsion trap.
+
+110
+00:04:03.360 --> 00:04:06.050
+When Noether cannot finish a calculation,
+
+111
+00:04:06.060 --> 00:04:07.096
+it says so plainly.
+
+112
+00:04:07.440 --> 00:04:09.350
+The higher Horndeski densities need
+
+113
+00:04:09.360 --> 00:04:11.540
+derivative ordering machinery that is not
+
+114
+00:04:11.550 --> 00:04:12.943
+installed here.
+
+115
+00:04:13.440 --> 00:04:16.050
+Those requests come back unverified, with
+
+116
+00:04:16.060 --> 00:04:18.171
+a detail line naming the blocker.
+
+117
+00:04:18.480 --> 00:04:21.380
+A gated result is always distinguishable
+
+118
+00:04:21.390 --> 00:04:22.631
+from a confirmed one.
+
+119
+00:04:22.960 --> 00:04:25.860
+A fabricated answer would be far worse
+
+120
+00:04:25.870 --> 00:04:26.963
+than an honest not yet.
+
+121
+00:04:27.720 --> 00:04:29.860
+Four frontends share that single
+
+122
+00:04:29.870 --> 00:04:30.862
+session surface.
+
+123
+00:04:31.180 --> 00:04:34.080
+A command line loop, an HTTP API,
+
+124
+00:04:34.090 --> 00:04:36.538
+an MCP server, and a web client.
+
+125
+00:04:36.880 --> 00:04:38.790
+None of them run physics, in the
+
+126
+00:04:38.800 --> 00:04:40.443
+browser or in the terminal.
+
+127
+00:04:40.760 --> 00:04:43.460
+A host model calling the MCP tools
+
+128
+00:04:43.470 --> 00:04:45.906
+gets refusals as ordinary data.
+
+129
+00:04:46.360 --> 00:04:48.640
+So it cannot pressure Noether into
+
+130
+00:04:48.650 --> 00:04:49.619
+guessing on its behalf.
+
+131
+00:04:50.440 --> 00:04:52.910
+Every run writes a provenance bundle
+
+132
+00:04:52.920 --> 00:04:53.370
+to disk.
+
+133
+00:04:53.600 --> 00:04:55.760
+The kernel script, the raw output, the
+
+134
+00:04:55.770 --> 00:04:57.710
+assumptions snapshot, and every
+
+135
+00:04:57.720 --> 00:04:58.320
+check verdict.
+
+136
+00:04:58.780 --> 00:05:01.250
+That history reloads identically across
+
+137
+00:05:01.260 --> 00:05:02.960
+the server, the tools, and the
+
+138
+00:05:02.970 --> 00:05:03.484
+web client.
+
+139
+00:05:03.900 --> 00:05:06.440
+If a later answer changes an assumption,
+
+140
+00:05:06.450 --> 00:05:08.392
+earlier results are marked stale.
+
+141
+00:05:08.800 --> 00:05:11.530
+They are never quietly trusted, and never
+
+142
+00:05:11.540 --> 00:05:12.404
+silently dropped.
+
+143
+00:05:13.040 --> 00:05:15.250
+The churn history tells you where to
+
+144
+00:05:15.260 --> 00:05:16.069
+start reading.
+
+145
+00:05:16.440 --> 00:05:18.862
+The derive path and the Cadabra templates
+
+146
+00:05:18.872 --> 00:05:20.422
+absorbed the most change.
+
+147
+00:05:20.722 --> 00:05:23.020
+Eighty three test and eval files hold
+
+148
+00:05:23.030 --> 00:05:24.626
+the contract in place.
+
+149
+00:05:25.080 --> 00:05:27.360
+So remember three things about
+
+150
+00:05:27.370 --> 00:05:28.297
+this repository.
+
+151
+00:05:28.920 --> 00:05:30.880
+Kernels compute, the model only
+
+152
+00:05:30.890 --> 00:05:33.500
+orchestrates, and ambiguity always comes
+
+153
+00:05:33.510 --> 00:05:33.960
+back to you.
+
+154
+00:05:34.230 --> 00:05:36.790
+That boundary is the whole product.
